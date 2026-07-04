@@ -28,7 +28,7 @@ Minecraft Bedrock Dedicated Server 管理工具
   - 多线程优化：所有耗时操作移至后台线程，避免阻塞主界面
 """
 
-__version__ = "2.0.0"
+__version__ = "2.0.1"
 
 import sys
 import os
@@ -1550,7 +1550,7 @@ class SettingsDialog(QDialog):
             self, "下载完成",
             f"新版本已下载完成！（{message}）\n\n"
             "是否立即替换当前文件并重启？\n"
-            "⚠️ 替换后程序将自动关闭，请手动重新打开。",
+            "⚠️ 替换后程序将自动重启。",
             QMessageBox.Yes | QMessageBox.No,
             QMessageBox.Yes
         )
@@ -1569,9 +1569,13 @@ class SettingsDialog(QDialog):
                     self, "更新完成",
                     "BDS Manager 已更新！\n\n"
                     f"旧文件已备份为 bds_manager.py.bak\n\n"
-                    "程序将自动关闭，请重新启动。"
+                    "程序即将自动重启。"
                 )
-                # 关闭整个应用
+                # 重启程序
+                import subprocess
+                subprocess.Popen([sys.executable] + sys.argv,
+                                 creationflags=subprocess.CREATE_NO_WINDOW
+                                 if sys.platform == "win32" else 0)
                 QApplication.quit()
             except Exception as e:
                 QMessageBox.critical(self, "更新失败", f"替换文件时出错：{e}")
