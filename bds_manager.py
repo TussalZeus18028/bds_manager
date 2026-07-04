@@ -28,7 +28,7 @@ Minecraft Bedrock Dedicated Server 管理工具
   - 多线程优化：所有耗时操作移至后台线程，避免阻塞主界面
 """
 
-__version__ = "2.0.4"
+__version__ = "2.0.5"
 
 import sys
 import os
@@ -4426,8 +4426,7 @@ class BDSManager(QMainWindow):
                         time.sleep(0.1)
                 elif reply == QMessageBox.Cancel:
                     return
-            self.tray_icon.hide()
-            QApplication.quit()
+            self.quit_app()
         else:
             super().keyPressEvent(event)
 
@@ -4489,7 +4488,9 @@ class BDSManager(QMainWindow):
             "monitor_interval": self.config.get("monitor_interval", 2000),
             "custom_colors": self.custom_colors,
             "frpc_path": self.config.get("frpc_path", ""),
-            "version_cache": self.config.get("version_cache", {})
+            "version_cache": self.config.get("version_cache", {}),
+            "window_width": self.config.get("window_width", 1200),
+            "window_height": self.config.get("window_height", 800),
         }
         try:
             with open(CONFIG_FILE, "w", encoding="utf-8") as f:
@@ -4565,7 +4566,10 @@ class BDSManager(QMainWindow):
 
     def init_ui(self):
         self.setWindowTitle("Minecraft Bedrock Server 管理工具 ")
-        self.setGeometry(100, 100, 1200, 800)
+        # 恢复上次窗口大小
+        w = self.config.get("window_width", 1200)
+        h = self.config.get("window_height", 800)
+        self.setGeometry(100, 100, w, h)
         central = QWidget()
         self.setCentralWidget(central)
         layout = QVBoxLayout(central)
@@ -4643,6 +4647,10 @@ class BDSManager(QMainWindow):
         if hasattr(self, 'system_monitor'):
             self.system_monitor.stop_monitoring()
         self.backup_timer.stop()
+        # 保存窗口大小
+        self.config["window_width"] = self.width()
+        self.config["window_height"] = self.height()
+        self.save_config()
         self.tray_icon.hide()
         QApplication.quit()
 
@@ -4744,6 +4752,13 @@ class BDSManager(QMainWindow):
         event.ignore()
         self.hide()
         self.tray_icon.showMessage("提示", "程序已最小化到系统托盘，双击图标可恢复。", QSystemTrayIcon.Information, 2000)
+
+    def resizeEvent(self, event):
+        """窗口大小变化时自动保存"""
+        super().resizeEvent(event)
+        if hasattr(self, 'config'):
+            self.config["window_width"] = self.width()
+            self.config["window_height"] = self.height()
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
