@@ -2870,6 +2870,16 @@ class TunnelTab(QWidget):
         ini_layout = QVBoxLayout()
         self.ini_editor = QPlainTextEdit()
         self.ini_editor.setFont(QFont("Consolas", 10))
+        self.ini_editor.setStyleSheet("""
+            QPlainTextEdit {
+                background-color: #1a1a22;
+                color: #c8d6e5;
+                border: 1px solid #444;
+                border-radius: 6px;
+                padding: 8px;
+                selection-background-color: #3a3a5a;
+            }
+        """)
         self.ini_editor.setPlaceholderText(
             "在此粘贴从 ChmlFrp 官网获取的 frpc.ini 配置内容...\n"
             "获取方式：登录 panel.chmlfrp.cn → 隧道管理 → 配置文件 → 选择节点 → 生成配置文件"
@@ -3054,10 +3064,11 @@ class TunnelTab(QWidget):
             self.edit_toggle_btn.setStyleSheet("")
 
     def _deselect_editor(self):
-        """取消全选，光标移到开头"""
+        """取消全选，光标移到末尾"""
         c = self.ini_editor.textCursor()
-        c.movePosition(QTextCursor.Start)
+        c.clearSelection()
         self.ini_editor.setTextCursor(c)
+        self.ini_editor.moveCursor(QTextCursor.End)
 
     # ---------- 隧道输出 ----------
     def _init_tunnel_log(self):
