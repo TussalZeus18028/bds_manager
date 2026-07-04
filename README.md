@@ -4,7 +4,7 @@
 
 ![Python](https://img.shields.io/badge/Python-3.8%2B-blue)
 ![PyQt5](https://img.shields.io/badge/PyQt5-5.15-green)
-![License](https://img.shields.io/badge/License-Apache%202.0-orange)
+![License](https://img.shields.io/badge/License-MIT-yellow)
 
 ---
 
@@ -40,7 +40,7 @@ BDS Manager 是一个使用 PyQt5 构建的图形化管理工具，专为 **Mine
 - 查看当前世界名称、种子、难度
 - 一键 **备份** 当前世界（自动压缩为 ZIP）
 - **还原** 备份（支持从列表中选择历史备份）
-- 快速修改世界难度（需重启服务器生效）
+- 快速修改世界难度（无需重启服务器？需重启生效但修改配置）
 
 ### 📊 系统资源监视
 - 实时显示 CPU、内存、网络、磁盘使用率（进度条 + 数值）
@@ -71,14 +71,13 @@ BDS Manager 是一个使用 PyQt5 构建的图形化管理工具，专为 **Mine
 - **多线程优化**：所有耗时操作（备份、还原、下载、解压）均在后台线程执行，界面不卡顿
 - **脚本与服务器目录分离**：可随意指定服务器所在路径，方便多实例管理
 
-
 ---
 
 ## 🚀 快速开始
 
 ### 环境要求
 - Python 3.8 或更高版本
-- Windows
+- Windows（也支持 Linux/macOS，但部分功能如托盘、端口检测可能受限）
 
 ### 安装依赖
 
@@ -151,7 +150,7 @@ bds-manager/
 - 选择已有备份，点击「还原备份」即可覆盖当前世界（需服务器停止）。
 
 ### 隧道穿透
-1. 在「隧道」标签页中设置 `frpc.exe` 路径（从 ChmlFrp 官网下载 https://www.chmlfrp.net/ ）。
+1. 在「隧道」标签页中设置 `frpc.exe` 路径（从 ChmlFrp 官网下载）。
 2. 编辑 `frpc.ini` 配置内容（可粘贴从官网生成的配置）。
 3. 点击「启动隧道」即可连接内网穿透服务。
 
@@ -168,17 +167,10 @@ bds-manager/
 
 ---
 
-## 📄 许可证
-
-本项目基于 **Apache License 2.0** 开源，详情请见 [LICENSE](LICENSE) 文件。
-
----
-
 ## 📞 联系与支持
 
 - GitHub Issues：https://github.com/tussalzeus18028/bds-manager/issues
 - 如果你觉得这个工具对你有帮助，不妨给个 ⭐ 鼓励一下！
-- 十分感谢deepseek卖命写代码
 
 ---
 

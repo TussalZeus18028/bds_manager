@@ -1921,9 +1921,9 @@ class ConsoleTab(QWidget):
         }
 
     def _init_log_file(self):
-        """初始化日志文件，按日期命名"""
+        """初始化日志文件，按日期命名（脚本目录/logs/）"""
         try:
-            log_dir = os.path.join(self.parent.get_absolute_server_dir(), "logs")
+            log_dir = os.path.join(SCRIPT_DIR, "logs")
             os.makedirs(log_dir, exist_ok=True)
             date_str = datetime.now().strftime("%Y-%m-%d")
             log_path = os.path.join(log_dir, f"console_{date_str}.log")
@@ -2961,9 +2961,9 @@ class TunnelTab(QWidget):
 
     # ---------- 隧道输出 ----------
     def _init_tunnel_log(self):
-        """初始化隧道日志文件"""
+        """初始化隧道日志文件（脚本目录/logs/）"""
         try:
-            log_dir = os.path.join(self.parent.get_absolute_server_dir(), "logs")
+            log_dir = os.path.join(SCRIPT_DIR, "logs")
             os.makedirs(log_dir, exist_ok=True)
             date_str = datetime.now().strftime("%Y-%m-%d")
             log_path = os.path.join(log_dir, f"tunnel_{date_str}.log")
