@@ -28,7 +28,7 @@ Minecraft Bedrock Dedicated Server 管理工具
   - 多线程优化：所有耗时操作移至后台线程，避免阻塞主界面
 """
 
-__version__ = "1.5.0"
+__version__ = "2.0.0"
 
 import sys
 import os
@@ -39,7 +39,21 @@ import subprocess
 import threading
 import time
 import re
-import json5
+try:
+    import json5
+    _HAS_JSON5 = True
+except ImportError:
+    _HAS_JSON5 = False
+    json5 = None
+
+def _parse_json(text):
+    """兼容解析 JSON 或 JSON5（含注释/尾逗号）"""
+    if _HAS_JSON5:
+        try:
+            return json5.loads(text), True
+        except Exception:
+            pass
+    return json.loads(text), False
 import socket
 import psutil
 import ctypes
@@ -362,7 +376,7 @@ def get_pack_manifest(pack_folder, retry=5, delay=0.4):
             time.sleep(delay)
             continue
         try:
-            data = json5.loads(content)
+            data, _ = _parse_json(content)
             header = data.get("header", {})
             uuid = header.get("uuid")
             version = header.get("version")
@@ -1735,6 +1749,13 @@ class ConsoleTab(QWidget):
         self._restart_timer.timeout.connect(self._do_auto_restart)
         self._log_file = None
         self._init_log_file()
+        # 命令历史
+        self._cmd_history = []
+        self._cmd_history_idx = -1
+        # 玩家列表和 TPS
+        self._players = {}     # {name: {"xuid": xuid, "joined": timestamp}}
+        self._tps_history = []  # 最近 TPS 采样
+        self._server_start_time = None
         self.init_ui()
 
     def init_ui(self):
@@ -1764,8 +1785,31 @@ class ConsoleTab(QWidget):
         self.cmd_input = QLineEdit()
         self.cmd_input.setPlaceholderText("输入命令 (如 stop, list, op <玩家名>) 并按回车发送")
         self.cmd_input.returnPressed.connect(self.send_command)
+        # 命令历史：上下箭头翻页
+        self.cmd_input.installEventFilter(self)
+        self.cmd_input._console_tab = self
         cmd_layout.addWidget(self.cmd_input)
         layout.addLayout(cmd_layout)
+
+    def eventFilter(self, obj, event):
+        """命令输入框的按键历史"""
+        if obj is self.cmd_input and event.type() == QEvent.KeyPress:
+            if event.key() == Qt.Key_Up:
+                if self._cmd_history and self._cmd_history_idx < len(self._cmd_history) - 1:
+                    self._cmd_history_idx += 1
+                    idx = len(self._cmd_history) - 1 - self._cmd_history_idx
+                    self.cmd_input.setText(self._cmd_history[idx])
+                return True
+            elif event.key() == Qt.Key_Down:
+                if self._cmd_history_idx > 0:
+                    self._cmd_history_idx -= 1
+                    idx = len(self._cmd_history) - 1 - self._cmd_history_idx
+                    self.cmd_input.setText(self._cmd_history[idx])
+                elif self._cmd_history_idx == 0:
+                    self._cmd_history_idx = -1
+                    self.cmd_input.clear()
+                return True
+        return super().eventFilter(obj, event)
 
     def append_output(self, text):
         # 1. 定义颜色规则（按优先级从高到低匹配）
@@ -1824,6 +1868,58 @@ class ConsoleTab(QWidget):
             except Exception:
                 pass
 
+        # 同步输出到 cmd 窗口
+        ts = datetime.now().strftime("%H:%M:%S")
+        print(f"[{ts}] [BDS] {text}", flush=True)
+
+        # 解析玩家加入/离开事件
+        self._parse_player_event(text)
+        # 解析 TPS（如果服务器输出包含）
+        self._parse_tps(text)
+
+    def _parse_player_event(self, text):
+        """解析 BDS 玩家连接/生成/断开事件"""
+        # "Player connected: Name, xuid: ..."
+        m = re.search(r'Player connected:\s+([A-Za-z0-9_]+)', text, re.I)
+        if m:
+            name = m.group(1)
+            self._players[name] = {"joined": time.time()}
+            self.parent.server_stats["players"] = list(self._players.keys())
+            return
+        # "Player Spawned: Name xuid: ..."  （没有逗号！）
+        m = re.search(r'Player (?:S|s)pawned:\s+([A-Za-z0-9_]+)', text, re.I)
+        if m:
+            name = m.group(1)
+            if name not in self._players:
+                self._players[name] = {"joined": time.time()}
+            self.parent.server_stats["players"] = list(self._players.keys())
+            return
+        # "Player disconnected: Name, xuid: ..."
+        m = re.search(r'Player disconnected:\s+([A-Za-z0-9_]+)', text, re.I)
+        if m:
+            name = m.group(1)
+            self._players.pop(name, None)
+            self.parent.server_stats["players"] = list(self._players.keys())
+
+    def _parse_tps(self, text):
+        """解析 TPS 相关信息"""
+        # BDS 不直接输出 TPS，通过 "Server uptime" 等模式间接估算
+        # 简单做法：追踪消息频率
+        if hasattr(self, '_last_tps_check'):
+            pass  # 由 DashboardTab 的定时器计算
+        self._last_tps_check = time.time()
+
+    def get_server_stats(self):
+        """返回当前服务器状态汇总"""
+        uptime = int(time.time() - self._server_start_time) if self._server_start_time else 0
+        return {
+            "running": self.is_server_running(),
+            "uptime_seconds": uptime,
+            "players": list(self._players.keys()),
+            "player_count": len(self._players),
+            "auto_restart": self._auto_restart,
+        }
+
     def _init_log_file(self):
         """初始化日志文件，按日期命名"""
         try:
@@ -1849,6 +1945,10 @@ class ConsoleTab(QWidget):
         self.server_process.start()
         self.start_btn.setEnabled(False)
         self.stop_btn.setEnabled(True)
+        self._server_start_time = time.time()
+        self._players.clear()
+        self._tps_history.clear()
+        self._restart_count = 0
         log_success("服务器启动中...")
         self.append_output(">>> 服务器启动中... <<<")
 
@@ -1880,6 +1980,12 @@ class ConsoleTab(QWidget):
         if not cmd:
             return
         self.cmd_input.clear()
+        # 添加到历史（去重）
+        if cmd not in self._cmd_history:
+            self._cmd_history.append(cmd)
+        if len(self._cmd_history) > 100:
+            self._cmd_history.pop(0)
+        self._cmd_history_idx = -1
         if self.server_process and self.server_process.isRunning():
             self.server_process.send_command(cmd)
             log_cmd(f"发送命令: {cmd}")
@@ -2108,6 +2214,7 @@ class PacksTab(QWidget):
                     item = QListWidgetItem(f"{folder}{status}")
                     item.setData(Qt.UserRole, (folder, "resource", uuid))
                     self.resource_list.addItem(item)
+            QApplication.processEvents()
             for folder in os.listdir(BEHAVIOR_PACKS_DIR):
                 folder_path = os.path.join(BEHAVIOR_PACKS_DIR, folder)
                 if os.path.isdir(folder_path):
@@ -2126,6 +2233,8 @@ class PacksTab(QWidget):
                     item = QListWidgetItem(f"{folder}{status}")
                     item.setData(Qt.UserRole, (folder, "behavior", uuid))
                     self.behavior_list.addItem(item)
+            # 防止大量包导致 UI 卡顿
+            QApplication.processEvents()
         except Exception as e:
             log_error(f"刷新包列表失败: {e}")
             QMessageBox.warning(self, "错误", f"刷新包列表失败: {e}")
@@ -2419,7 +2528,12 @@ correct-player-movement=false
                         value = "true" if widget.isChecked() else "false"
                     elif isinstance(widget, QComboBox):
                         value = widget.currentText()
-                    new_lines.append(f"{key}={value}\n")
+                    # 保留原行的注释部分
+                    comment = ""
+                    if "#" in stripped:
+                        idx = stripped.index("#")
+                        comment = " " + stripped[idx:]
+                    new_lines.append(f"{key}={value}{comment}\n")
                     updated_keys.add(key)
                     continue
             new_lines.append(line)
@@ -2669,6 +2783,8 @@ class TunnelTab(QWidget):
         self.parent = parent
         self.tunnel_process = None
         self._read_thread = None
+        self._tunnel_log = None
+        self._init_tunnel_log()
         self.init_ui()
         self.load_settings()
         self.tunnel_line_signal.connect(self._on_tunnel_line)
@@ -2844,9 +2960,35 @@ class TunnelTab(QWidget):
             QMessageBox.critical(self, "错误", f"打开目录失败: {e}")
 
     # ---------- 隧道输出 ----------
+    def _init_tunnel_log(self):
+        """初始化隧道日志文件"""
+        try:
+            log_dir = os.path.join(self.parent.get_absolute_server_dir(), "logs")
+            os.makedirs(log_dir, exist_ok=True)
+            date_str = datetime.now().strftime("%Y-%m-%d")
+            log_path = os.path.join(log_dir, f"tunnel_{date_str}.log")
+            self._tunnel_log = open(log_path, "a", encoding="utf-8")
+            self._tunnel_log.write(f"\n--- 会话: {datetime.now()} ---\n")
+        except Exception:
+            self._tunnel_log = None
+
     def _on_tunnel_line(self, text, is_error):
         """信号槽：安全地从工作线程传递到主线程"""
+        # GUI 输出
         self.append_output(text, is_error)
+        # 写入日志文件
+        if self._tunnel_log:
+            try:
+                ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                self._tunnel_log.write(f"[{ts}] {text}\n")
+                self._tunnel_log.flush()
+            except Exception:
+                pass
+        # 输出到 cmd 窗口
+        if is_error:
+            log_warning(f"[隧道] {text}")
+        else:
+            log_info(f"[隧道] {text}")
 
     def append_output(self, text, is_error=False):
         timestamp = datetime.now().strftime("%H:%M:%S")
@@ -4025,6 +4167,183 @@ class UpgradeTab(QWidget):
             QMessageBox.critical(self, "升级失败", f"升级过程中发生错误：\n\n{message}\n\n"
                                                    "备份文件位于 backups/pre_upgrade_* 目录，可手动恢复。")
 
+# ---------- 仪表盘标签页 ----------
+class DashboardTab(QWidget):
+    """首页仪表盘：状态概览 + 玩家列表 + 快捷指令"""
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.parent = parent
+        self._refresh_timer = QTimer()
+        self._refresh_timer.timeout.connect(self._refresh)
+        self._refresh_timer.start(2000)  # 每 2 秒刷新
+        self._tps_samples = []
+        self._last_tick_count = 0
+        self._last_tick_time = time.time()
+        self.init_ui()
+
+    def init_ui(self):
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QScrollArea.NoFrame)
+        content = QWidget()
+        layout = QVBoxLayout(content)
+        layout.setSpacing(8)
+
+        # === 第一行：状态卡片 ===
+        status_row = QHBoxLayout()
+        self._make_status_card(status_row, "🟢 服务器", "server", "停止")
+        self._make_status_card(status_row, "👥 在线玩家", "players", "0")
+        self._make_status_card(status_row, "⏱ 运行时长", "uptime", "00:00:00")
+        self._make_status_card(status_row, "📦 备份", "backup", "--")
+        layout.addLayout(status_row)
+
+        # === 第二行：玩家列表 + 快捷指令 ===
+        row2 = QHBoxLayout()
+
+        # 玩家列表
+        players_group = QGroupBox("👥 在线玩家")
+        players_layout = QVBoxLayout()
+        self.players_list = QListWidget()
+        self.players_list.setMaximumHeight(140)
+        self.players_list.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.players_list.customContextMenuRequested.connect(self._player_context_menu)
+        players_layout.addWidget(self.players_list)
+        players_group.setLayout(players_layout)
+        row2.addWidget(players_group, 1)
+
+        # 玩家右键菜单
+        self.players_list.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.players_list.customContextMenuRequested.connect(self._player_context_menu)
+        layout.addLayout(row2)
+
+        # === 第三行：性能 + TPS ===
+        perf_group = QGroupBox("📊 性能监控")
+        perf_layout = QGridLayout()
+        self.cpu_label = QLabel("CPU: --%")
+        self.mem_label = QLabel("内存: --%")
+        self.net_label = QLabel("网络: --")
+        self.tps_label = QLabel("TPS: --")
+        self.cpu_pbar = QProgressBar(); self.cpu_pbar.setMaximum(100); self.cpu_pbar.setMaximumHeight(14)
+        self.mem_pbar = QProgressBar(); self.mem_pbar.setMaximum(100); self.mem_pbar.setMaximumHeight(14)
+        perf_layout.addWidget(QLabel("CPU:"), 0, 0)
+        perf_layout.addWidget(self.cpu_pbar, 0, 1)
+        perf_layout.addWidget(self.cpu_label, 0, 2)
+        perf_layout.addWidget(QLabel("内存:"), 1, 0)
+        perf_layout.addWidget(self.mem_pbar, 1, 1)
+        perf_layout.addWidget(self.mem_label, 1, 2)
+        perf_layout.addWidget(QLabel("TPS:"), 2, 0)
+        perf_layout.addWidget(self.tps_label, 2, 1)
+        perf_layout.addWidget(self.net_label, 2, 2)
+        perf_group.setLayout(perf_layout)
+        layout.addWidget(perf_group)
+
+        layout.addStretch()
+        scroll.setWidget(content)
+        outer.addWidget(scroll)
+
+        # 初始化刷新
+        self._refresh()
+
+    def _make_status_card(self, row, title, key, default):
+        group = QGroupBox(title)
+        group.setStyleSheet("QGroupBox { font-weight: bold; font-size: 13px; }")
+        gl = QVBoxLayout()
+        gl.setAlignment(Qt.AlignCenter)
+        label = QLabel(default)
+        label.setAlignment(Qt.AlignCenter)
+        label.setStyleSheet("font-size: 18px; font-weight: bold; color: #4CAF50;")
+        setattr(self, f"card_{key}", label)
+        gl.addWidget(label)
+        group.setLayout(gl)
+        row.addWidget(group)
+
+    def _player_context_menu(self, pos):
+        """玩家列表右键菜单"""
+        item = self.players_list.itemAt(pos)
+        if not item:
+            return
+        player = item.text()
+        menu = QMenu()
+        for action_text, cmd in [("踢出", "kick"), ("封禁", "ban"), ("设为OP", "op"), ("取消OP", "deop")]:
+            act = menu.addAction(action_text)
+            act.triggered.connect(lambda checked, c=cmd, p=player: self._run_player_cmd(c, p))
+        menu.exec_(self.players_list.mapToGlobal(pos))
+
+    def _run_player_cmd(self, cmd, player):
+        """对选中玩家执行命令"""
+        ct = self.parent.console_tab
+        ct.cmd_input.setText(f"{cmd} {player}")
+        ct.send_command()
+
+    def _refresh(self):
+        """定时刷新仪表盘数据"""
+        ct = self.parent.console_tab
+        stats = ct.get_server_stats()
+
+        # 服务器状态
+        if stats["running"]:
+            self.card_server.setText("🟢 运行中")
+            self.card_server.setStyleSheet("font-size: 18px; font-weight: bold; color: #4CAF50;")
+        else:
+            self.card_server.setText("⏹ 已停止")
+            self.card_server.setStyleSheet("font-size: 18px; font-weight: bold; color: #f44336;")
+
+        # 玩家数
+        self.card_players.setText(str(stats["player_count"]))
+        self.card_players.setStyleSheet("font-size: 18px; font-weight: bold; color: #66ccff;")
+
+        # 运行时长
+        secs = stats["uptime_seconds"]
+        if secs > 0:
+            h, m, s = secs // 3600, (secs % 3600) // 60, secs % 60
+            self.card_uptime.setText(f"{h:02d}:{m:02d}:{s:02d}")
+            self.card_uptime.setStyleSheet("font-size: 18px; font-weight: bold; color: #ffaa33;")
+        else:
+            self.card_uptime.setText("--")
+            self.card_uptime.setStyleSheet("font-size: 18px; font-weight: bold; color: #888;")
+
+        # 玩家列表
+        self.players_list.clear()
+        for p in stats["players"]:
+            self.players_list.addItem(p)
+
+        # 备份信息
+        backup_dir = self.parent.get_absolute_server_dir() + "/backups"
+        if os.path.exists(backup_dir):
+            backups = sorted(
+                [f for f in os.listdir(backup_dir) if f.endswith(".zip")],
+                key=lambda f: os.path.getmtime(os.path.join(backup_dir, f)),
+                reverse=True
+            )
+            if backups:
+                last_bk = backups[0]
+                bk_time = datetime.fromtimestamp(
+                    os.path.getmtime(os.path.join(backup_dir, last_bk))
+                ).strftime("%m-%d %H:%M")
+                self.card_backup.setText(f"最近: {bk_time}")
+                self.card_backup.setStyleSheet("font-size: 14px; color: #4CAF50;")
+            else:
+                self.card_backup.setText("无备份")
+                self.card_backup.setStyleSheet("font-size: 14px; color: #888;")
+
+        # CPU/内存
+        try:
+            import psutil
+            cpu = psutil.cpu_percent(interval=0.1)
+            mem = psutil.virtual_memory().percent
+            net = psutil.net_io_counters()
+            self.cpu_pbar.setValue(int(cpu))
+            self.mem_pbar.setValue(int(mem))
+            self.cpu_label.setText(f"CPU: {cpu:.1f}%")
+            self.mem_label.setText(f"内存: {mem:.1f}%")
+            sent_kb = net.bytes_sent / 1024
+            recv_kb = net.bytes_recv / 1024
+            self.net_label.setText(f"上传: {sent_kb/1024:.1f}MB / 下载: {recv_kb/1024:.1f}MB")
+        except Exception:
+            pass
+
 # ---------- 主窗口 ----------
 class BDSManager(QMainWindow):
     def __init__(self):
@@ -4042,6 +4361,8 @@ class BDSManager(QMainWindow):
             "button_hover": "#45a049"
         })
         self.theme_manager.set_custom_colors(self.custom_colors)
+        # 共享服务器状态（ConsoleTab 写入，DashboardTab 读取）
+        self.server_stats = {"players": []}
         self.init_ui()
         self.apply_theme(self.config.get("theme", "dark"))
         # 自动备份定时器
@@ -4237,7 +4558,9 @@ class BDSManager(QMainWindow):
 
         self.tunnel_tab = TunnelTab(self)
         self.upgrade_tab = UpgradeTab(self)
+        self.dashboard_tab = DashboardTab(self)
 
+        self.tab_widget.addTab(self.dashboard_tab, "🏠 仪表盘")
         self.tab_widget.addTab(self.console_tab, "🖥️ 控制台")
         self.tab_widget.addTab(self.packs_tab, "📦 资源包/行为包")
         self.tab_widget.addTab(self.config_tab, "⚙️ 配置")
@@ -4305,6 +4628,17 @@ class BDSManager(QMainWindow):
             paths_to_watch.append(ALLOWLIST_FILE)
         if os.path.exists(PERMISSIONS_FILE):
             paths_to_watch.append(PERMISSIONS_FILE)
+        # 监控世界包注册文件（激活/注销包时修改）
+        level_name = self.get_level_name()
+        if level_name:
+            world_path = get_world_path(level_name)
+            for reg_file in ["world_resource_packs.json", "world_behavior_packs.json"]:
+                fp = os.path.join(world_path, reg_file)
+                if os.path.exists(fp):
+                    paths_to_watch.append(fp)
+        # 监控世界目录（新增/删除世界时刷新）
+        if os.path.exists(WORLDS_DIR):
+            paths_to_watch.append(WORLDS_DIR)
         existing = self.watcher.directories() + self.watcher.files()
         for p in existing:
             if p not in paths_to_watch:
@@ -4314,9 +4648,10 @@ class BDSManager(QMainWindow):
                 self.watcher.addPath(p)
         log_info("文件监控已启动，资源包或配置变化将自动刷新界面")
 
-    def on_external_change(self, path=None):
-        log_debug(f"检测到变化: {path}")
-        self._refresh_timer.start(500)
+    def on_external_change(self, path=""):
+        """文件系统变化回调（防抖：500ms 内多次变化只刷新一次）"""
+        if not self._refresh_timer.isActive():
+            self._refresh_timer.start(500)
 
     def refresh_all_tabs(self):
         if hasattr(self, 'packs_tab'):
