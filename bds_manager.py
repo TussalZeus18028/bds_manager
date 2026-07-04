@@ -1921,7 +1921,7 @@ class ConsoleTab(QWidget):
             "players": list(self._players.keys()),
             "player_count": len(self._players),
             "auto_restart": self._auto_restart,
-            "bds_version": self._bds_version,
+            "bds_version": self._bds_version or _detect_current_version(get_server_dir()),
         }
 
     def _init_log_file(self):
