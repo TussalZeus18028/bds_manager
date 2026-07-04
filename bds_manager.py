@@ -28,7 +28,7 @@ Minecraft Bedrock Dedicated Server 管理工具
   - 多线程优化：所有耗时操作移至后台线程，避免阻塞主界面
 """
 
-__version__ = "2.0.7"
+__version__ = "2.0.8"
 
 import sys
 import os
@@ -2874,9 +2874,15 @@ class TunnelTab(QWidget):
             "在此粘贴从 ChmlFrp 官网获取的 frpc.ini 配置内容...\n"
             "获取方式：登录 panel.chmlfrp.cn → 隧道管理 → 配置文件 → 选择节点 → 生成配置文件"
         )
+        self.ini_editor.setReadOnly(True)  # 默认锁定防误触
         ini_layout.addWidget(self.ini_editor)
 
         ini_btn_layout = QHBoxLayout()
+        self.edit_toggle_btn = QPushButton("🔒 点击编辑")
+        self.edit_toggle_btn.setToolTip("点击解锁后才能修改配置内容")
+        self.edit_toggle_btn.setCheckable(True)
+        self.edit_toggle_btn.toggled.connect(self._toggle_ini_edit)
+        ini_btn_layout.addWidget(self.edit_toggle_btn)
         save_ini_btn = QPushButton("💾 保存 frpc.ini")
         save_ini_btn.clicked.connect(self.save_ini_file)
         load_ini_btn = QPushButton("📂 加载 frpc.ini")
@@ -2932,6 +2938,7 @@ class TunnelTab(QWidget):
             try:
                 with open(ini_path, "r", encoding="utf-8") as f:
                     self.ini_editor.setPlainText(f.read())
+                    self._deselect_editor()
             except Exception as e:
                 log_error(f"加载 frpc.ini 失败: {e}")
 
@@ -2953,6 +2960,7 @@ class TunnelTab(QWidget):
                 try:
                     with open(ini_path, "r", encoding="utf-8") as f:
                         self.ini_editor.setPlainText(f.read())
+                        self._deselect_editor()
                     self.append_output(f"📂 已自动加载 {ini_path}")
                 except Exception as e:
                     log_error(f"自动加载 frpc.ini 失败: {e}")
@@ -2985,6 +2993,7 @@ class TunnelTab(QWidget):
         try:
             with open(ini_path, "r", encoding="utf-8") as f:
                 self.ini_editor.setPlainText(f.read())
+                self._deselect_editor()
             self.append_output(f"📂 已加载: {ini_path}")
             log_success(f"加载 frpc.ini: {ini_path}")
         except Exception as e:
@@ -3032,6 +3041,23 @@ class TunnelTab(QWidget):
         )
         if reply == QMessageBox.Yes:
             self.ini_editor.setPlainText(template)
+            self._deselect_editor()
+
+    def _toggle_ini_edit(self, checked):
+        """锁定/解锁编辑器"""
+        self.ini_editor.setReadOnly(not checked)
+        if checked:
+            self.edit_toggle_btn.setText("✏️ 编辑中（点击锁定）")
+            self.edit_toggle_btn.setStyleSheet("color: #ffaa33; font-weight: bold;")
+        else:
+            self.edit_toggle_btn.setText("🔒 点击编辑")
+            self.edit_toggle_btn.setStyleSheet("")
+
+    def _deselect_editor(self):
+        """取消全选，光标移到开头"""
+        c = self.ini_editor.textCursor()
+        c.movePosition(QTextCursor.Start)
+        self.ini_editor.setTextCursor(c)
 
     # ---------- 隧道输出 ----------
     def _init_tunnel_log(self):
