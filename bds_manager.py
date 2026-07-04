@@ -28,7 +28,7 @@ Minecraft Bedrock Dedicated Server 管理工具
   - 多线程优化：所有耗时操作移至后台线程，避免阻塞主界面
 """
 
-__version__ = "2.0.5"
+__version__ = "2.0.6"
 
 import sys
 import os
@@ -1589,7 +1589,6 @@ class ConsoleTab(QWidget):
         self._cmd_history_idx = -1
         # 玩家列表和 TPS
         self._players = {}     # {name: {"xuid": xuid, "joined": timestamp}}
-        self._tps_history = []  # 最近 TPS 采样
         self._server_start_time = None
         self.init_ui()
 
@@ -1655,17 +1654,28 @@ class ConsoleTab(QWidget):
             (re.compile(r'(?:WARN|WARNING|警告|deprecated)', re.I), '#ffaa33', True),
             # 成功/启动/加载完成
             (re.compile(r'(?:Server started|Done|Started|Loaded|成功|完成|✅)', re.I), '#55ff55', True),
-            # 玩家相关（加入/离开）
-            (re.compile(r'(?:joined the game|connected|玩家.*加入|登录)', re.I), '#66ccff', True),
-            (re.compile(r'(?:left the game|disconnected|lost connection|玩家.*离开|退出)', re.I), '#ff66aa', True),
-            # 命令执行
-            (re.compile(r'^>\s', re.M), '#ffaa00', False),  # 仅匹配行首的 ">"
+            # 玩家连接/生成
+            (re.compile(r'Player (?:connected|Spawned):', re.I), '#66ccff', True),
+            # 玩家断开
+            (re.compile(r'Player disconnected:', re.I), '#ff66aa', True),
+            # OP/Deop/权限变更
+            (re.compile(r'(?:Opped|De-opped|Permission)', re.I), '#ffdd44', True),
+            # 命令执行（行首 >）
+            (re.compile(r'^>\s', re.M), '#ffaa00', False),
+            # 世界保存
+            (re.compile(r'(?:Saving|Saved|save complete)', re.I), '#aaddff', True),
+            # 自动保存 / 备份
+            (re.compile(r'(?:Autosave|backup|Backup)', re.I), '#88cc88', True),
             # 服务器版本/核心信息
             (re.compile(r'(?:Version|v\d+\.\d+\.\d+|Bedrock)', re.I), '#88ddff', True),
             # 玩家列表/数量
             (re.compile(r'(?:There are \d+ of|players online|\d+ players)', re.I), '#aaffaa', True),
             # 网络/端口绑定
             (re.compile(r'(?:port|bind|listening|UDP|IPv[46])', re.I), '#dd88ff', True),
+            # 世界加载/区块
+            (re.compile(r'(?:Loading|level|chunk|dimension|world)', re.I), '#ccddff', True),
+            # 遥测
+            (re.compile(r'(?:TELEMETRY|telemetry)', re.I), '#888888', True),
         ]
 
         # 2. 依次匹配规则
@@ -1709,8 +1719,6 @@ class ConsoleTab(QWidget):
 
         # 解析玩家加入/离开事件
         self._parse_player_event(text)
-        # 解析 TPS（如果服务器输出包含）
-        self._parse_tps(text)
 
     def _parse_player_event(self, text):
         """解析 BDS 玩家连接/生成/断开事件"""
@@ -1735,14 +1743,6 @@ class ConsoleTab(QWidget):
             name = m.group(1)
             self._players.pop(name, None)
             self.parent.server_stats["players"] = list(self._players.keys())
-
-    def _parse_tps(self, text):
-        """解析 TPS 相关信息"""
-        # BDS 不直接输出 TPS，通过 "Server uptime" 等模式间接估算
-        # 简单做法：追踪消息频率
-        if hasattr(self, '_last_tps_check'):
-            pass  # 由 DashboardTab 的定时器计算
-        self._last_tps_check = time.time()
 
     def get_server_stats(self):
         """返回当前服务器状态汇总"""
@@ -1782,7 +1782,6 @@ class ConsoleTab(QWidget):
         self.stop_btn.setEnabled(True)
         self._server_start_time = time.time()
         self._players.clear()
-        self._tps_history.clear()
         self._restart_count = 0
         log_success("服务器启动中...")
         self.append_output(">>> 服务器启动中... <<<")
@@ -2676,9 +2675,13 @@ class TunnelTab(QWidget):
         load_ini_btn.clicked.connect(self.load_ini_file)
         open_ini_dir_btn = QPushButton("📁 打开 frpc 目录")
         open_ini_dir_btn.clicked.connect(self.open_frpc_dir)
+        template_btn = QPushButton("📋 配置模板")
+        template_btn.clicked.connect(self._load_template)
+        template_btn.setToolTip("填入 frpc.ini 模板，含 ChmlFrp 官网链接")
         ini_btn_layout.addWidget(save_ini_btn)
         ini_btn_layout.addWidget(load_ini_btn)
         ini_btn_layout.addWidget(open_ini_dir_btn)
+        ini_btn_layout.addWidget(template_btn)
         ini_btn_layout.addStretch()
         ini_layout.addLayout(ini_btn_layout)
         ini_group.setLayout(ini_layout)
@@ -2793,6 +2796,34 @@ class TunnelTab(QWidget):
         except Exception as e:
             log_error(f"打开目录失败: {e}")
             QMessageBox.critical(self, "错误", f"打开目录失败: {e}")
+
+    def _load_template(self):
+        """加载 frpc.ini 模板"""
+        template = (
+            "# frpc.ini 配置模板\n"
+            "# 请访问 ChmlFrp 官网获取隧道信息：https://www.chmlfrp.net/\n"
+            "# 在官网创建隧道后，复制生成的配置到下方\n"
+            "#\n"
+            "# 示例配置:\n"
+            "# [common]\n"
+            "# server_addr = 你的服务器地址\n"
+            "# server_port = 7000\n"
+            "# token = 你的token\n"
+            "#\n"
+            "# [你的隧道名称]\n"
+            "# type = tcp\n"
+            "# local_ip = 127.0.0.1\n"
+            "# local_port = 19132\n"
+            "# remote_port = 外网端口\n"
+        )
+        reply = QMessageBox.question(
+            self, "加载模板",
+            "将用模板替换当前编辑内容，是否继续？\n\n"
+            "提示：请前往 https://www.chmlfrp.net/ 创建隧道。",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No
+        )
+        if reply == QMessageBox.Yes:
+            self.ini_editor.setPlainText(template)
 
     # ---------- 隧道输出 ----------
     def _init_tunnel_log(self):
@@ -4255,7 +4286,6 @@ class DashboardTab(QWidget):
         self.cpu_label = QLabel("CPU: --%")
         self.mem_label = QLabel("内存: --%")
         self.net_label = QLabel("网络: --")
-        self.tps_label = QLabel("TPS: --")
         self.cpu_pbar = QProgressBar(); self.cpu_pbar.setMaximum(100); self.cpu_pbar.setMaximumHeight(14)
         self.mem_pbar = QProgressBar(); self.mem_pbar.setMaximum(100); self.mem_pbar.setMaximumHeight(14)
         perf_layout.addWidget(QLabel("CPU:"), 0, 0)
@@ -4264,9 +4294,10 @@ class DashboardTab(QWidget):
         perf_layout.addWidget(QLabel("内存:"), 1, 0)
         perf_layout.addWidget(self.mem_pbar, 1, 1)
         perf_layout.addWidget(self.mem_label, 1, 2)
+        perf_layout.addWidget(self.net_label, 2, 2)
+        self.tps_label = QLabel("TPS: N/A")
         perf_layout.addWidget(QLabel("TPS:"), 2, 0)
         perf_layout.addWidget(self.tps_label, 2, 1)
-        perf_layout.addWidget(self.net_label, 2, 2)
         perf_group.setLayout(perf_layout)
         layout.addWidget(perf_group)
 
@@ -4374,6 +4405,22 @@ class DashboardTab(QWidget):
             self.net_label.setText(f"上传: {sent_kb/1024:.1f}MB / 下载: {recv_kb/1024:.1f}MB")
         except Exception:
             pass
+
+        # TPS（活动率估算）
+        tps = stats.get("tps", 0)
+        if tps > 0:
+            if tps >= 5:
+                self.tps_label.setText(f"TPS: {tps:.1f} 🟢")
+                self.tps_label.setStyleSheet("color: #4CAF50; font-weight: bold;")
+            elif tps >= 1:
+                self.tps_label.setText(f"TPS: {tps:.1f} 🟡")
+                self.tps_label.setStyleSheet("color: #ffaa33; font-weight: bold;")
+            else:
+                self.tps_label.setText(f"TPS: {tps:.1f} 🔴")
+                self.tps_label.setStyleSheet("color: #f44336; font-weight: bold;")
+        else:
+            self.tps_label.setText("TPS: --")
+            self.tps_label.setStyleSheet("color: #888;")
 
 # ---------- 主窗口 ----------
 class BDSManager(QMainWindow):
