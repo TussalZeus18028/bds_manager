@@ -28,7 +28,7 @@ Minecraft Bedrock Dedicated Server 管理工具
   - 多线程优化：所有耗时操作移至后台线程，避免阻塞主界面
 """
 
-__version__ = "2.0.2"
+__version__ = "2.0.4"
 
 import sys
 import os
@@ -1243,59 +1243,65 @@ class ThemeManager:
     def get_theme(self, name):
         return self.themes.get(name, self.themes["dark"])
 
-# ---------- 设置对话框 ----------
-class SettingsDialog(QDialog):
+# ---------- 设置标签页 ----------
+class SettingsTab(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.parent = parent
-        self.setWindowTitle("设置")
-        self.setModal(True)
-        self.resize(550, 600)
         self.init_ui()
 
     def init_ui(self):
-        layout = QVBoxLayout(self)
-        theme_group = QGroupBox("主题")
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QScrollArea.NoFrame)
+        content = QWidget()
+        layout = QVBoxLayout(content)
+        layout.setContentsMargins(12, 12, 12, 12)
+        layout.setSpacing(10)
+
+        # --- 主题 ---
+        theme_group = QGroupBox("🎨 主题")
         theme_layout = QHBoxLayout()
         self.theme_combo = QComboBox()
         self.theme_combo.addItems(["dark", "light", "custom"])
         self.theme_combo.currentTextChanged.connect(self.parent.on_theme_changed)
-        theme_layout.addWidget(QLabel("主题:"))
+        theme_layout.addWidget(QLabel("选择主题:"))
         theme_layout.addWidget(self.theme_combo)
         theme_layout.addStretch()
         theme_group.setLayout(theme_layout)
         layout.addWidget(theme_group)
 
-        self.custom_group = QGroupBox("自定义颜色")
-        custom_layout = QGridLayout(self.custom_group)
+        # --- 自定义颜色 ---
+        self.custom_group = QGroupBox("🎨 自定义颜色")
+        custom_layout = QGridLayout()
         self.color_buttons = {}
         colors_def = [
-            ("background", "背景色"),
-            ("text", "文字色"),
-            ("accent", "强调色"),
-            ("border", "边框色"),
-            ("group_bg", "组背景"),
-            ("input_bg", "输入框背景"),
-            ("button_bg", "按钮背景"),
-            ("button_hover", "按钮悬停")
+            ("background", "背景色"), ("text", "文字色"), ("accent", "强调色"),
+            ("border", "边框色"), ("group_bg", "组背景"), ("input_bg", "输入框背景"),
+            ("button_bg", "按钮背景"), ("button_hover", "按钮悬停")
         ]
         for i, (key, label) in enumerate(colors_def):
             btn = QPushButton()
             btn.setFixedSize(60, 30)
             btn.clicked.connect(lambda _, k=key: self.parent.choose_custom_color(k))
             self.color_buttons[key] = btn
-            custom_layout.addWidget(QLabel(label), i, 0)
-            custom_layout.addWidget(btn, i, 1)
+            custom_layout.addWidget(QLabel(label), i // 4, (i % 4) * 2)
+            custom_layout.addWidget(btn, i // 4, (i % 4) * 2 + 1)
         self.apply_custom_btn = QPushButton("应用自定义颜色")
         self.apply_custom_btn.clicked.connect(self.parent.apply_custom_theme)
-        custom_layout.addWidget(self.apply_custom_btn, len(colors_def), 0, 1, 2)
+        custom_layout.addWidget(self.apply_custom_btn, 2, 0, 1, 8)
+        self.custom_group.setLayout(custom_layout)
+        # 切换主题时显示/隐藏自定义颜色
+        self.theme_combo.currentTextChanged.connect(
+            lambda t: self.custom_group.setVisible(t == "custom"))
         layout.addWidget(self.custom_group)
-        self.custom_group.setVisible(self.theme_combo.currentText() == "custom")
 
-        server_group = QGroupBox("服务器路径")
+        # --- 服务器路径 ---
+        server_group = QGroupBox("📂 服务器路径")
         server_layout = QHBoxLayout()
         self.server_dir_edit = QLineEdit()
-        self.server_dir_edit.setText(self.parent.config.get("server_dir", "Server"))
         browse_dir_btn = QPushButton("浏览")
         browse_dir_btn.clicked.connect(self.browse_server_dir)
         server_layout.addWidget(QLabel("服务器文件夹:"))
@@ -1304,10 +1310,10 @@ class SettingsDialog(QDialog):
         server_group.setLayout(server_layout)
         layout.addWidget(server_group)
 
-        exe_group = QGroupBox("服务端程序")
+        # --- 服务端程序 ---
+        exe_group = QGroupBox("⚙️ 服务端程序")
         exe_layout = QHBoxLayout()
         self.server_exe_edit = QLineEdit()
-        self.server_exe_edit.setText(self.parent.config.get("server_exe", "bedrock_server.exe"))
         browse_exe_btn = QPushButton("浏览")
         browse_exe_btn.clicked.connect(self.browse_server_exe)
         exe_layout.addWidget(QLabel("可执行文件:"))
@@ -1316,35 +1322,46 @@ class SettingsDialog(QDialog):
         exe_group.setLayout(exe_layout)
         layout.addWidget(exe_group)
 
-        backup_group = QGroupBox("自动备份")
+        # --- 自动备份 ---
+        backup_group = QGroupBox("💾 自动备份")
         backup_layout = QHBoxLayout()
         self.backup_interval = QSpinBox()
         self.backup_interval.setRange(0, 1440)
         self.backup_interval.setSuffix(" 分钟")
-        self.backup_interval.setToolTip("设置为0禁用自动备份")
-        self.backup_interval.setValue(self.parent.config.get("backup_interval", 60))
+        self.backup_interval.setToolTip("0 = 禁用自动备份")
         backup_layout.addWidget(QLabel("备份间隔:"))
         backup_layout.addWidget(self.backup_interval)
         backup_layout.addStretch()
         backup_group.setLayout(backup_layout)
         layout.addWidget(backup_group)
 
-        monitor_group = QGroupBox("系统资源监视")
+        # --- 系统监视 ---
+        monitor_group = QGroupBox("📊 系统资源监视")
         monitor_layout = QHBoxLayout()
         self.monitor_interval = QSpinBox()
         self.monitor_interval.setRange(500, 10000)
         self.monitor_interval.setSuffix(" 毫秒")
-        self.monitor_interval.setToolTip("系统资源监视器的更新频率")
-        self.monitor_interval.setValue(self.parent.config.get("monitor_interval", 2000))
+        self.monitor_interval.setToolTip("系统资源监视器更新频率")
         monitor_layout.addWidget(QLabel("更新间隔:"))
         monitor_layout.addWidget(self.monitor_interval)
         monitor_layout.addStretch()
         monitor_group.setLayout(monitor_layout)
         layout.addWidget(monitor_group)
 
-        btn_save = QPushButton("保存设置")
+        # --- 保存按钮 ---
+        save_row = QHBoxLayout()
+        save_row.addStretch()
+        btn_save = QPushButton("💾 保存设置")
+        btn_save.setStyleSheet("font-weight: bold; min-height: 32px; padding: 6px 24px;")
         btn_save.clicked.connect(self.save_settings)
-        layout.addWidget(btn_save)
+        save_row.addWidget(btn_save)
+        save_row.addStretch()
+        layout.addLayout(save_row)
+
+        layout.addStretch()
+        scroll.setWidget(content)
+        outer.addWidget(scroll)
+
         self.load_config()
 
     def browse_server_dir(self):
@@ -1373,14 +1390,10 @@ class SettingsDialog(QDialog):
     def save_settings(self):
         new_dir = self.server_dir_edit.text().strip()
         new_exe = self.server_exe_edit.text().strip()
-
-        # 校验服务器目录
         abs_dir = os.path.join(SCRIPT_DIR, new_dir) if not os.path.isabs(new_dir) else new_dir
         if not os.path.isdir(abs_dir):
             QMessageBox.warning(self, "路径无效", f"服务器目录不存在：\n{abs_dir}")
             return
-
-        # 校验可执行文件（可选：检查是否存在）
         exe_path = os.path.join(abs_dir, new_exe)
         if not os.path.isfile(exe_path):
             reply = QMessageBox.question(
@@ -1401,7 +1414,7 @@ class SettingsDialog(QDialog):
         self.parent.apply_monitor_interval(self.parent.config["monitor_interval"])
         self.parent.init_watcher()
         self.parent.update_backup_timer()
-        self.accept()
+        QMessageBox.information(self, "保存成功", "设置已保存并生效。")
 
 # ---------- 后台工作线程（用于耗时操作）----------
 class BaseWorker(QThread):
@@ -4577,6 +4590,7 @@ class BDSManager(QMainWindow):
         self.tunnel_tab = TunnelTab(self)
         self.upgrade_tab = UpgradeTab(self)
         self.dashboard_tab = DashboardTab(self)
+        self.settings_tab = SettingsTab(self)
 
         self.tab_widget.addTab(self.dashboard_tab, "🏠 仪表盘")
         self.tab_widget.addTab(self.console_tab, "🖥️ 控制台")
@@ -4586,16 +4600,14 @@ class BDSManager(QMainWindow):
         self.tab_widget.addTab(monitor_tab, "📊 系统资源")
         self.tab_widget.addTab(self.tunnel_tab, "🚇 隧道")
         self.tab_widget.addTab(self.upgrade_tab, "🔄 版本升级")
+        self.tab_widget.addTab(self.settings_tab, "⚙️ 设置")
 
         layout.addWidget(self.tab_widget)
 
         status_layout = QHBoxLayout()
         self.status_label = QLabel("就绪")
-        self.settings_btn = QPushButton("⚙️ 设置")
-        self.settings_btn.clicked.connect(self.open_settings)
         status_layout.addWidget(self.status_label)
         status_layout.addStretch()
-        status_layout.addWidget(self.settings_btn)
         layout.addLayout(status_layout)
 
     def create_tray_icon(self):
@@ -4711,8 +4723,8 @@ class BDSManager(QMainWindow):
         color = QColorDialog.getColor(current, self, f"选择 {color_key}")
         if color.isValid():
             self.custom_colors[color_key] = color.name()
-            if hasattr(self, 'settings_dlg') and self.settings_dlg and self.settings_dlg.color_buttons.get(color_key):
-                self.settings_dlg.color_buttons[color_key].setStyleSheet(f"background-color: {color.name()}; border: 1px solid #888;")
+            if hasattr(self, 'settings_tab') and self.settings_tab and self.settings_tab.color_buttons.get(color_key):
+                self.settings_tab.color_buttons[color_key].setStyleSheet(f"background-color: {color.name()}; border: 1px solid #888;")
 
     def apply_custom_theme(self):
         self.theme_manager.set_custom_colors(self.custom_colors)
@@ -4722,11 +4734,6 @@ class BDSManager(QMainWindow):
     def apply_monitor_interval(self, interval):
         if hasattr(self, 'system_monitor'):
             self.system_monitor.update_interval(interval)
-
-    def open_settings(self):
-        self.settings_dlg = SettingsDialog(self)
-        self.settings_dlg.exec_()
-        self.settings_dlg = None
 
     def closeEvent(self, event):
         if hasattr(self, 'tunnel_tab'):
