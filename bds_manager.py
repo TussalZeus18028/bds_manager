@@ -1409,7 +1409,7 @@ class SettingsTab(QWidget):
         theme_group = QGroupBox("🎨 主题")
         theme_layout = QHBoxLayout()
         self.theme_combo = QComboBox()
-        self.theme_combo.addItems(["dark", "light", "custom"])
+        self.theme_combo.addItems(["auto", "dark", "light", "custom"])
         self.theme_combo.currentTextChanged.connect(self.parent.on_theme_changed)
         theme_layout.addWidget(QLabel("选择主题:"))
         theme_layout.addWidget(self.theme_combo)
@@ -1505,6 +1505,14 @@ class SettingsTab(QWidget):
         mem_group.setLayout(mem_layout)
         layout.addWidget(mem_group)
 
+        # --- 高分屏 ---
+        dpi_group = QGroupBox("🖥️ 高分屏适配")
+        dpi_layout = QHBoxLayout()
+        self.hidpi_cb = QCheckBox("启用高分屏缩放（需重启程序生效）")
+        dpi_layout.addWidget(self.hidpi_cb)
+        dpi_group.setLayout(dpi_layout)
+        layout.addWidget(dpi_group)
+
         # --- 保存按钮 ---
         save_row = QHBoxLayout()
         save_row.addStretch()
@@ -1534,12 +1542,13 @@ class SettingsTab(QWidget):
             self.server_exe_edit.setText(rel)
 
     def load_config(self):
-        self.theme_combo.setCurrentText(self.parent.config.get("theme", "dark"))
+        self.theme_combo.setCurrentText(self.parent.config.get("theme", "auto"))
         self.server_dir_edit.setText(self.parent.config.get("server_dir", "Server"))
         self.server_exe_edit.setText(self.parent.config.get("server_exe", "bedrock_server.exe"))
         self.backup_interval.setValue(self.parent.config.get("backup_interval", 60))
         self.monitor_interval.setValue(self.parent.config.get("monitor_interval", 2000))
         self.mem_warn.setValue(self.parent.config.get("mem_warn_threshold", 80))
+        self.hidpi_cb.setChecked(self.parent.config.get("hidpi_enabled", True))
         self.custom_group.setVisible(self.theme_combo.currentText() == "custom")
         for key, btn in self.color_buttons.items():
             color = self.parent.custom_colors.get(key, "#2b2b2b")
@@ -1568,6 +1577,7 @@ class SettingsTab(QWidget):
         self.parent.config["backup_interval"] = self.backup_interval.value()
         self.parent.config["monitor_interval"] = self.monitor_interval.value()
         self.parent.config["mem_warn_threshold"] = self.mem_warn.value()
+        self.parent.config["hidpi_enabled"] = self.hidpi_cb.isChecked()
         self.parent.save_config()
         self.parent.apply_theme(self.parent.config["theme"])
         self.parent.apply_monitor_interval(self.parent.config["monitor_interval"])
@@ -4658,7 +4668,7 @@ class BDSManager(QMainWindow):
         # Toast 通知系统
         set_toast_parent(self)
         self.init_ui()
-        self.apply_theme(self.config.get("theme", "dark"))
+        self.apply_theme(self.config.get("theme", "auto"))
         # 自动备份定时器
         self.backup_timer = QTimer()
         self.backup_timer.timeout.connect(self.auto_backup)
@@ -4762,6 +4772,7 @@ class BDSManager(QMainWindow):
             "window_width": self.config.get("window_width", 1200),
             "window_height": self.config.get("window_height", 800),
             "mem_warn_threshold": self.config.get("mem_warn_threshold", 80),
+            "hidpi_enabled": self.config.get("hidpi_enabled", True),
         }
         try:
             with open(CONFIG_FILE, "w", encoding="utf-8") as f:
@@ -4890,14 +4901,40 @@ class BDSManager(QMainWindow):
         self.tab_widget.addTab(self.tunnel_tab, "🚇 隧道")
         self.tab_widget.addTab(self.upgrade_tab, "🔄 版本升级")
         self.tab_widget.addTab(self.settings_tab, "⚙️ 设置")
+        # 标签页切换动画
+        from PyQt5.QtWidgets import QGraphicsOpacityEffect
+        self._tab_fx = QGraphicsOpacityEffect(self.tab_widget)
+        self._tab_fx.setOpacity(1.0)
+        self.tab_widget.setGraphicsEffect(self._tab_fx)
+        self._tab_anim = QPropertyAnimation(self._tab_fx, b"opacity")
+        self._tab_anim.setDuration(150)
+        self.tab_widget.currentChanged.connect(self._animate_tab_switch)
 
         layout.addWidget(self.tab_widget)
 
+        # 状态栏（实时信息）
         status_layout = QHBoxLayout()
-        self.status_label = QLabel("就绪")
-        status_layout.addWidget(self.status_label)
+        status_layout.setContentsMargins(8, 2, 8, 2)
+        self.status_server = QLabel("⏹ 服务器: 已停止")
+        self.status_server.setStyleSheet("font-size:11px; color:#888; padding:0 8px;")
+        self.status_players = QLabel("👥 0")
+        self.status_players.setStyleSheet("font-size:11px; color:#888; padding:0 8px;")
+        self.status_mem = QLabel("💾 --")
+        self.status_mem.setStyleSheet("font-size:11px; color:#888; padding:0 8px;")
+        self.status_ver = QLabel(f"v{__version__}")
+        self.status_ver.setStyleSheet("font-size:10px; color:#555; padding:0 8px;")
+        status_layout.addWidget(self.status_server)
+        status_layout.addWidget(self.status_players)
+        status_layout.addWidget(self.status_mem)
         status_layout.addStretch()
+        status_layout.addWidget(self.status_ver)
         layout.addLayout(status_layout)
+        # 兼容旧代码
+        self.status_label = self.status_server
+        # 状态栏刷新定时器
+        self._status_timer = QTimer()
+        self._status_timer.timeout.connect(self._refresh_status_bar)
+        self._status_timer.start(3000)
 
     def create_tray_icon(self):
         self.tray_icon = QSystemTrayIcon(self)
@@ -4950,6 +4987,39 @@ class BDSManager(QMainWindow):
     def on_tray_activated(self, reason):
         if reason == QSystemTrayIcon.DoubleClick:
             self.show_normal()
+
+    def _animate_tab_switch(self, index):
+        """标签页切换 150ms 淡入动画"""
+        self._tab_anim.stop()
+        self._tab_anim.setStartValue(0.7)
+        self._tab_anim.setEndValue(1.0)
+        self._tab_anim.setEasingCurve(QEasingCurve.OutCubic)
+        self._tab_anim.start()
+
+    def _refresh_status_bar(self):
+        """更新底部状态栏实时信息"""
+        running = self.is_server_running()
+        stats = self.console_tab.get_server_stats()
+        # 服务器
+        if running:
+            self.status_server.setText("🟢 服务器: 在线")
+            self.status_server.setStyleSheet("font-size:11px; color:#4CAF50; padding:0 8px;")
+        else:
+            self.status_server.setText("⏹ 服务器: 已停止")
+            self.status_server.setStyleSheet("font-size:11px; color:#888; padding:0 8px;")
+        # 玩家
+        n = stats.get("player_count", 0)
+        self.status_players.setText(f"👥 {n}")
+        self.status_players.setStyleSheet(f"font-size:11px; color:{'#66ccff' if n else '#888'}; padding:0 8px;")
+        # 内存
+        try:
+            import psutil
+            mem = psutil.virtual_memory().percent
+            c = "#4CAF50" if mem < 60 else "#ffaa33" if mem < 80 else "#f44336"
+            self.status_mem.setText(f"💾 {mem:.0f}%")
+            self.status_mem.setStyleSheet(f"font-size:11px; color:{c}; padding:0 8px;")
+        except:
+            pass
 
     def quit_app(self):
         """退出应用：先停止服务器和隧道，再清理资源"""
@@ -5018,7 +5088,22 @@ class BDSManager(QMainWindow):
             self.upgrade_tab.refresh_current_info()
         log_info("界面已自动同步外部更改")
 
+    def _detect_system_theme(self):
+        """检测 Windows 深浅色模式"""
+        if sys.platform != "win32":
+            return "dark"
+        try:
+            import winreg
+            key = winreg.OpenKey(winreg.HKEY_CURRENT_USER,
+                r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize")
+            val, _ = winreg.QueryValueEx(key, "AppsUseLightTheme")
+            return "light" if val else "dark"
+        except Exception:
+            return "dark"
+
     def apply_theme(self, theme_name):
+        if theme_name == "auto":
+            theme_name = self._detect_system_theme()
         style = self.theme_manager.get_theme(theme_name)
         self.setStyleSheet(style)
         if MATPLOTLIB_AVAILABLE and hasattr(self, 'system_monitor') and hasattr(self.system_monitor, 'figure'):
@@ -5075,7 +5160,19 @@ class BDSManager(QMainWindow):
             self.config["window_width"] = self.width()
             self.config["window_height"] = self.height()
 
+# ---------- 高分屏适配 ----------
+def _load_hidpi_config():
+    if os.path.exists(CONFIG_FILE):
+        try:
+            with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+                return json.load(f).get("hidpi_enabled", True)
+        except: pass
+    return True
+
 if __name__ == "__main__":
+    if _load_hidpi_config():
+        QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)
+        QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps, True)
     app = QApplication(sys.argv)
     app.setFont(QFont("Segoe UI", 9))
     if not QSystemTrayIcon.isSystemTrayAvailable():
