@@ -1,6 +1,6 @@
 {
-    "version": "1.5.0",
+    "version": "2.0.0",
     "release_date": "2026-07-04",
     "download_url": "https://github.com/TussalZeus18028/bds_manager",
-    "changelog": "大量错误修复"
+    "changelog": "增加功能，修复问题"
 }
