@@ -2662,6 +2662,10 @@ class WorldTab(QWidget):
         self.backup_list.setMaximumHeight(200)
         layout.addWidget(QLabel("已有备份:"))
         layout.addWidget(self.backup_list)
+        del_btn = QPushButton("🗑 删除选中备份")
+        del_btn.setStyleSheet("color: #f44336; font-weight: bold;")
+        del_btn.clicked.connect(self.delete_backup)
+        layout.addWidget(del_btn)
         self.refresh_backup_list()
 
         quick_group = QGroupBox("世界设置快捷修改 (会修改 server.properties)")
@@ -2720,6 +2724,28 @@ class WorldTab(QWidget):
                 self.backup_list.addItem(b)
         except Exception as e:
             log_error(f"刷新备份列表失败: {e}")
+
+    def delete_backup(self):
+        """删除选中的备份文件"""
+        item = self.backup_list.currentItem()
+        if not item:
+            toast_warning("未选择", "请先选择要删除的备份")
+            return
+        filename = item.text()
+        filepath = os.path.join(BACKUP_DIR, filename)
+        reply = QMessageBox.question(
+            self, "确认删除",
+            f"确定要删除备份文件吗？\n\n{filename}\n\n此操作不可恢复！",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No
+        )
+        if reply != QMessageBox.Yes:
+            return
+        try:
+            os.remove(filepath)
+            toast_success("已删除", filename)
+            self.refresh_backup_list()
+        except Exception as e:
+            toast_error("删除失败", str(e))
 
     def backup_world(self):
         if self.parent.is_server_running():
