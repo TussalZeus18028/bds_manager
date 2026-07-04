@@ -28,7 +28,7 @@ Minecraft Bedrock Dedicated Server 管理工具
   - 多线程优化：所有耗时操作移至后台线程，避免阻塞主界面
 """
 
-__version__ = "2.0.6"
+__version__ = "2.0.7"
 
 import sys
 import os
@@ -93,8 +93,133 @@ from PyQt5.QtWidgets import (
     QTabWidget as QTabWidget2, QSystemTrayIcon, QAction, QStyle,
     QPlainTextEdit
 )
-from PyQt5.QtCore import Qt, QTimer, pyqtSignal, QThread, QFileSystemWatcher, QEvent, QObject
-from PyQt5.QtGui import QFont, QColor, QTextCursor, QIcon
+from PyQt5.QtCore import Qt, QTimer, pyqtSignal, QThread, QFileSystemWatcher, QEvent, QObject, QPropertyAnimation, QParallelAnimationGroup, QEasingCurve, QRect, QPoint
+from PyQt5.QtGui import QFont, QColor, QTextCursor, QIcon, QPainter, QPen
+
+# ---------- Toast 通知组件 ----------
+class ToastNotification(QWidget):
+    """现代化右上角弹窗通知"""
+    _instances = []
+
+    def __init__(self, parent, title, message, level="info", duration=4000):
+        super().__init__(None)
+        self._window = parent
+
+        # 使用纯色背景 + 圆角遮罩（避免 Windows UpdateLayeredWindow 错误）
+        colors = {
+            "error": ("#ff4444", "#2a181a"),
+            "warning": ("#ffaa33", "#2a2218"),
+            "success": ("#44cc66", "#182a1e"),
+            "info": ("#4488ff", "#181e2a"),
+        }
+        accent_hex, bg_hex = colors.get(level, colors["info"])
+        self._bg = QColor(bg_hex)
+        self._accent = QColor(accent_hex)
+        self._radius = 12
+
+        self.setWindowFlags(Qt.FramelessWindowHint | Qt.ToolTip)
+        self.setAttribute(Qt.WA_ShowWithoutActivating)
+        self.setFixedWidth(320)
+
+        icon = {"error": "❌", "warning": "⚠️", "success": "✅", "info": "ℹ️"}.get(level, "ℹ️")
+
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(12, 10, 12, 10)
+        layout.setSpacing(10)
+
+        icon_label = QLabel(icon)
+        icon_label.setStyleSheet("font-size:18px; background:transparent;")
+        layout.addWidget(icon_label, 0, Qt.AlignTop)
+
+        text_layout = QVBoxLayout()
+        text_layout.setSpacing(2)
+        title_label = QLabel(title)
+        title_label.setStyleSheet(f"font-weight:bold; font-size:12px; color:{accent_hex}; background:transparent;")
+        msg_label = QLabel(message)
+        msg_label.setWordWrap(True)
+        msg_label.setStyleSheet("font-size:11px; color:#ccddee; background:transparent;")
+        text_layout.addWidget(title_label)
+        text_layout.addWidget(msg_label)
+        layout.addLayout(text_layout, 1)
+
+        self.setStyleSheet(f"ToastNotification {{ background-color: {bg_hex}; }}")
+
+        self.adjustSize()
+        self.setFixedWidth(320)
+        h = max(60, self.sizeHint().height() + 10)
+        self.setFixedHeight(h)
+        self._apply_mask()
+
+        self._calc_position()
+        self._start_slide_in()
+        self.show()
+        self._clicked = False
+        self.mousePressEvent = lambda e: self._dismiss()
+        QTimer.singleShot(duration, self._dismiss)
+        ToastNotification._instances.append(self)
+
+    def _apply_mask(self):
+        """圆角遮罩"""
+        from PyQt5.QtGui import QBitmap, QPainter as QP2
+        mask = QBitmap(self.size())
+        mask.fill(Qt.color0)
+        p = QP2(mask)
+        p.setRenderHint(QPainter.Antialiasing)
+        p.setBrush(Qt.color1)
+        p.setPen(Qt.NoPen)
+        p.drawRoundedRect(self.rect(), self._radius, self._radius)
+        p.end()
+        self.setMask(mask)
+
+    def paintEvent(self, event):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
+        p.setBrush(self._bg)
+        p.setPen(QPen(self._accent, 2))
+        r = self.rect().adjusted(1, 1, -1, -1)
+        p.drawRoundedRect(r, self._radius, self._radius)
+
+    def _calc_position(self):
+        """计算在窗口右上角的绝对坐标"""
+        w = self._window
+        offset = 12
+        for inst in ToastNotification._instances:
+            offset += inst.height() + 8
+        # 相对于主窗口右上角
+        x = w.mapToGlobal(QPoint(w.width() - self.width() - 12, offset)).x()
+        y = w.mapToGlobal(QPoint(0, offset)).y()
+        self.move(x, y)
+
+    def _start_slide_in(self):
+        # 从窗口右边缘滑入
+        w = self._window
+        right_edge = w.mapToGlobal(QPoint(w.width(), 0)).x()
+        self._anim_in = QPropertyAnimation(self, b"pos")
+        self._anim_in.setDuration(300)
+        self._anim_in.setStartValue(QPoint(right_edge, self.y()))
+        self._anim_in.setEndValue(self.pos())
+        self._anim_in.setEasingCurve(QEasingCurve.OutCubic)
+        self._anim_in.start()
+
+    def _dismiss(self):
+        if self._clicked: return
+        self._clicked = True
+        # 位置 + 透明度 同时动画
+        self._anim_out = QPropertyAnimation(self, b"pos")
+        self._anim_out.setDuration(250)
+        self._anim_out.setStartValue(self.pos())
+        end_x = self._window.mapToGlobal(QPoint(self._window.width(), 0)).x()
+        self._anim_out.setEndValue(QPoint(end_x, self.y()))
+        self._anim_out.setEasingCurve(QEasingCurve.InCubic)
+        self._anim_out.finished.connect(self._cleanup)
+        self._anim_out.start()
+
+    def _cleanup(self):
+        if self in ToastNotification._instances:
+            ToastNotification._instances.remove(self)
+        self.deleteLater()
+        for inst in ToastNotification._instances:
+            inst._calc_position()
 
 # ---------- 启用 Windows 控制台 ANSI 颜色 ----------
 if sys.platform == "win32":
@@ -137,6 +262,25 @@ def log_step(msg):
 
 def log_debug(msg):
     print(f"{COLOR_DEBUG}[{_timestamp()}] [DEBUG] {msg}{COLOR_RESET}")
+
+# ---------- Toast 便捷函数 ----------
+_toast_parent = None
+
+def set_toast_parent(parent):
+    global _toast_parent
+    _toast_parent = parent
+
+def toast_error(title, msg=""):
+    if _toast_parent: ToastNotification(_toast_parent, title, msg, "error", 5000)
+
+def toast_warning(title, msg=""):
+    if _toast_parent: ToastNotification(_toast_parent, title, msg, "warning", 4000)
+
+def toast_success(title, msg=""):
+    if _toast_parent: ToastNotification(_toast_parent, title, msg, "success", 3500)
+
+def toast_info(title, msg=""):
+    if _toast_parent: ToastNotification(_toast_parent, title, msg, "info", 3000)
 
 # ---------- 全局配置：支持脚本与服务器文件夹分离 ----------
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -296,7 +440,7 @@ class PortCheckerDialog(QDialog):
             self.recommend_ipv6_edit.setText(str(new_ipv6) if new_ipv6 is not None else "错误")
         except Exception as e:
             log_error(f"端口检测异常: {e}")
-            QMessageBox.warning(self, "错误", f"端口检测失败: {e}")
+            toast_error("端口检测失败", str(e))
 
     def apply_recommended_ports(self):
         new_ipv4_text = self.recommend_ipv4_edit.text().strip()
@@ -305,10 +449,10 @@ class PortCheckerDialog(QDialog):
             new_ipv4 = int(new_ipv4_text)
             new_ipv6 = int(new_ipv6_text)
         except ValueError:
-            QMessageBox.warning(self, "错误", "推荐的端口格式无效，请重新检测或手动输入。")
+            toast_error("格式无效", "推荐的端口格式无效，请重新检测或手动输入。")
             return
         if not os.path.exists(SERVER_PROPERTIES):
-            QMessageBox.warning(self, "错误", "server.properties 文件不存在。")
+            toast_error("文件不存在", "server.properties 文件不存在")
             return
         try:
             with open(SERVER_PROPERTIES, "r", encoding="utf-8") as f:
@@ -328,7 +472,7 @@ class PortCheckerDialog(QDialog):
                     f.write(f"server-port={new_ipv4}\n")
                     f.write(f"server-portv6={new_ipv6}\n")
             log_success(f"端口已更新: IPv4={new_ipv4}, IPv6={new_ipv6}")
-            QMessageBox.information(self, "成功", f"端口已更新为 {new_ipv4} (IPv4) 和 {new_ipv6} (IPv6)。\n请重启服务器生效。")
+            toast_success("端口已更新", f"{new_ipv4} / {new_ipv6}")
             self.load_current_ports()
             if hasattr(self.parent, 'load_server_properties'):
                 self.parent.load_server_properties()
@@ -1348,6 +1492,19 @@ class SettingsTab(QWidget):
         monitor_group.setLayout(monitor_layout)
         layout.addWidget(monitor_group)
 
+        # --- 内存告警 ---
+        mem_group = QGroupBox("⚠️ 内存告警")
+        mem_layout = QHBoxLayout()
+        self.mem_warn = QSpinBox()
+        self.mem_warn.setRange(50, 99)
+        self.mem_warn.setSuffix(" %")
+        self.mem_warn.setToolTip("内存使用率超过此阈值时弹出告警")
+        mem_layout.addWidget(QLabel("告警阈值:"))
+        mem_layout.addWidget(self.mem_warn)
+        mem_layout.addStretch()
+        mem_group.setLayout(mem_layout)
+        layout.addWidget(mem_group)
+
         # --- 保存按钮 ---
         save_row = QHBoxLayout()
         save_row.addStretch()
@@ -1382,6 +1539,7 @@ class SettingsTab(QWidget):
         self.server_exe_edit.setText(self.parent.config.get("server_exe", "bedrock_server.exe"))
         self.backup_interval.setValue(self.parent.config.get("backup_interval", 60))
         self.monitor_interval.setValue(self.parent.config.get("monitor_interval", 2000))
+        self.mem_warn.setValue(self.parent.config.get("mem_warn_threshold", 80))
         self.custom_group.setVisible(self.theme_combo.currentText() == "custom")
         for key, btn in self.color_buttons.items():
             color = self.parent.custom_colors.get(key, "#2b2b2b")
@@ -1392,7 +1550,7 @@ class SettingsTab(QWidget):
         new_exe = self.server_exe_edit.text().strip()
         abs_dir = os.path.join(SCRIPT_DIR, new_dir) if not os.path.isabs(new_dir) else new_dir
         if not os.path.isdir(abs_dir):
-            QMessageBox.warning(self, "路径无效", f"服务器目录不存在：\n{abs_dir}")
+            toast_error("路径无效", f"服务器目录不存在")
             return
         exe_path = os.path.join(abs_dir, new_exe)
         if not os.path.isfile(exe_path):
@@ -1409,12 +1567,13 @@ class SettingsTab(QWidget):
         self.parent.config["server_exe"] = new_exe
         self.parent.config["backup_interval"] = self.backup_interval.value()
         self.parent.config["monitor_interval"] = self.monitor_interval.value()
+        self.parent.config["mem_warn_threshold"] = self.mem_warn.value()
         self.parent.save_config()
         self.parent.apply_theme(self.parent.config["theme"])
         self.parent.apply_monitor_interval(self.parent.config["monitor_interval"])
         self.parent.init_watcher()
         self.parent.update_backup_timer()
-        QMessageBox.information(self, "保存成功", "设置已保存并生效。")
+        toast_success("设置已保存", "新设置已生效")
 
 # ---------- 后台工作线程（用于耗时操作）----------
 class BaseWorker(QThread):
@@ -1457,9 +1616,11 @@ class BackupWorker(BaseWorker):
                         if total_files % 100 == 0:
                             self.progress.emit(f"已打包 {total_files} 个文件...")
             self.progress.emit(f"备份完成: {backup_name}")
+            toast_success("备份完成", backup_name)
             self.finished.emit(True, f"备份成功: {backup_name}")
         except Exception as e:
             log_error(f"备份失败: {e}")
+            toast_error("备份失败", str(e))
             self.finished.emit(False, f"备份失败: {e}")
 
 class RestoreWorker(BaseWorker):
@@ -1728,6 +1889,7 @@ class ConsoleTab(QWidget):
             name = m.group(1)
             self._players[name] = {"joined": time.time()}
             self.parent.server_stats["players"] = list(self._players.keys())
+            toast_info("玩家加入", name)
             return
         # "Player Spawned: Name xuid: ..."  （没有逗号！）
         m = re.search(r'Player (?:S|s)pawned:\s+([A-Za-z0-9_]+)', text, re.I)
@@ -1743,6 +1905,7 @@ class ConsoleTab(QWidget):
             name = m.group(1)
             self._players.pop(name, None)
             self.parent.server_stats["players"] = list(self._players.keys())
+            toast_info("玩家离开", name)
 
     def get_server_stats(self):
         """返回当前服务器状态汇总"""
@@ -1770,6 +1933,7 @@ class ConsoleTab(QWidget):
     def start_server(self):
         server_exe = self.parent.get_server_exe_path()
         if not os.path.exists(server_exe):
+            toast_error("启动失败", f"找不到: {os.path.basename(server_exe)}")
             QMessageBox.critical(self, "错误", f"找不到服务器程序: {server_exe}\n请在设置中指定正确路径。")
             log_error(f"服务器程序不存在: {server_exe}")
             return
@@ -1785,6 +1949,7 @@ class ConsoleTab(QWidget):
         self._restart_count = 0
         log_success("服务器启动中...")
         self.append_output(">>> 服务器启动中... <<<")
+        toast_info("服务器启动", "BDS 正在启动...")
 
     def stop_server(self):
         if self.server_process:
@@ -1793,14 +1958,18 @@ class ConsoleTab(QWidget):
             self.server_process.stop_server()
 
     def on_server_stopped(self):
+        if self.start_btn.isEnabled():
+            return  # 防重复
         self.start_btn.setEnabled(True)
         self.stop_btn.setEnabled(False)
         log_success("服务器已停止")
+        toast_info("服务器已停止", "BDS 进程已退出")
         self.append_output(">>> 服务器已停止 <<<")
         self.server_process = None
 
     def on_server_error(self, error_msg):
         self.append_output(f">>> 错误: {error_msg} <<<")
+        toast_error("服务器崩溃", error_msg)
         if self._auto_restart and self._restart_count < 5:
             self._restart_count += 1
             self.append_output(f">>> {5}秒后自动重启（第 {self._restart_count} 次）... <<<")
@@ -1836,6 +2005,7 @@ class ConsoleTab(QWidget):
         if self.parent.is_server_running():
             self.append_output(">>> 服务器仍在运行，跳过自动重启 <<<")
             return
+        toast_warning("自动重启", f"第 {self._restart_count} 次尝试")
         self.append_output(">>> 自动重启服务器... <<<")
         self.start_server()
 
@@ -1947,13 +2117,13 @@ class PacksTab(QWidget):
     def show_pack_info(self, item):
         data = item.data(Qt.UserRole)
         if not data:
-            QMessageBox.warning(self, "错误", "无法获取包信息")
+            toast_error("错误", "无法获取包信息")
             return
         folder_name, pack_type, uuid = data
         base_dir = RESOURCE_PACKS_DIR if pack_type == "resource" else BEHAVIOR_PACKS_DIR
         pack_folder = os.path.join(base_dir, folder_name)
         if not os.path.exists(pack_folder):
-            QMessageBox.warning(self, "错误", f"包文件夹不存在: {pack_folder}")
+            toast_error("包不存在", f"文件夹不存在: {pack_folder}")
             return
         is_active = False
         level_name = self.parent.get_level_name()
@@ -1977,25 +2147,25 @@ class PacksTab(QWidget):
             return
         folder_name, pack_type, uuid = data
         if self.parent.is_server_running():
-            QMessageBox.warning(self, "操作被阻止", "服务器正在运行，无法修改包激活状态。请先停止服务器。")
+            toast_warning("操作被阻止", "请先停止服务器再修改包状态")
             return
         level_name = self.parent.get_level_name()
         world_path = get_world_path(level_name)
         if not os.path.exists(world_path):
-            QMessageBox.warning(self, "错误", f"世界文件夹不存在: {world_path}\n请确保服务器已至少启动过一次以生成世界。")
+            toast_error("世界不存在", "请先启动一次服务器生成世界")
             return
         base_dir = RESOURCE_PACKS_DIR if pack_type == "resource" else BEHAVIOR_PACKS_DIR
         pack_folder = os.path.join(base_dir, folder_name)
         uuid, version = get_pack_manifest(pack_folder, retry=3)
         if not uuid:
-            QMessageBox.warning(self, "错误", f"无法读取包 {folder_name} 的 manifest.json，缺少有效 UUID。")
+            toast_error("缺少 UUID", f"无法读取 {folder_name} 的 manifest.json")
             return
         success = register_pack_to_world(world_path, pack_type, folder_name, uuid, version)
         if success:
             log_success(f"手动激活 {folder_name} 到世界 {level_name}")
-            QMessageBox.information(self, "成功", f"已激活 {folder_name} 到当前世界。")
+            toast_success("激活成功", f"{folder_name} 已激活")
         else:
-            QMessageBox.information(self, "提示", f"{folder_name} 已在激活列表中。")
+            toast_info("已激活", f"{folder_name} 已在激活列表中")
         self.refresh_lists()
         self.parent.on_external_change()
 
@@ -2005,22 +2175,22 @@ class PacksTab(QWidget):
             return
         folder_name, pack_type, uuid = data
         if self.parent.is_server_running():
-            QMessageBox.warning(self, "操作被阻止", "服务器正在运行，无法修改包激活状态。请先停止服务器。")
+            toast_warning("操作被阻止", "请先停止服务器")
             return
         level_name = self.parent.get_level_name()
         world_path = get_world_path(level_name)
         if not os.path.exists(world_path):
-            QMessageBox.warning(self, "错误", f"世界文件夹不存在: {world_path}")
+            toast_error("世界不存在", f"世界文件夹不存在")
             return
         if not uuid:
-            QMessageBox.warning(self, "错误", "包缺少 UUID，无法注销。")
+            toast_error("缺少 UUID", "包缺少 UUID，无法注销")
             return
         success = unregister_pack_from_world(world_path, pack_type, uuid)
         if success:
             log_success(f"从世界注销 {folder_name}")
-            QMessageBox.information(self, "成功", f"已从当前世界注销 {folder_name}。")
+            toast_success("注销成功", f"{folder_name} 已注销")
         else:
-            QMessageBox.information(self, "提示", f"{folder_name} 未在激活列表中。")
+            toast_info("未激活", f"{folder_name} 未在激活列表中")
         self.refresh_lists()
         self.parent.on_external_change()
 
@@ -2071,7 +2241,7 @@ class PacksTab(QWidget):
             QApplication.processEvents()
         except Exception as e:
             log_error(f"刷新包列表失败: {e}")
-            QMessageBox.warning(self, "错误", f"刷新包列表失败: {e}")
+            toast_error("刷新失败", str(e))
 
     def add_pack(self, pack_type):
         path = QFileDialog.getExistingDirectory(self, f"选择{pack_type}包文件夹", SCRIPT_DIR)
@@ -2081,7 +2251,7 @@ class PacksTab(QWidget):
         dest_dir = RESOURCE_PACKS_DIR if pack_type == "resource" else BEHAVIOR_PACKS_DIR
         dest_path = os.path.join(dest_dir, folder_name)
         if os.path.exists(dest_path):
-            QMessageBox.warning(self, "已存在", f"{folder_name} 已存在于目标目录中。")
+            toast_warning("已存在", f"{folder_name} 已存在")
             log_warning(f"添加失败，{folder_name} 已存在")
             return
         level_name = self.parent.get_level_name()
@@ -2099,10 +2269,10 @@ class PacksTab(QWidget):
         self.setEnabled(True)
         self.parent.status_label.setText("就绪")
         if success:
-            QMessageBox.information(self, "成功", message)
+            toast_success("添加成功", message)
             log_success(message)
         else:
-            QMessageBox.warning(self, "警告", message)
+            toast_warning("警告", message)
             log_warning(message)
         self.refresh_lists()
         self.parent.on_external_change()
@@ -2140,10 +2310,10 @@ class PacksTab(QWidget):
         self.setEnabled(True)
         self.parent.status_label.setText("就绪")
         if success:
-            QMessageBox.information(self, "成功", message)
+            toast_success("移除成功", message)
             log_success(message)
         else:
-            QMessageBox.warning(self, "错误", message)
+            toast_error("错误", message)
             log_error(message)
         self.refresh_lists()
         self.parent.on_external_change()
@@ -2297,7 +2467,7 @@ class ConfigTab(QWidget):
                                 widget.setCurrentIndex(idx)
         except Exception as e:
             log_error(f"加载 server.properties 失败: {e}")
-            QMessageBox.warning(self, "错误", f"加载 server.properties 失败: {e}")
+            toast_error("加载配置失败", str(e))
 
     def create_default_properties(self):
         default_content = """#server.properties
@@ -2386,7 +2556,7 @@ correct-player-movement=false
             with open(SERVER_PROPERTIES, "w", encoding="utf-8") as f:
                 f.writelines(new_lines)
             log_success("server.properties 已保存")
-            QMessageBox.information(self, "成功", "server.properties 已保存。重启服务器后生效。")
+            toast_success("配置已保存", "重启服务器后生效")
         except Exception as e:
             log_error(f"保存 server.properties 失败: {e}")
             QMessageBox.critical(self, "错误", f"保存失败: {e}")
@@ -2429,11 +2599,11 @@ correct-player-movement=false
                 with open(filepath, "w", encoding="utf-8") as f:
                     f.write(text_edit.toPlainText())
                 log_success(f"{title} 已保存")
-                QMessageBox.information(dialog, "成功", "已保存")
+                toast_success("已保存", "JSON 已保存")
                 dialog.accept()
             except Exception as e:
                 log_error(f"保存 {title} 失败: {e}")
-                QMessageBox.warning(dialog, "错误", f"JSON 格式错误: {e}")
+                toast_error("JSON 格式错误", str(e))
         btn_save.clicked.connect(save)
         layout.addWidget(btn_save)
         dialog.exec_()
@@ -2517,17 +2687,18 @@ class WorldTab(QWidget):
 
     def backup_world(self):
         if self.parent.is_server_running():
-            reply = QMessageBox.warning(self, "警告", "服务器正在运行，备份可能损坏世界文件。是否继续？",
+            reply = QMessageBox.question(self, "警告", "服务器正在运行，备份可能损坏世界文件。是否继续？",
                                         QMessageBox.Yes | QMessageBox.No)
             if reply != QMessageBox.Yes:
                 return
         level_name = self.level_name_label.text()
         world_path = get_world_path(level_name)
         if not os.path.exists(world_path):
-            QMessageBox.warning(self, "错误", f"世界文件夹不存在: {world_path}")
+            toast_error("世界不存在", f"世界文件夹不存在")
             log_error(f"世界备份失败：{world_path} 不存在")
             return
         # 启动备份线程
+        toast_info("开始备份", f"正在备份世界 {level_name}...")
         self.worker = BackupWorker(level_name, world_path, BACKUP_DIR, self)
         self.worker.progress.connect(lambda msg: self.parent.status_label.setText(msg))
         self.worker.finished.connect(self.on_backup_finished)
@@ -2539,9 +2710,10 @@ class WorldTab(QWidget):
         self.backup_btn.setEnabled(True)
         self.parent.status_label.setText("就绪")
         if success:
-            QMessageBox.information(self, "成功", message)
+            toast_success("备份完成", message)
             log_success(message)
         else:
+            toast_error("备份失败", message)
             QMessageBox.critical(self, "备份失败", message)
             log_error(message)
         self.refresh_backup_list()
@@ -2550,7 +2722,7 @@ class WorldTab(QWidget):
     def restore_backup(self):
         selected = self.backup_list.currentItem()
         if not selected:
-            QMessageBox.warning(self, "提示", "请先选择一个备份")
+            toast_warning("请选择备份", "请先选择一个备份文件")
             return
         backup_name = selected.text()
         backup_path = os.path.join(BACKUP_DIR, backup_name)
@@ -2559,7 +2731,7 @@ class WorldTab(QWidget):
         if not os.path.exists(world_path):
             os.makedirs(world_path, exist_ok=True)
         if self.parent.is_server_running():
-            QMessageBox.warning(self, "警告", "服务器正在运行，还原前请先停止服务器。")
+            toast_warning("服务器运行中", "还原前请先停止服务器")
             return
         reply = QMessageBox.question(self, "确认还原", f"还原将覆盖当前世界 {level_name}，是否继续？",
                                      QMessageBox.Yes | QMessageBox.No)
@@ -2577,7 +2749,7 @@ class WorldTab(QWidget):
         self.restore_btn.setEnabled(True)
         self.parent.status_label.setText("就绪")
         if success:
-            QMessageBox.information(self, "成功", message)
+            toast_success("还原成功", message)
             log_success(message)
         else:
             QMessageBox.critical(self, "还原失败", message)
@@ -2598,14 +2770,14 @@ class WorldTab(QWidget):
                         else:
                             f.write(line)
                 log_success(f"难度已修改为 {difficulty}，需重启服务器生效")
-                QMessageBox.information(self, "成功", "难度已修改，需重启服务器生效。")
+                toast_success("难度已修改", "需重启服务器生效")
                 self.refresh_info()
             except Exception as e:
                 log_error(f"修改难度失败: {e}")
                 QMessageBox.critical(self, "错误", f"修改失败: {e}")
         else:
             log_error("server.properties 不存在")
-            QMessageBox.warning(self, "错误", "server.properties 不存在。")
+            toast_error("错误", "server.properties 不存在")
 
 # ==================== 隧道标签页 (ChmlFrp) ====================
 class TunnelTab(QWidget):
@@ -2753,7 +2925,7 @@ class TunnelTab(QWidget):
     def save_ini_file(self):
         ini_path = self.get_ini_path()
         if not ini_path:
-            QMessageBox.warning(self, "错误", "请先设置 frpc.exe 路径！")
+            toast_error("未设置 frpc", "请先设置 frpc.exe 路径")
             return
         try:
             os.makedirs(os.path.dirname(ini_path), exist_ok=True)
@@ -2761,7 +2933,7 @@ class TunnelTab(QWidget):
                 f.write(self.ini_editor.toPlainText())
             log_success(f"frpc.ini 已保存到 {ini_path}")
             self.append_output(f"✅ frpc.ini 已保存: {ini_path}")
-            QMessageBox.information(self, "成功", f"frpc.ini 已保存到:\n{ini_path}")
+            toast_success("frpc.ini 已保存", "配置已保存")
         except Exception as e:
             log_error(f"保存 frpc.ini 失败: {e}")
             QMessageBox.critical(self, "错误", f"保存失败: {e}")
@@ -2769,10 +2941,10 @@ class TunnelTab(QWidget):
     def load_ini_file(self):
         ini_path = self.get_ini_path()
         if not ini_path:
-            QMessageBox.warning(self, "错误", "请先设置 frpc.exe 路径！")
+            toast_error("未设置 frpc", "请先设置 frpc.exe 路径")
             return
         if not os.path.exists(ini_path):
-            QMessageBox.warning(self, "提示", f"文件不存在:\n{ini_path}")
+            toast_warning("文件不存在", f"frpc.ini 不存在")
             return
         try:
             with open(ini_path, "r", encoding="utf-8") as f:
@@ -2786,7 +2958,7 @@ class TunnelTab(QWidget):
     def open_frpc_dir(self):
         dir_path = self.get_frpc_dir()
         if not dir_path or not os.path.exists(dir_path):
-            QMessageBox.warning(self, "提示", "frpc.exe 所在目录不存在，请先设置正确路径。")
+            toast_warning("目录不存在", "请先设置正确的 frpc.exe 路径")
             return
         try:
             if sys.platform == "win32":
@@ -2870,7 +3042,7 @@ class TunnelTab(QWidget):
     def start_tunnel(self):
         exe_path = self.get_frpc_exe()
         if not exe_path:
-            QMessageBox.warning(self, "错误", "请先设置 frpc.exe 路径！")
+            toast_error("未设置 frpc", "请先设置 frpc.exe 路径")
             return
         if not os.path.exists(exe_path):
             QMessageBox.critical(self, "错误", f"找不到 frpc.exe:\n{exe_path}")
@@ -2922,6 +3094,7 @@ class TunnelTab(QWidget):
         self.stop_tunnel_btn.setEnabled(True)
         self.tunnel_status_label.setText("▶ 运行中")
         self.tunnel_status_label.setStyleSheet("font-weight: bold; color: #4CAF50;")
+        toast_success("隧道已启动", "frpc 正在运行")
         self.append_output("✅ 隧道已启动，等待连接...")
 
     def _read_tunnel_output(self):
@@ -2946,8 +3119,11 @@ class TunnelTab(QWidget):
             QTimer.singleShot(0, self._on_tunnel_stopped)
 
     def _on_tunnel_stopped(self):
+        if self.start_tunnel_btn.isEnabled():
+            return  # 已处理过，防重复
         self.start_tunnel_btn.setEnabled(True)
         self.stop_tunnel_btn.setEnabled(False)
+        toast_info("隧道已停止", "frpc 已退出")
         self.tunnel_status_label.setText("⏹ 已停止")
         self.tunnel_status_label.setStyleSheet("font-weight: bold; color: #ff5555;")
         if self.tunnel_process:
@@ -3625,12 +3801,12 @@ class UpgradeTab(QWidget):
         """手动指定版本号直接下载"""
         ver = self.manual_version_input.text().strip()
         if not ver:
-            QMessageBox.warning(self, "提示", "请输入版本号，例如: 1.26.32.2")
+            toast_warning("请输入版本号", "例如: 1.26.32.2")
             return
 
         # 验证版本号格式
         if not re.match(r'^\d+\.\d+\.\d+\.\d+$', ver):
-            QMessageBox.warning(self, "格式错误", "版本号格式应为 X.Y.Z.W，例如: 1.26.32.2")
+            toast_warning("格式错误", "版本号格式应为 X.Y.Z.W")
             return
 
         branch = self.manual_branch_combo.currentData()
@@ -3649,8 +3825,8 @@ class UpgradeTab(QWidget):
         if not exists:
             self.manual_download_btn.setEnabled(True)
             self.manual_download_btn.setText("⬇️ 直接下载")
-            QMessageBox.warning(self, "版本不存在",
-                                f"指定的版本 v{ver} ({label}) 在服务器上不存在。\n\nURL: {url}")
+            toast_error("版本不存在", "请确认版本号正确")
+            return
             self._log(f"版本 v{ver} 不存在 (HTTP 404)", "ERROR")
             return
 
@@ -3757,7 +3933,7 @@ class UpgradeTab(QWidget):
             ver = self.latest_preview_version
 
         if not url:
-            QMessageBox.warning(self, "提示", "尚未检查到可用版本，请先点击「检查更新」按钮。")
+            toast_warning("未检查更新", "请先点击「检查更新」按钮")
             return
 
         # 选择保存路径
@@ -3810,6 +3986,7 @@ class UpgradeTab(QWidget):
             self.dl_status_label.setText(f"❌ {message}")
             self.dl_status_label.setStyleSheet("color: #f44336;")
             self.downloaded_zip = None
+            toast_error("下载失败", message)
             self._log(f"下载失败: {message}", "ERROR")
 
     def _reset_download_ui(self):
@@ -3821,7 +3998,7 @@ class UpgradeTab(QWidget):
 
     def start_upgrade(self):
         if not self.downloaded_zip or not os.path.exists(self.downloaded_zip):
-            QMessageBox.warning(self, "错误", "未找到下载的更新包，请先下载。")
+            toast_error("未下载", "请先下载更新包")
             return
 
         server_dir = self.parent.get_absolute_server_dir()
@@ -3905,9 +4082,11 @@ class UpgradeTab(QWidget):
                         self._log("步骤 3/3: 跳过恢复（未备份）", "INFO")
 
                     self._log("✅ 升级完成！", "SUCCESS")
+                    toast_success("升级完成", "请重新启动服务器")
                     self.finished.emit(True, "升级成功！")
                 except Exception as e:
                     self._log(f"❌ 升级失败: {e}", "ERROR")
+                    toast_error("升级失败", str(e))
                     self.finished.emit(False, str(e))
 
             def _backup_critical_files(self):
@@ -4041,7 +4220,7 @@ class UpgradeTab(QWidget):
     def _on_upgrade_finished(self, success, message):
         self.upgrade_btn.setEnabled(bool(self.downloaded_zip and os.path.exists(self.downloaded_zip)))
         if success:
-            QMessageBox.information(self, "升级完成", "服务器版本升级已成功完成！\n\n请重新启动服务器。")
+            toast_success("升级完成", "请重新启动服务器")
             self.refresh_current_info()
             if hasattr(self.parent, 'refresh_all_tabs'):
                 self.parent.refresh_all_tabs()
@@ -4097,6 +4276,7 @@ class UpgradeTab(QWidget):
         if not ok:
             self.tool_update_status.setText(f"❌ 检查失败: {changelog}")
             self.tool_update_status.setStyleSheet("color: #f44336; padding: 4px;")
+            toast_error("检查更新失败", changelog)
             self._log(f"工具更新检查失败: {changelog}", "ERROR")
             return
 
@@ -4183,6 +4363,7 @@ class UpgradeTab(QWidget):
         if not success:
             self.tool_update_status.setText(f"❌ 下载失败: {message}")
             self.tool_update_status.setStyleSheet("color: #f44336; padding: 4px;")
+            toast_error("下载失败", message)
             self._log(f"下载失败: {message}", "ERROR")
             return
 
@@ -4191,6 +4372,7 @@ class UpgradeTab(QWidget):
             self._log("下载内容为空", "ERROR")
             return
 
+        toast_success("下载完成", message)
         self._log(f"下载完成: {message}", "SUCCESS")
 
         reply = QMessageBox.question(
@@ -4441,12 +4623,19 @@ class BDSManager(QMainWindow):
         self.theme_manager.set_custom_colors(self.custom_colors)
         # 共享服务器状态（ConsoleTab 写入，DashboardTab 读取）
         self.server_stats = {"players": []}
+        # Toast 通知系统
+        set_toast_parent(self)
         self.init_ui()
         self.apply_theme(self.config.get("theme", "dark"))
         # 自动备份定时器
         self.backup_timer = QTimer()
         self.backup_timer.timeout.connect(self.auto_backup)
         self.update_backup_timer()
+        # 内存告警监视器（每30秒检查）
+        self._mem_timer = QTimer()
+        self._mem_timer.timeout.connect(self._check_memory)
+        self._mem_timer.start(30000)
+        self._last_mem_warn = 0  # 上次告警时间，避免频繁弹
         # 文件监控（防抖）
         self.watcher = QFileSystemWatcher()
         self.watcher.directoryChanged.connect(self.on_external_change)
@@ -4457,6 +4646,8 @@ class BDSManager(QMainWindow):
         self.init_watcher()
         # 系统托盘
         self.create_tray_icon()
+        # 启动自检提示
+        QTimer.singleShot(500, self._show_startup_toasts)
 
     def keyPressEvent(self, event):
         if event.modifiers() == Qt.ControlModifier and event.key() == Qt.Key_D:
@@ -4538,6 +4729,7 @@ class BDSManager(QMainWindow):
             "version_cache": self.config.get("version_cache", {}),
             "window_width": self.config.get("window_width", 1200),
             "window_height": self.config.get("window_height", 800),
+            "mem_warn_threshold": self.config.get("mem_warn_threshold", 80),
         }
         try:
             with open(CONFIG_FILE, "w", encoding="utf-8") as f:
@@ -4573,6 +4765,18 @@ class BDSManager(QMainWindow):
         else:
             log_info("自动备份已禁用")
 
+    def _check_memory(self):
+        """检查内存使用率，超过阈值则告警"""
+        try:
+            import psutil
+            mem = psutil.virtual_memory().percent
+            threshold = self.config.get("mem_warn_threshold", 80)
+            if mem > threshold and time.time() - self._last_mem_warn > 120:
+                self._last_mem_warn = time.time()
+                toast_warning("内存不足", f"内存使用率 {mem:.1f}%（阈值 {threshold}%）")
+        except Exception:
+            pass
+
     def auto_backup(self):
         level_name = self.get_level_name()
         world_path = get_world_path(level_name)
@@ -4588,10 +4792,12 @@ class BDSManager(QMainWindow):
                             arcname = os.path.relpath(file_path, os.path.dirname(world_path))
                             zipf.write(file_path, arcname)
                 log_success(f"自动备份完成: {backup_name}")
+                toast_success("自动备份完成", backup_name)
                 # 清理旧备份：保留最近 20 个，删除多余的
                 self._cleanup_old_backups(keep=20)
             except Exception as e:
                 log_error(f"自动备份失败: {e}")
+                toast_error("备份失败", str(e))
         else:
             log_debug("自动备份跳过：世界不存在或服务器正在运行")
 
@@ -4674,6 +4880,36 @@ class BDSManager(QMainWindow):
         self.tray_icon.setContextMenu(tray_menu)
         self.tray_icon.activated.connect(self.on_tray_activated)
         self.tray_icon.show()
+
+    def _show_startup_toasts(self):
+        """启动时自检并提示"""
+        import psutil
+        server_dir = get_server_dir()
+        # 服务器目录
+        if os.path.isdir(server_dir):
+            toast_success("服务器目录", f"✓ {os.path.basename(server_dir)}")
+        else:
+            toast_error("服务器目录", f"✗ 不存在: {server_dir}")
+        # 服务端程序
+        exe = os.path.join(server_dir, self.config.get("server_exe", "bedrock_server.exe"))
+        if os.path.exists(exe):
+            toast_info("服务端程序", f"✓ {os.path.basename(exe)}")
+        else:
+            toast_warning("服务端程序", f"✗ 未找到 {os.path.basename(exe)}")
+        # 系统资源
+        cpu = psutil.cpu_percent()
+        mem = psutil.virtual_memory().percent
+        toast_info("系统资源", f"CPU {cpu:.0f}% | 内存 {mem:.0f}%")
+        # 备份状态
+        if os.path.exists(BACKUP_DIR):
+            pkgs = sorted([f for f in os.listdir(BACKUP_DIR) if f.endswith(".zip")],
+                          key=lambda f: os.path.getmtime(os.path.join(BACKUP_DIR, f)), reverse=True)
+            if pkgs:
+                toast_info("备份状态", f"最近: {pkgs[0][:40]}")
+            else:
+                toast_info("备份状态", "暂无备份")
+        # 版本信息
+        toast_info(f"BDS Manager v{__version__}", "就绪，等待操作")
 
     def show_normal(self):
         self.showNormal()

@@ -1,4 +1,7 @@
 PyQt5>=5.15.0
 json5>=0.9.14
 psutil>=5.9.0
-matplotlib>=3.5.0  # 可选，如不需要折线图可删除
+matplotlib>=3.5.0
+fastapi>=0.100.0
+uvicorn>=0.23.0
+websockets>=11.0
