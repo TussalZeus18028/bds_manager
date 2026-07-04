@@ -1751,6 +1751,7 @@ class ConsoleTab(QWidget):
         # 玩家列表和 TPS
         self._players = {}     # {name: {"xuid": xuid, "joined": timestamp}}
         self._server_start_time = None
+        self._bds_version = ""
         self.init_ui()
 
     def init_ui(self):
@@ -1880,6 +1881,10 @@ class ConsoleTab(QWidget):
 
         # 解析玩家加入/离开事件
         self._parse_player_event(text)
+        # 解析 BDS 版本
+        m = re.search(r'Version:\s+(\d+\.\d+\.\d+\.\d+)', text)
+        if m and not self._bds_version:
+            self._bds_version = m.group(1)
 
     def _parse_player_event(self, text):
         """解析 BDS 玩家连接/生成/断开事件"""
@@ -1916,6 +1921,7 @@ class ConsoleTab(QWidget):
             "players": list(self._players.keys()),
             "player_count": len(self._players),
             "auto_restart": self._auto_restart,
+            "bds_version": self._bds_version,
         }
 
     def _init_log_file(self):
@@ -2622,9 +2628,11 @@ class WorldTab(QWidget):
         self.level_name_label = QLabel()
         self.level_seed_label = QLabel()
         self.difficulty_label = QLabel()
+        self.world_size_label = QLabel()
         info_layout.addRow("世界名称:", self.level_name_label)
         info_layout.addRow("种子:", self.level_seed_label)
         info_layout.addRow("难度:", self.difficulty_label)
+        info_layout.addRow("世界大小:", self.world_size_label)
         info_group.setLayout(info_layout)
         layout.addWidget(info_group)
 
@@ -2675,6 +2683,24 @@ class WorldTab(QWidget):
                 log_error(f"读取世界信息失败: {e}")
         else:
             self.level_name_label.setText("未找到")
+
+        # 计算世界大小
+        level_name = self.level_name_label.text()
+        wp = get_world_path(level_name)
+        if os.path.exists(wp):
+            try:
+                total = sum(os.path.getsize(os.path.join(root, f))
+                            for root, _, files in os.walk(wp) for f in files)
+                if total < 1048576:
+                    self.world_size_label.setText(f"{total/1024:.1f} KB")
+                elif total < 1073741824:
+                    self.world_size_label.setText(f"{total/1048576:.1f} MB")
+                else:
+                    self.world_size_label.setText(f"{total/1073741824:.2f} GB")
+            except Exception:
+                self.world_size_label.setText("计算失败")
+        else:
+            self.world_size_label.setText("不存在")
 
     def refresh_backup_list(self):
         self.backup_list.clear()
@@ -4440,6 +4466,7 @@ class DashboardTab(QWidget):
         self._make_status_card(status_row, "🟢 服务器", "server", "停止")
         self._make_status_card(status_row, "👥 在线玩家", "players", "0")
         self._make_status_card(status_row, "⏱ 运行时长", "uptime", "00:00:00")
+        self._make_status_card(status_row, "📌 BDS 版本", "bds_ver", "--")
         self._make_status_card(status_row, "📦 备份", "backup", "--")
         layout.addLayout(status_row)
 
@@ -4547,6 +4574,11 @@ class DashboardTab(QWidget):
         else:
             self.card_uptime.setText("--")
             self.card_uptime.setStyleSheet("font-size: 18px; font-weight: bold; color: #888;")
+
+        # BDS 版本
+        ver = stats.get("bds_version", "")
+        self.card_bds_ver.setText(ver or "--")
+        self.card_bds_ver.setStyleSheet(f"font-size: 14px; font-weight: bold; color: {'#88ddff' if ver else '#888'};")
 
         # 玩家列表
         self.players_list.clear()
