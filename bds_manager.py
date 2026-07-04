@@ -28,7 +28,7 @@ Minecraft Bedrock Dedicated Server 管理工具
   - 多线程优化：所有耗时操作移至后台线程，避免阻塞主界面
 """
 
-__version__ = "2.0.8"
+__version__ = "2.0.12"
 
 import sys
 import os
@@ -4960,10 +4960,13 @@ class BDSManager(QMainWindow):
         self.status_mem.setStyleSheet("font-size:11px; color:#888; padding:0 8px;")
         self.status_ver = QLabel(f"v{__version__}")
         self.status_ver.setStyleSheet("font-size:10px; color:#555; padding:0 8px;")
+        self.status_tunnel = QLabel("🚇 --")
+        self.status_tunnel.setStyleSheet("font-size:11px; color:#888; padding:0 8px;")
         status_layout.addWidget(self.status_server)
         status_layout.addWidget(self.status_players)
         status_layout.addWidget(self.status_mem)
         status_layout.addStretch()
+        status_layout.addWidget(self.status_tunnel)
         status_layout.addWidget(self.status_ver)
         layout.addLayout(status_layout)
         # 兼容旧代码
@@ -5057,6 +5060,14 @@ class BDSManager(QMainWindow):
             self.status_mem.setStyleSheet(f"font-size:11px; color:{c}; padding:0 8px;")
         except:
             pass
+        # 隧道
+        t_running = hasattr(self, 'tunnel_tab') and self.tunnel_tab.is_tunnel_running()
+        if t_running:
+            self.status_tunnel.setText("🚇 隧道在线")
+            self.status_tunnel.setStyleSheet("font-size:11px; color:#4CAF50; padding:0 8px;")
+        else:
+            self.status_tunnel.setText("🚇 --")
+            self.status_tunnel.setStyleSheet("font-size:11px; color:#888; padding:0 8px;")
 
     def quit_app(self):
         """退出应用：先停止服务器和隧道，再清理资源"""
