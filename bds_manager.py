@@ -28,6 +28,8 @@ Minecraft Bedrock Dedicated Server 管理工具
   - 多线程优化：所有耗时操作移至后台线程，避免阻塞主界面
 """
 
+__version__ = "1.0.0"
+
 import sys
 import os
 import json
@@ -85,7 +87,7 @@ if sys.platform == "win32":
     try:
         kernel32 = ctypes.windll.kernel32
         kernel32.SetConsoleMode(kernel32.GetStdHandle(-11), 7)
-    except:
+    except Exception:
         pass
 
 # ---------- 增强的颜色控制台日志（带时间戳）----------
@@ -244,12 +246,12 @@ class PortCheckerDialog(QDialog):
                         if line.startswith("server-port="):
                             try:
                                 self.current_ipv4 = int(line.split("=", 1)[1])
-                            except:
+                            except (ValueError, IndexError):
                                 pass
                         elif line.startswith("server-portv6="):
                             try:
                                 self.current_ipv6 = int(line.split("=", 1)[1])
-                            except:
+                            except (ValueError, IndexError):
                                 pass
             except Exception as e:
                 log_error(f"读取 server.properties 失败: {e}")
@@ -662,7 +664,7 @@ class ServerProcess(QThread):
         if self.process:
             try:
                 self.send_command("stop")
-            except:
+            except Exception:
                 pass
             self._stop_event.set()
             for _ in range(50):
@@ -769,8 +771,14 @@ class SystemMonitor(QGroupBox):
 
     def update_interval(self, interval):
         self.interval = interval
-        self.timer.stop()
-        self.timer.start(interval)
+        if hasattr(self, 'timer') and self.timer.isActive():
+            self.timer.stop()
+            self.timer.start(interval)
+
+    def stop_monitoring(self):
+        """停止资源监视定时器"""
+        if hasattr(self, 'timer') and self.timer.isActive():
+            self.timer.stop()
 
     def update_system_info(self):
         try:
@@ -1320,6 +1328,22 @@ class SettingsDialog(QDialog):
         monitor_group.setLayout(monitor_layout)
         layout.addWidget(monitor_group)
 
+        # --- 工具版本 ---
+        version_group = QGroupBox("🔧 工具更新")
+        version_layout = QVBoxLayout()
+        version_info_row = QHBoxLayout()
+        version_info_row.addWidget(QLabel(f"当前版本: v{__version__}"))
+        version_info_row.addStretch()
+        self.check_tool_update_btn = QPushButton("🔍 检查更新")
+        self.check_tool_update_btn.clicked.connect(self.check_tool_update)
+        version_info_row.addWidget(self.check_tool_update_btn)
+        version_layout.addLayout(version_info_row)
+        self.tool_update_status = QLabel("")
+        self.tool_update_status.setWordWrap(True)
+        version_layout.addWidget(self.tool_update_status)
+        version_group.setLayout(version_layout)
+        layout.addWidget(version_group)
+
         btn_save = QPushButton("保存设置")
         btn_save.clicked.connect(self.save_settings)
         layout.addWidget(btn_save)
@@ -1349,9 +1373,29 @@ class SettingsDialog(QDialog):
             btn.setStyleSheet(f"background-color: {color}; border: 1px solid #888;")
 
     def save_settings(self):
+        new_dir = self.server_dir_edit.text().strip()
+        new_exe = self.server_exe_edit.text().strip()
+
+        # 校验服务器目录
+        abs_dir = os.path.join(SCRIPT_DIR, new_dir) if not os.path.isabs(new_dir) else new_dir
+        if not os.path.isdir(abs_dir):
+            QMessageBox.warning(self, "路径无效", f"服务器目录不存在：\n{abs_dir}")
+            return
+
+        # 校验可执行文件（可选：检查是否存在）
+        exe_path = os.path.join(abs_dir, new_exe)
+        if not os.path.isfile(exe_path):
+            reply = QMessageBox.question(
+                self, "文件不存在",
+                f"指定的服务器程序不存在：\n{exe_path}\n\n仍要保存设置吗？",
+                QMessageBox.Yes | QMessageBox.No, QMessageBox.No
+            )
+            if reply != QMessageBox.Yes:
+                return
+
         self.parent.config["theme"] = self.theme_combo.currentText()
-        self.parent.config["server_dir"] = self.server_dir_edit.text().strip()
-        self.parent.config["server_exe"] = self.server_exe_edit.text().strip()
+        self.parent.config["server_dir"] = new_dir
+        self.parent.config["server_exe"] = new_exe
         self.parent.config["backup_interval"] = self.backup_interval.value()
         self.parent.config["monitor_interval"] = self.monitor_interval.value()
         self.parent.save_config()
@@ -1360,6 +1404,168 @@ class SettingsDialog(QDialog):
         self.parent.init_watcher()
         self.parent.update_backup_timer()
         self.accept()
+
+    def check_tool_update(self):
+        """检查 BDS Manager 自身是否有新版本"""
+        self.check_tool_update_btn.setEnabled(False)
+        self.check_tool_update_btn.setText("检查中...")
+        self.tool_update_status.setText("")
+
+        class ToolVersionWorker(BaseWorker):
+            result_signal = pyqtSignal(bool, str, str, str)
+
+            def run(self):
+                try:
+                    import urllib.request, json, re
+                    url = ("https://raw.githubusercontent.com/TussalZeus18028/"
+                           "bds_manager/main/version.json")
+                    req = urllib.request.Request(url, headers={
+                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+                                      " AppleWebKit/537.36"
+                    })
+                    with urllib.request.urlopen(req, timeout=10) as resp:
+                        data = json.loads(resp.read().decode("utf-8"))
+                        remote_ver = data.get("version", "")
+                        release_date = data.get("release_date", "")
+                        changelog = data.get("changelog", "")
+                        download_url = data.get("download_url", "")
+                        self.result_signal.emit(
+                            True, remote_ver, release_date,
+                            f"{changelog}\n\n下载: {download_url}" if changelog
+                            else f"下载: {download_url}"
+                        )
+                except Exception as e:
+                    self.result_signal.emit(False, "", "", str(e))
+
+        self._tool_ver_worker = ToolVersionWorker(self)
+        self._tool_ver_worker.result_signal.connect(self._on_tool_version_result)
+        self._tool_ver_worker.start()
+
+    def _on_tool_version_result(self, ok, remote_ver, release_date, detail):
+        self.check_tool_update_btn.setEnabled(True)
+        self.check_tool_update_btn.setText("🔍 检查更新")
+
+        if not ok:
+            self.tool_update_status.setText(f"❌ 检查失败: {detail}")
+            self.tool_update_status.setStyleSheet("color: #f44336;")
+            return
+
+        def _cmp(v1, v2):
+            try:
+                a = [int(x) for x in v1.split(".")]
+                b = [int(x) for x in v2.split(".")]
+                while len(a) < 4: a.append(0)
+                while len(b) < 4: b.append(0)
+                return (a > b) - (a < b)
+            except Exception: 0
+
+        if _cmp(remote_ver, __version__) > 0:
+            self.tool_update_status.setText(
+                f"📢 发现新版本 v{remote_ver}！（当前 v{__version__}）\n"
+                f"发布日期: {release_date}\n{detail}"
+            )
+            self.tool_update_status.setStyleSheet("color: #ff9800; font-weight: bold;")
+
+            # 询问用户是否立即更新
+            reply = QMessageBox.question(
+                self, "发现新版本",
+                f"BDS Manager 有新版本可用！\n\n"
+                f"当前版本: v{__version__}\n"
+                f"最新版本: v{remote_ver}\n"
+                f"发布日期: {release_date}\n\n"
+                f"是否立即下载并更新？",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.Yes
+            )
+            if reply == QMessageBox.Yes:
+                self._download_tool_update(remote_ver)
+        else:
+            self.tool_update_status.setText(
+                f"✅ 已是最新版本 v{__version__}（远程: v{remote_ver}）"
+            )
+            self.tool_update_status.setStyleSheet("color: #4CAF50;")
+
+    def _download_tool_update(self, remote_ver):
+        """下载新版 bds_manager.py 并提示替换"""
+        self.check_tool_update_btn.setEnabled(False)
+        self.check_tool_update_btn.setText("下载中...")
+        self.tool_update_status.setText(f"⬇️ 正在下载 v{remote_ver}...")
+
+        class DownloadSelfWorker(BaseWorker):
+            def run(self):
+                try:
+                    import tempfile, shutil
+                    url = ("https://raw.githubusercontent.com/TussalZeus18028/"
+                           "bds_manager/main/bds_manager.py")
+                    req = urllib.request.Request(url, headers={
+                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+                    })
+                    with urllib.request.urlopen(req, timeout=30) as resp:
+                        new_content = resp.read()
+
+                    if not new_content or len(new_content) < 1000:
+                        self.finished.emit(False, "下载的文件异常（太小）")
+                        return
+
+                    # 保存到临时文件
+                    self._new_content = new_content
+                    self.finished.emit(True, f"下载完成（{len(new_content)/1024:.1f} KB）")
+                except Exception as e:
+                    self.finished.emit(False, str(e))
+
+        self._dl_self_worker = DownloadSelfWorker(self)
+        self._dl_self_worker.finished.connect(
+            lambda ok, msg: self._on_self_download_finished(ok, msg))
+        self._dl_self_worker.start()
+
+    def _on_self_download_finished(self, success, message):
+        self.check_tool_update_btn.setEnabled(True)
+        self.check_tool_update_btn.setText("🔍 检查更新")
+
+        if not success:
+            self.tool_update_status.setText(f"❌ 下载失败: {message}")
+            self.tool_update_status.setStyleSheet("color: #f44336;")
+            return
+
+        new_content = getattr(self._dl_self_worker, "_new_content", None)
+        if not new_content:
+            return
+
+        # 提示用户替换
+        reply = QMessageBox.question(
+            self, "下载完成",
+            f"新版本已下载完成！（{message}）\n\n"
+            "是否立即替换当前文件并重启？\n"
+            "⚠️ 替换后程序将自动关闭，请手动重新打开。",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.Yes
+        )
+
+        if reply == QMessageBox.Yes:
+            try:
+                import shutil
+                current_path = os.path.join(SCRIPT_DIR, "bds_manager.py")
+                # 备份旧文件
+                backup_path = current_path + ".bak"
+                shutil.copy2(current_path, backup_path)
+                # 写入新文件
+                with open(current_path, "wb") as f:
+                    f.write(new_content)
+                QMessageBox.information(
+                    self, "更新完成",
+                    "BDS Manager 已更新！\n\n"
+                    f"旧文件已备份为 bds_manager.py.bak\n\n"
+                    "程序将自动关闭，请重新启动。"
+                )
+                # 关闭整个应用
+                QApplication.quit()
+            except Exception as e:
+                QMessageBox.critical(self, "更新失败", f"替换文件时出错：{e}")
+        else:
+            self.tool_update_status.setText(
+                "⚠️ 已取消更新。新版本已下载但未安装。"
+            )
+            self.tool_update_status.setStyleSheet("color: #ff9800;")
 
 # ---------- 后台工作线程（用于耗时操作）----------
 class BaseWorker(QThread):
@@ -1416,20 +1622,49 @@ class RestoreWorker(BaseWorker):
 
     def run(self):
         try:
+            # 先验证备份 zip 完整性
+            self.progress.emit("正在验证备份文件...")
+            if not zipfile.is_zipfile(self.backup_path):
+                self.finished.emit(False, "备份文件已损坏或不是有效的 ZIP 文件")
+                return
+
+            # 测试 zip 完整性
+            bad_file = None
+            try:
+                with zipfile.ZipFile(self.backup_path, 'r') as test_zf:
+                    bad_file = test_zf.testzip()
+            except zipfile.BadZipFile:
+                self.finished.emit(False, "备份文件已损坏，无法读取")
+                return
+
+            if bad_file:
+                self.finished.emit(False, f"备份文件中的 {bad_file} 已损坏，还原已中止")
+                return
+
+            # 验证通过，开始还原
             self.progress.emit("正在清空当前世界...")
-            # 清空世界文件夹
-            for item in os.listdir(self.world_path):
-                if self._cancel:
-                    self.finished.emit(False, "还原已取消")
-                    return
-                item_path = os.path.join(self.world_path, item)
-                if os.path.isdir(item_path):
-                    shutil.rmtree(item_path)
-                else:
-                    os.remove(item_path)
+            # 先移到临时目录而非直接删除（安全回滚）
+            temp_backup = None
+            if os.path.exists(self.world_path) and os.listdir(self.world_path):
+                import tempfile
+                temp_backup = tempfile.mkdtemp(prefix="world_restore_backup_",
+                                               dir=os.path.dirname(self.world_path))
+                for item in os.listdir(self.world_path):
+                    if self._cancel:
+                        self.finished.emit(False, "还原已取消")
+                        return
+                    item_path = os.path.join(self.world_path, item)
+                    dest = os.path.join(temp_backup, item)
+                    shutil.move(item_path, dest)
+
             self.progress.emit("正在解压备份...")
             with zipfile.ZipFile(self.backup_path, 'r') as zipf:
                 zipf.extractall(os.path.dirname(self.world_path))
+
+            # 清理临时备份
+            if temp_backup and os.path.exists(temp_backup):
+                shutil.rmtree(temp_backup, ignore_errors=True)
+
             self.progress.emit("还原完成")
             self.finished.emit(True, f"世界已从 {os.path.basename(self.backup_path)} 还原")
         except Exception as e:
@@ -1493,6 +1728,13 @@ class ConsoleTab(QWidget):
         super().__init__(parent)
         self.parent = parent
         self.server_process = None
+        self._auto_restart = False
+        self._restart_count = 0
+        self._restart_timer = QTimer()
+        self._restart_timer.setSingleShot(True)
+        self._restart_timer.timeout.connect(self._do_auto_restart)
+        self._log_file = None
+        self._init_log_file()
         self.init_ui()
 
     def init_ui(self):
@@ -1506,6 +1748,10 @@ class ConsoleTab(QWidget):
         btn_layout.addWidget(self.start_btn)
         btn_layout.addWidget(self.stop_btn)
         btn_layout.addStretch()
+        self.auto_restart_cb = QCheckBox("崩溃自动重启（最多5次）")
+        self.auto_restart_cb.setToolTip("服务器异常退出后自动重新启动")
+        self.auto_restart_cb.toggled.connect(lambda v: setattr(self, '_auto_restart', v))
+        btn_layout.addWidget(self.auto_restart_cb)
         layout.addLayout(btn_layout)
 
         self.output_area = QTextEdit()
@@ -1569,6 +1815,27 @@ class ConsoleTab(QWidget):
         scrollbar = self.output_area.verticalScrollBar()
         scrollbar.setValue(scrollbar.maximum())
 
+        # 写入日志文件
+        if self._log_file:
+            try:
+                ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                self._log_file.write(f"[{ts}] {text}\n")
+                self._log_file.flush()
+            except Exception:
+                pass
+
+    def _init_log_file(self):
+        """初始化日志文件，按日期命名"""
+        try:
+            log_dir = os.path.join(self.parent.get_absolute_server_dir(), "logs")
+            os.makedirs(log_dir, exist_ok=True)
+            date_str = datetime.now().strftime("%Y-%m-%d")
+            log_path = os.path.join(log_dir, f"console_{date_str}.log")
+            self._log_file = open(log_path, "a", encoding="utf-8")
+            self._log_file.write(f"\n--- 会话开始: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} ---\n")
+        except Exception:
+            self._log_file = None
+
     def start_server(self):
         server_exe = self.parent.get_server_exe_path()
         if not os.path.exists(server_exe):
@@ -1599,8 +1866,13 @@ class ConsoleTab(QWidget):
         self.server_process = None
 
     def on_server_error(self, error_msg):
-        QMessageBox.critical(self, "服务器错误", error_msg)
         self.append_output(f">>> 错误: {error_msg} <<<")
+        if self._auto_restart and self._restart_count < 5:
+            self._restart_count += 1
+            self.append_output(f">>> {5}秒后自动重启（第 {self._restart_count} 次）... <<<")
+            self._restart_timer.start(5000)
+        else:
+            QMessageBox.critical(self, "服务器错误", error_msg)
         self.on_server_stopped()
 
     def send_command(self):
@@ -1618,6 +1890,14 @@ class ConsoleTab(QWidget):
 
     def is_server_running(self):
         return self.server_process is not None and self.server_process.isRunning()
+
+    def _do_auto_restart(self):
+        """崩溃后自动重启服务器"""
+        if self.parent.is_server_running():
+            self.append_output(">>> 服务器仍在运行，跳过自动重启 <<<")
+            return
+        self.append_output(">>> 自动重启服务器... <<<")
+        self.start_server()
 
 # ---------- 资源包管理标签页 ----------
 class PacksTab(QWidget):
@@ -1702,7 +1982,7 @@ class PacksTab(QWidget):
                                     data_json = json.load(f)
                                 if any(e.get("pack_id") == uuid for e in data_json):
                                     is_active = True
-                            except:
+                            except Exception:
                                 pass
                     if is_active:
                         deactivate_action = menu.addAction("从当前世界注销")
@@ -1746,7 +2026,7 @@ class PacksTab(QWidget):
                         data_json = json.load(f)
                     if any(e.get("pack_id") == uuid for e in data_json):
                         is_active = True
-                except:
+                except Exception:
                     pass
         dialog = PackInfoDialog(pack_folder, pack_type, is_active, self)
         dialog.exec_()
@@ -1823,7 +2103,7 @@ class PacksTab(QWidget):
                                     data = json.load(f)
                                 if any(e.get("pack_id") == uuid for e in data):
                                     status = " ✓已激活"
-                            except:
+                            except Exception:
                                 pass
                     item = QListWidgetItem(f"{folder}{status}")
                     item.setData(Qt.UserRole, (folder, "resource", uuid))
@@ -1841,7 +2121,7 @@ class PacksTab(QWidget):
                                     data = json.load(f)
                                 if any(e.get("pack_id") == uuid for e in data):
                                     status = " ✓已激活"
-                            except:
+                            except Exception:
                                 pass
                     item = QListWidgetItem(f"{folder}{status}")
                     item.setData(Qt.UserRole, (folder, "behavior", uuid))
@@ -1973,6 +2253,13 @@ class ConfigTab(QWidget):
             ("content-log-file-enabled", "bool", False, "是否启用内容日志文件"),
             ("compression-threshold", "int", 1, "压缩阈值 (0-65535, 1=全部压缩)"),
             ("compression-algorithm", "combo", ["zlib", "snappy"], "压缩算法（zlib 兼容性更好）"),
+            ("op-permission-level", "combo", ["1", "2", "3", "4"], "OP 权限等级 (1-4)"),
+            ("server-authoritative-movement", "combo", ["client-auth", "server-auth", "server-auth-with-rewind"], "移动权威模式"),
+            ("server-authoritative-block-breaking", "bool", False, "服务端权威方块破坏"),
+            ("chat-restriction", "combo", ["None", "Disabled", "Muted", "Limited"], "聊天限制级别"),
+            ("disable-player-interaction", "bool", False, "禁用玩家交互"),
+            ("emit-server-telemetry", "bool", True, "发送服务器遥测数据"),
+            ("correct-player-movement", "bool", False, "服务端纠正玩家移动"),
         ]
         for item in props:
             key = item[0]
@@ -2057,7 +2344,7 @@ class ConfigTab(QWidget):
                         elif isinstance(widget, QSpinBox):
                             try:
                                 widget.setValue(int(value))
-                            except:
+                            except Exception:
                                 pass
                         elif isinstance(widget, QCheckBox):
                             widget.setChecked(value.lower() == "true")
@@ -2093,6 +2380,13 @@ texturepack-required=false
 content-log-file-enabled=false
 compression-threshold=1
 compression-algorithm=zlib
+op-permission-level=4
+server-authoritative-movement=server-auth
+server-authoritative-block-breaking=false
+chat-restriction=None
+disable-player-interaction=false
+emit-server-telemetry=true
+correct-player-movement=false
 """
         try:
             with open(SERVER_PROPERTIES, "w", encoding="utf-8") as f:
@@ -2368,6 +2662,8 @@ class WorldTab(QWidget):
 # ==================== 隧道标签页 (ChmlFrp) ====================
 class TunnelTab(QWidget):
     """ChmlFrp 内网穿透管理标签页"""
+    tunnel_line_signal = pyqtSignal(str, bool)  # 跨线程安全输出
+
     def __init__(self, parent):
         super().__init__(parent)
         self.parent = parent
@@ -2375,6 +2671,7 @@ class TunnelTab(QWidget):
         self._read_thread = None
         self.init_ui()
         self.load_settings()
+        self.tunnel_line_signal.connect(self._on_tunnel_line)
 
     def init_ui(self):
         layout = QVBoxLayout(self)
@@ -2547,6 +2844,10 @@ class TunnelTab(QWidget):
             QMessageBox.critical(self, "错误", f"打开目录失败: {e}")
 
     # ---------- 隧道输出 ----------
+    def _on_tunnel_line(self, text, is_error):
+        """信号槽：安全地从工作线程传递到主线程"""
+        self.append_output(text, is_error)
+
     def append_output(self, text, is_error=False):
         timestamp = datetime.now().strftime("%H:%M:%S")
         if is_error:
@@ -2623,14 +2924,14 @@ class TunnelTab(QWidget):
                 if not line:
                     break
                 if "启动成功" in line or "login to server" in line.lower():
-                    self.append_output(f"✅ {line.strip()}")
+                    self.tunnel_line_signal.emit(f"✅ {line.strip()}", False)
                 elif "error" in line.lower() or "fail" in line.lower():
-                    self.append_output(f"❌ {line.strip()}", is_error=True)
+                    self.tunnel_line_signal.emit(f"❌ {line.strip()}", True)
                 else:
-                    self.append_output(line.strip())
+                    self.tunnel_line_signal.emit(line.strip(), False)
             retcode = self.tunnel_process.poll()
             if retcode is not None and retcode != 0:
-                self.append_output(f"⚠️ 隧道异常退出，返回码: {retcode}", is_error=True)
+                self.tunnel_line_signal.emit(f"⚠️ 隧道异常退出，返回码: {retcode}", True)
         except Exception as e:
             log_error(f"读取隧道输出异常: {e}")
         finally:
@@ -2933,7 +3234,7 @@ class UpgradeWorker(BaseWorker):
         self.save_path = save_path
 
     def run(self):
-        self._cancelled = False
+        self._cancel = False
         try:
             self.status_signal.emit("正在连接下载服务器...")
             req = urllib.request.Request(self.url, headers={
@@ -2948,7 +3249,7 @@ class UpgradeWorker(BaseWorker):
 
                 with open(self.save_path, "wb") as f:
                     while True:
-                        if self._cancelled:
+                        if self._cancel:
                             self.finished.emit(False, "下载已取消")
                             return
                         chunk = resp.read(chunk_size)
@@ -3511,8 +3812,11 @@ class UpgradeTab(QWidget):
             if reply == QMessageBox.Yes:
                 self._log("正在停止服务器...", "WARN")
                 self.parent.console_tab.stop_server()
-                QApplication.processEvents()
-                time.sleep(2)
+                for _ in range(30):
+                    QApplication.processEvents()
+                    if not self.parent.is_server_running():
+                        break
+                    time.sleep(0.1)
             else:
                 self._log("用户取消升级（服务器未停止）", "WARN")
                 return
@@ -3762,8 +4066,12 @@ class BDSManager(QMainWindow):
                                              QMessageBox.Yes | QMessageBox.No | QMessageBox.Cancel)
                 if reply == QMessageBox.Yes:
                     self.console_tab.stop_server()
-                    QApplication.processEvents()
-                    time.sleep(1)
+                    # 等待服务器退出（最多 3 秒）
+                    for _ in range(30):
+                        QApplication.processEvents()
+                        if not self.is_server_running():
+                            break
+                        time.sleep(0.1)
                 elif reply == QMessageBox.Cancel:
                     return
             self.tray_icon.hide()
@@ -3880,10 +4188,28 @@ class BDSManager(QMainWindow):
                             arcname = os.path.relpath(file_path, os.path.dirname(world_path))
                             zipf.write(file_path, arcname)
                 log_success(f"自动备份完成: {backup_name}")
+                # 清理旧备份：保留最近 20 个，删除多余的
+                self._cleanup_old_backups(keep=20)
             except Exception as e:
                 log_error(f"自动备份失败: {e}")
         else:
             log_debug("自动备份跳过：世界不存在或服务器正在运行")
+
+    def _cleanup_old_backups(self, keep=20):
+        """清理旧备份文件，仅保留最近 keep 个"""
+        try:
+            if not os.path.exists(BACKUP_DIR):
+                return
+            backups = sorted(
+                [f for f in os.listdir(BACKUP_DIR) if f.endswith(".zip")],
+                key=lambda f: os.path.getmtime(os.path.join(BACKUP_DIR, f)),
+                reverse=True
+            )
+            for old in backups[keep:]:
+                os.remove(os.path.join(BACKUP_DIR, old))
+                log_info(f"已删除旧备份: {old}")
+        except Exception as e:
+            log_warning(f"清理旧备份失败: {e}")
 
     def init_ui(self):
         self.setWindowTitle("Minecraft Bedrock Server 管理工具 ")
@@ -3954,6 +4280,16 @@ class BDSManager(QMainWindow):
             self.show_normal()
 
     def quit_app(self):
+        """退出应用：先停止服务器和隧道，再清理资源"""
+        if self.is_server_running():
+            self.console_tab.stop_server()
+            QApplication.processEvents()
+            time.sleep(1)  # 给服务器时间优雅退出
+        if hasattr(self, 'tunnel_tab'):
+            self.tunnel_tab.cleanup()
+        if hasattr(self, 'system_monitor'):
+            self.system_monitor.stop_monitoring()
+        self.backup_timer.stop()
         self.tray_icon.hide()
         QApplication.quit()
 
@@ -4042,6 +4378,9 @@ class BDSManager(QMainWindow):
     def closeEvent(self, event):
         if hasattr(self, 'tunnel_tab'):
             self.tunnel_tab.cleanup()
+        if hasattr(self, 'system_monitor'):
+            self.system_monitor.stop_monitoring()
+        self.backup_timer.stop()
         event.ignore()
         self.hide()
         self.tray_icon.showMessage("提示", "程序已最小化到系统托盘，双击图标可恢复。", QSystemTrayIcon.Information, 2000)
