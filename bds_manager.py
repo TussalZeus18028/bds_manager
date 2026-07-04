@@ -28,7 +28,7 @@ Minecraft Bedrock Dedicated Server 管理工具
   - 多线程优化：所有耗时操作移至后台线程，避免阻塞主界面
 """
 
-__version__ = "2.0.1"
+__version__ = "2.0.2"
 
 import sys
 import os
@@ -1342,22 +1342,6 @@ class SettingsDialog(QDialog):
         monitor_group.setLayout(monitor_layout)
         layout.addWidget(monitor_group)
 
-        # --- 工具版本 ---
-        version_group = QGroupBox("🔧 工具更新")
-        version_layout = QVBoxLayout()
-        version_info_row = QHBoxLayout()
-        version_info_row.addWidget(QLabel(f"当前版本: v{__version__}"))
-        version_info_row.addStretch()
-        self.check_tool_update_btn = QPushButton("🔍 检查更新")
-        self.check_tool_update_btn.clicked.connect(self.check_tool_update)
-        version_info_row.addWidget(self.check_tool_update_btn)
-        version_layout.addLayout(version_info_row)
-        self.tool_update_status = QLabel("")
-        self.tool_update_status.setWordWrap(True)
-        version_layout.addWidget(self.tool_update_status)
-        version_group.setLayout(version_layout)
-        layout.addWidget(version_group)
-
         btn_save = QPushButton("保存设置")
         btn_save.clicked.connect(self.save_settings)
         layout.addWidget(btn_save)
@@ -1418,172 +1402,6 @@ class SettingsDialog(QDialog):
         self.parent.init_watcher()
         self.parent.update_backup_timer()
         self.accept()
-
-    def check_tool_update(self):
-        """检查 BDS Manager 自身是否有新版本"""
-        self.check_tool_update_btn.setEnabled(False)
-        self.check_tool_update_btn.setText("检查中...")
-        self.tool_update_status.setText("")
-
-        class ToolVersionWorker(BaseWorker):
-            result_signal = pyqtSignal(bool, str, str, str)
-
-            def run(self):
-                try:
-                    import urllib.request, json, re
-                    url = ("https://raw.githubusercontent.com/TussalZeus18028/"
-                           "bds_manager/main/version.json")
-                    req = urllib.request.Request(url, headers={
-                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
-                                      " AppleWebKit/537.36"
-                    })
-                    with urllib.request.urlopen(req, timeout=10) as resp:
-                        data = json.loads(resp.read().decode("utf-8"))
-                        remote_ver = data.get("version", "")
-                        release_date = data.get("release_date", "")
-                        changelog = data.get("changelog", "")
-                        download_url = data.get("download_url", "")
-                        self.result_signal.emit(
-                            True, remote_ver, release_date,
-                            f"{changelog}\n\n下载: {download_url}" if changelog
-                            else f"下载: {download_url}"
-                        )
-                except Exception as e:
-                    self.result_signal.emit(False, "", "", str(e))
-
-        self._tool_ver_worker = ToolVersionWorker(self)
-        self._tool_ver_worker.result_signal.connect(self._on_tool_version_result)
-        self._tool_ver_worker.start()
-
-    def _on_tool_version_result(self, ok, remote_ver, release_date, detail):
-        self.check_tool_update_btn.setEnabled(True)
-        self.check_tool_update_btn.setText("🔍 检查更新")
-
-        if not ok:
-            self.tool_update_status.setText(f"❌ 检查失败: {detail}")
-            self.tool_update_status.setStyleSheet("color: #f44336;")
-            return
-
-        def _cmp(v1, v2):
-            try:
-                a = [int(x) for x in v1.split(".")]
-                b = [int(x) for x in v2.split(".")]
-                while len(a) < 4: a.append(0)
-                while len(b) < 4: b.append(0)
-                return (a > b) - (a < b)
-            except Exception: 0
-
-        if _cmp(remote_ver, __version__) > 0:
-            self.tool_update_status.setText(
-                f"📢 发现新版本 v{remote_ver}！（当前 v{__version__}）\n"
-                f"发布日期: {release_date}\n{detail}"
-            )
-            self.tool_update_status.setStyleSheet("color: #ff9800; font-weight: bold;")
-
-            # 询问用户是否立即更新
-            reply = QMessageBox.question(
-                self, "发现新版本",
-                f"BDS Manager 有新版本可用！\n\n"
-                f"当前版本: v{__version__}\n"
-                f"最新版本: v{remote_ver}\n"
-                f"发布日期: {release_date}\n\n"
-                f"是否立即下载并更新？",
-                QMessageBox.Yes | QMessageBox.No,
-                QMessageBox.Yes
-            )
-            if reply == QMessageBox.Yes:
-                self._download_tool_update(remote_ver)
-        else:
-            self.tool_update_status.setText(
-                f"✅ 已是最新版本 v{__version__}（远程: v{remote_ver}）"
-            )
-            self.tool_update_status.setStyleSheet("color: #4CAF50;")
-
-    def _download_tool_update(self, remote_ver):
-        """下载新版 bds_manager.py 并提示替换"""
-        self.check_tool_update_btn.setEnabled(False)
-        self.check_tool_update_btn.setText("下载中...")
-        self.tool_update_status.setText(f"⬇️ 正在下载 v{remote_ver}...")
-
-        class DownloadSelfWorker(BaseWorker):
-            def run(self):
-                try:
-                    import tempfile, shutil
-                    url = ("https://raw.githubusercontent.com/TussalZeus18028/"
-                           "bds_manager/main/bds_manager.py")
-                    req = urllib.request.Request(url, headers={
-                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
-                    })
-                    with urllib.request.urlopen(req, timeout=30) as resp:
-                        new_content = resp.read()
-
-                    if not new_content or len(new_content) < 1000:
-                        self.finished.emit(False, "下载的文件异常（太小）")
-                        return
-
-                    # 保存到临时文件
-                    self._new_content = new_content
-                    self.finished.emit(True, f"下载完成（{len(new_content)/1024:.1f} KB）")
-                except Exception as e:
-                    self.finished.emit(False, str(e))
-
-        self._dl_self_worker = DownloadSelfWorker(self)
-        self._dl_self_worker.finished.connect(
-            lambda ok, msg: self._on_self_download_finished(ok, msg))
-        self._dl_self_worker.start()
-
-    def _on_self_download_finished(self, success, message):
-        self.check_tool_update_btn.setEnabled(True)
-        self.check_tool_update_btn.setText("🔍 检查更新")
-
-        if not success:
-            self.tool_update_status.setText(f"❌ 下载失败: {message}")
-            self.tool_update_status.setStyleSheet("color: #f44336;")
-            return
-
-        new_content = getattr(self._dl_self_worker, "_new_content", None)
-        if not new_content:
-            return
-
-        # 提示用户替换
-        reply = QMessageBox.question(
-            self, "下载完成",
-            f"新版本已下载完成！（{message}）\n\n"
-            "是否立即替换当前文件并重启？\n"
-            "⚠️ 替换后程序将自动重启。",
-            QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.Yes
-        )
-
-        if reply == QMessageBox.Yes:
-            try:
-                import shutil
-                current_path = os.path.join(SCRIPT_DIR, "bds_manager.py")
-                # 备份旧文件
-                backup_path = current_path + ".bak"
-                shutil.copy2(current_path, backup_path)
-                # 写入新文件
-                with open(current_path, "wb") as f:
-                    f.write(new_content)
-                QMessageBox.information(
-                    self, "更新完成",
-                    "BDS Manager 已更新！\n\n"
-                    f"旧文件已备份为 bds_manager.py.bak\n\n"
-                    "程序即将自动重启。"
-                )
-                # 重启程序
-                import subprocess
-                subprocess.Popen([sys.executable] + sys.argv,
-                                 creationflags=subprocess.CREATE_NO_WINDOW
-                                 if sys.platform == "win32" else 0)
-                QApplication.quit()
-            except Exception as e:
-                QMessageBox.critical(self, "更新失败", f"替换文件时出错：{e}")
-        else:
-            self.tool_update_status.setText(
-                "⚠️ 已取消更新。新版本已下载但未安装。"
-            )
-            self.tool_update_status.setStyleSheet("color: #ff9800;")
 
 # ---------- 后台工作线程（用于耗时操作）----------
 class BaseWorker(QThread):
@@ -3623,6 +3441,22 @@ class UpgradeTab(QWidget):
         log_group.setLayout(log_layout)
         layout.addWidget(log_group)
 
+        # --- 工具自更新 ---
+        self.tool_update_group = QGroupBox("🔧 BDS Manager 自身更新")
+        tool_layout = QVBoxLayout()
+        tool_top = QHBoxLayout()
+        tool_top.addWidget(QLabel(f"当前版本: v{__version__}"))
+        tool_top.addStretch()
+        self.check_tool_btn = QPushButton("🔍 检查工具更新")
+        self.check_tool_btn.clicked.connect(self._check_tool_update)
+        tool_top.addWidget(self.check_tool_btn)
+        tool_layout.addLayout(tool_top)
+        self.tool_update_status = QLabel("")
+        self.tool_update_status.setWordWrap(True)
+        tool_layout.addWidget(self.tool_update_status)
+        self.tool_update_group.setLayout(tool_layout)
+        layout.addWidget(self.tool_update_group)
+
         layout.addStretch()
 
         scroll_area.setWidget(content)
@@ -4170,6 +4004,186 @@ class UpgradeTab(QWidget):
         else:
             QMessageBox.critical(self, "升级失败", f"升级过程中发生错误：\n\n{message}\n\n"
                                                    "备份文件位于 backups/pre_upgrade_* 目录，可手动恢复。")
+
+    # ---------- 工具自更新方法 ----------
+    def _check_tool_update(self):
+        """检查 BDS Manager 自身是否有新版本"""
+        self.check_tool_btn.setEnabled(False)
+        self.check_tool_btn.setText("检查中...")
+        self.tool_update_status.setText("🔍 正在连接 GitHub...")
+        self._log("正在检查 BDS Manager 自身更新...", "INFO")
+
+        class ToolVersionWorker(BaseWorker):
+            result_signal = pyqtSignal(bool, str, str, str)
+
+            def run(self):
+                try:
+                    url = ("https://raw.githubusercontent.com/TussalZeus18028/"
+                           "bds_manager/main/version.json")
+                    req = urllib.request.Request(url, headers={
+                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+                    })
+                    with urllib.request.urlopen(req, timeout=10) as resp:
+                        data = json.loads(resp.read().decode("utf-8"))
+                        remote_ver = data.get("version", "")
+                        release_date = data.get("release_date", "")
+                        changelog = data.get("changelog", "")
+                        download_url = data.get("download_url", "")
+                        self.result_signal.emit(
+                            True, remote_ver, release_date,
+                            changelog or ""
+                        )
+                except urllib.error.HTTPError as e:
+                    self.result_signal.emit(False, "", "", f"HTTP {e.code}: {e.reason}")
+                except urllib.error.URLError as e:
+                    self.result_signal.emit(False, "", "", f"网络错误: {e.reason}")
+                except json.JSONDecodeError as e:
+                    self.result_signal.emit(False, "", "", f"JSON 解析失败: {e}")
+                except Exception as e:
+                    self.result_signal.emit(False, "", "", f"未知错误: {e}")
+
+        self._tool_ver_worker = ToolVersionWorker(self)
+        self._tool_ver_worker.result_signal.connect(self._on_tool_update_result)
+        self._tool_ver_worker.start()
+
+    def _on_tool_update_result(self, ok, remote_ver, release_date, changelog):
+        self.check_tool_btn.setEnabled(True)
+        self.check_tool_btn.setText("🔍 检查工具更新")
+
+        if not ok:
+            self.tool_update_status.setText(f"❌ 检查失败: {changelog}")
+            self.tool_update_status.setStyleSheet("color: #f44336; padding: 4px;")
+            self._log(f"工具更新检查失败: {changelog}", "ERROR")
+            return
+
+        self._log(f"远程版本: v{remote_ver} | 本地: v{__version__}", "INFO")
+
+        def _cmp(v1, v2):
+            try:
+                a = [int(x) for x in v1.split(".")]
+                b = [int(x) for x in v2.split(".")]
+                while len(a) < 4: a.append(0)
+                while len(b) < 4: b.append(0)
+                return (a > b) - (a < b)
+            except (ValueError, IndexError):
+                return 0
+
+        if _cmp(remote_ver, __version__) > 0:
+            info = f"📢 发现新版本 v{remote_ver}！（当前 v{__version__}）\n发布日期: {release_date}"
+            if changelog:
+                info += f"\n\n更新内容:\n{changelog}"
+            self.tool_update_status.setText(info)
+            self.tool_update_status.setStyleSheet("color: #ff9800; font-weight: bold; padding: 4px;")
+            self._log(f"发现新版本 v{remote_ver}", "SUCCESS")
+
+            reply = QMessageBox.question(
+                self, "发现新版本",
+                f"BDS Manager 有新版本可用！\n\n"
+                f"当前版本: v{__version__}\n"
+                f"最新版本: v{remote_ver}\n"
+                f"发布日期: {release_date}\n\n"
+                f"是否立即下载并更新？",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.Yes
+            )
+            if reply == QMessageBox.Yes:
+                self._download_tool_update(remote_ver)
+        else:
+            self.tool_update_status.setText(f"✅ 已是最新版本 v{__version__}（远程: v{remote_ver}）")
+            self.tool_update_status.setStyleSheet("color: #4CAF50; padding: 4px;")
+            self._log("已是最新版本", "SUCCESS")
+
+    def _download_tool_update(self, remote_ver):
+        """下载新版 bds_manager.py"""
+        self.check_tool_btn.setEnabled(False)
+        self.check_tool_btn.setText("下载中...")
+        self.tool_update_status.setText(f"⬇️ 正在下载 v{remote_ver}...")
+        self._log(f"开始下载 BDS Manager v{remote_ver}...", "INFO")
+
+        class DownloadSelfWorker(BaseWorker):
+            def run(self):
+                try:
+                    url = ("https://raw.githubusercontent.com/TussalZeus18028/"
+                           "bds_manager/main/bds_manager.py")
+                    req = urllib.request.Request(url, headers={
+                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+                    })
+                    with urllib.request.urlopen(req, timeout=60) as resp:
+                        new_content = resp.read()
+
+                    if not new_content:
+                        self.finished.emit(False, "下载的文件为空")
+                        return
+                    if len(new_content) < 1000:
+                        self.finished.emit(False, f"文件异常（仅 {len(new_content)} 字节）")
+                        return
+
+                    self._new_content = new_content
+                    self.finished.emit(True, f"下载完成（{len(new_content)/1024:.1f} KB）")
+                except urllib.error.HTTPError as e:
+                    self.finished.emit(False, f"HTTP {e.code}: {e.reason}")
+                except urllib.error.URLError as e:
+                    self.finished.emit(False, f"网络错误: {e.reason}")
+                except Exception as e:
+                    self.finished.emit(False, f"下载失败: {e}")
+
+        self._dl_self_worker = DownloadSelfWorker(self)
+        self._dl_self_worker.finished.connect(
+            lambda ok, msg: self._on_tool_download_finished(ok, msg))
+        self._dl_self_worker.start()
+
+    def _on_tool_download_finished(self, success, message):
+        self.check_tool_btn.setEnabled(True)
+        self.check_tool_btn.setText("🔍 检查工具更新")
+
+        if not success:
+            self.tool_update_status.setText(f"❌ 下载失败: {message}")
+            self.tool_update_status.setStyleSheet("color: #f44336; padding: 4px;")
+            self._log(f"下载失败: {message}", "ERROR")
+            return
+
+        new_content = getattr(self._dl_self_worker, "_new_content", None)
+        if not new_content:
+            self._log("下载内容为空", "ERROR")
+            return
+
+        self._log(f"下载完成: {message}", "SUCCESS")
+
+        reply = QMessageBox.question(
+            self, "下载完成",
+            f"新版本已下载完成！（{message}）\n\n"
+            "是否立即替换当前文件并重启？\n"
+            "⚠️ 替换后程序将自动重启。",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.Yes
+        )
+
+        if reply == QMessageBox.Yes:
+            try:
+                current_path = os.path.join(SCRIPT_DIR, "bds_manager.py")
+                backup_path = current_path + ".bak"
+                shutil.copy2(current_path, backup_path)
+                with open(current_path, "wb") as f:
+                    f.write(new_content)
+                self._log("文件已替换，旧文件备份为 .bak", "SUCCESS")
+                QMessageBox.information(
+                    self, "更新完成",
+                    "BDS Manager 已更新！\n\n"
+                    f"旧文件已备份为 bds_manager.py.bak\n\n"
+                    "程序即将自动重启。"
+                )
+                import subprocess
+                subprocess.Popen([sys.executable] + sys.argv,
+                                 creationflags=subprocess.CREATE_NO_WINDOW
+                                 if sys.platform == "win32" else 0)
+                QApplication.quit()
+            except Exception as e:
+                self._log(f"替换文件失败: {e}", "ERROR")
+                QMessageBox.critical(self, "更新失败", f"替换文件时出错：{e}")
+        else:
+            self.tool_update_status.setText("⚠️ 已取消更新。新版本已下载但未安装。")
+            self.tool_update_status.setStyleSheet("color: #ff9800; padding: 4px;")
+            self._log("用户取消安装更新", "WARN")
 
 # ---------- 仪表盘标签页 ----------
 class DashboardTab(QWidget):
