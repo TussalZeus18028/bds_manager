@@ -28,7 +28,7 @@ Minecraft Bedrock Dedicated Server 管理工具
   - 多线程优化：所有耗时操作移至后台线程，避免阻塞主界面
 """
 
-__version__ = "2.1.0.03"
+__version__ = "2.1.0.04"
 
 import sys
 import os
@@ -4944,8 +4944,65 @@ class BDSManager(QMainWindow):
         self.init_watcher()
         # 系统托盘
         self.create_tray_icon()
-        # 启动自检提示
+        # 启动自检提示 + 自动更新检查
         QTimer.singleShot(500, self._show_startup_toasts)
+        if self.config.get("auto_check_update", True):
+            QTimer.singleShot(3000, self._check_startup_update)
+
+    def _check_startup_update(self):
+        """启动时后台检查更新"""
+        class _SilentCheckWorker(QThread):
+            result = pyqtSignal(str, str, str)  # status, remote_ver, detail
+            def run(self):
+                try:
+                    req = urllib.request.Request(
+                        "https://raw.githubusercontent.com/TussalZeus18028/bds_manager/main/version.json",
+                        headers={"User-Agent": "Mozilla/5.0"})
+                    with urllib.request.urlopen(req, timeout=10) as resp:
+                        data = json.loads(resp.read().decode())
+                    remote = data.get("version", "")
+                    if not remote:
+                        self.result.emit("error", "", "version.json 无版本号")
+                        return
+                    def _cmp(a, b):
+                        try:
+                            x = [int(n) for n in a.split(".")]
+                            y = [int(n) for n in b.split(".")]
+                            while len(x) < 4: x.append(0)
+                            while len(y) < 4: y.append(0)
+                            return (x > y) - (x < y)
+                        except:
+                            return 0
+                    if _cmp(remote, __version__) > 0:
+                        self.result.emit("update", remote, "")
+                    else:
+                        self.result.emit("latest", remote, "")
+                except Exception as e:
+                    self.result.emit("error", "", str(e))
+
+        self._startup_worker = _SilentCheckWorker(self)
+        self._startup_worker.result.connect(self._on_startup_update_found)
+        self._startup_worker.start()
+
+    def _on_startup_update_found(self, status, remote_ver, detail):
+        if status == "error":
+            toast_error("版本检查失败", f"GitHub 连接失败: {detail}")
+            return
+        if status == "latest":
+            toast_success("已是最新版本", f"v{__version__}（远程: v{remote_ver}）")
+            return
+        # status == "update": 有新版，自动下载
+        url = "https://raw.githubusercontent.com/TussalZeus18028/bds_manager/main/bds_manager.py"
+        save_path = os.path.join(SCRIPT_DIR, f"bds_manager_v{remote_ver}.py.new")
+        try:
+            urllib.request.urlretrieve(url, save_path)
+        except Exception as e:
+            toast_error("更新下载失败", str(e))
+            return
+        if not os.path.exists(save_path) or os.path.getsize(save_path) < 10000:
+            return
+        toast_success("工具更新就绪", f"v{remote_ver} 已下载，可前往升级页重启应用")
+        log_info(f"工具更新 v{remote_ver} 已下载: {save_path}")
 
     def keyPressEvent(self, event):
         if event.modifiers() == Qt.ControlModifier and event.key() == Qt.Key_D:

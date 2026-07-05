@@ -1,6 +1,6 @@
 {
-    "version": "2.1.0.03",
+    "version": "2.1.0.04",
     "release_date": "2026-07-05",
     "download_url": "https://github.com/TussalZeus18028/bds_manager",
-    "changelog": "## v2.1.0.03\n\n### 🔧 升级 & 安装\n- 版本列表从自有仓库获取（TussalZeus18028/bds_version_list）\n- HEAD 并发探测 1.26+ 新版本\n- 启动自动扫描 + 24h 缓存\n- 停止扫描按钮 + 范围可调\n\n### 💬 Toast 时长可调\n- 四种提示各自独立调节（1-30秒）\n\n### ℹ️ 关于标签页\n- 项目简介 + 仓库/官网/隧道链接\n\n### 🛡️ 代码质量\n- 修复 BackupWorker 线程安全问题（toast 从工作线程移至主线程）\n- 裸 except 改为 except Exception\n- Git 抓取失败加 debug 日志\n- 终端输出统一为 log_* 函数\n- 项目目录整理（移除 bak/debug.log/__pycache__）\n\n### 🐛 修复\n- QPen 缺失导入\n- Toast 透明背景报错\n- frpc.ini 编辑区锁定\n- 滚动条跳动（setUpdatesEnabled 冻结）\n- 配置拆分后加载兼容"
+    "changelog": "## v2.1.0.04\n\n### 🔄 启动自检更新\n- 启动时自动检查 GitHub 是否有新版本\n- 已最新 / 发现新版（自动下载）/ 连接失败 三种 Toast 提示\n- 设置页可开关此功能\n\n### 🔒 安全退出\n- 退出时自动保存配置、停止服务器、清理定时器\n- 静默退出不弹确认框\n\n### 🐛 修复\n- start_download / download_manual_version 变量未定义崩溃\n- 退出确认弹窗移除\n- 异常处理统一\n- 项目目录整理"
 }
