@@ -4981,8 +4981,6 @@ class BDSManager(QMainWindow):
             "monitor_interval": self.config.get("monitor_interval", 2000),
             "custom_colors": self.custom_colors,
             "frpc_path": self.config.get("frpc_path", ""),
-            "version_cache": self.config.get("version_cache", {}),
-            "version_list": self.config.get("version_list", {}),
             "scan_patch_range": self.config.get("scan_patch_range", 40),
             "scan_build_range": self.config.get("scan_build_range", 30),
             "window_width": self.config.get("window_width", 1200),
@@ -4993,8 +4991,24 @@ class BDSManager(QMainWindow):
         try:
             with open(CONFIG_FILE, "w", encoding="utf-8") as f:
                 json.dump(config, f, indent=4, ensure_ascii=False, sort_keys=True)
+            log_info(f"配置已保存: {os.path.basename(CONFIG_FILE)}")
         except Exception as e:
             log_error(f"保存配置文件失败: {e}")
+        # 版本数据单独存
+        self._save_version_cache()
+
+    def _save_version_cache(self):
+        """保存版本缓存到独立文件"""
+        cache = {
+            "version_cache": self.config.get("version_cache", {}),
+            "version_list": self.config.get("version_list", {}),
+        }
+        try:
+            with open(VERSION_CACHE_FILE, "w", encoding="utf-8") as f:
+                json.dump(cache, f, indent=4, ensure_ascii=False, sort_keys=True)
+            log_info(f"版本缓存已保存: {os.path.basename(VERSION_CACHE_FILE)}")
+        except Exception as e:
+            log_error(f"保存版本缓存失败: {e}")
         self.update_global_paths()
         log_info(f"服务器目录已更新: {SERVER_DIR}")
         self.init_watcher()
