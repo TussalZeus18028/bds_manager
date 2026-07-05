@@ -28,7 +28,7 @@ Minecraft Bedrock Dedicated Server 管理工具
   - 多线程优化：所有耗时操作移至后台线程，避免阻塞主界面
 """
 
-__version__ = "2.1.0.01"
+__version__ = "2.1.0.02"
 
 import sys
 import os
@@ -271,16 +271,20 @@ def set_toast_parent(parent):
     _toast_parent = parent
 
 def toast_error(title, msg=""):
-    if _toast_parent: ToastNotification(_toast_parent, title, msg, "error", 5000)
+    if _toast_parent: ToastNotification(_toast_parent, title, msg, "error",
+        _toast_parent.config.get("toast_duration_error", 5000) if hasattr(_toast_parent, 'config') else 5000)
 
 def toast_warning(title, msg=""):
-    if _toast_parent: ToastNotification(_toast_parent, title, msg, "warning", 4000)
+    if _toast_parent: ToastNotification(_toast_parent, title, msg, "warning",
+        _toast_parent.config.get("toast_duration_warning", 4000) if hasattr(_toast_parent, 'config') else 4000)
 
 def toast_success(title, msg=""):
-    if _toast_parent: ToastNotification(_toast_parent, title, msg, "success", 3500)
+    if _toast_parent: ToastNotification(_toast_parent, title, msg, "success",
+        _toast_parent.config.get("toast_duration_success", 3500) if hasattr(_toast_parent, 'config') else 3500)
 
 def toast_info(title, msg=""):
-    if _toast_parent: ToastNotification(_toast_parent, title, msg, "info", 3000)
+    if _toast_parent: ToastNotification(_toast_parent, title, msg, "info",
+        _toast_parent.config.get("toast_duration_info", 3000) if hasattr(_toast_parent, 'config') else 3000)
 
 # ---------- 全局配置：支持脚本与服务器文件夹分离 ----------
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -1515,6 +1519,29 @@ class SettingsTab(QWidget):
         dpi_group.setLayout(dpi_layout)
         layout.addWidget(dpi_group)
 
+        # --- 消息提示时长 ---
+        toast_group = QGroupBox("💬 右上角提示显示时长")
+        toast_layout = QFormLayout()
+        self.toast_dur_error = QSpinBox()
+        self.toast_dur_error.setRange(1000, 30000)
+        self.toast_dur_error.setSuffix(" ms")
+        self.toast_dur_error.setToolTip("错误提示")
+        toast_layout.addRow("🔴 错误:", self.toast_dur_error)
+        self.toast_dur_warning = QSpinBox()
+        self.toast_dur_warning.setRange(1000, 30000)
+        self.toast_dur_warning.setSuffix(" ms")
+        toast_layout.addRow("🟠 警告:", self.toast_dur_warning)
+        self.toast_dur_success = QSpinBox()
+        self.toast_dur_success.setRange(1000, 30000)
+        self.toast_dur_success.setSuffix(" ms")
+        toast_layout.addRow("🟢 成功:", self.toast_dur_success)
+        self.toast_dur_info = QSpinBox()
+        self.toast_dur_info.setRange(1000, 30000)
+        self.toast_dur_info.setSuffix(" ms")
+        toast_layout.addRow("🔵 信息:", self.toast_dur_info)
+        toast_group.setLayout(toast_layout)
+        layout.addWidget(toast_group)
+
         # --- 保存按钮 ---
         save_row = QHBoxLayout()
         save_row.addStretch()
@@ -1551,6 +1578,10 @@ class SettingsTab(QWidget):
         self.monitor_interval.setValue(self.parent.config.get("monitor_interval", 2000))
         self.mem_warn.setValue(self.parent.config.get("mem_warn_threshold", 80))
         self.hidpi_cb.setChecked(self.parent.config.get("hidpi_enabled", True))
+        self.toast_dur_error.setValue(self.parent.config.get("toast_duration_error", 5000))
+        self.toast_dur_warning.setValue(self.parent.config.get("toast_duration_warning", 4000))
+        self.toast_dur_success.setValue(self.parent.config.get("toast_duration_success", 3500))
+        self.toast_dur_info.setValue(self.parent.config.get("toast_duration_info", 3000))
         self.custom_group.setVisible(self.theme_combo.currentText() == "custom")
         for key, btn in self.color_buttons.items():
             color = self.parent.custom_colors.get(key, "#2b2b2b")
@@ -1580,6 +1611,10 @@ class SettingsTab(QWidget):
         self.parent.config["monitor_interval"] = self.monitor_interval.value()
         self.parent.config["mem_warn_threshold"] = self.mem_warn.value()
         self.parent.config["hidpi_enabled"] = self.hidpi_cb.isChecked()
+        self.parent.config["toast_duration_error"] = self.toast_dur_error.value()
+        self.parent.config["toast_duration_warning"] = self.toast_dur_warning.value()
+        self.parent.config["toast_duration_success"] = self.toast_dur_success.value()
+        self.parent.config["toast_duration_info"] = self.toast_dur_info.value()
         self.parent.save_config()
         self.parent.apply_theme(self.parent.config["theme"])
         self.parent.apply_monitor_interval(self.parent.config["monitor_interval"])
@@ -3703,6 +3738,7 @@ class UpgradeTab(QWidget):
         scroll_area = QScrollArea()
         scroll_area.setWidgetResizable(True)
         scroll_area.setFrameShape(QScrollArea.NoFrame)
+        self.scroll_area = scroll_area  # 保存引用用于防跳
 
         content = QWidget()
         layout = QVBoxLayout(content)
@@ -3784,6 +3820,7 @@ class UpgradeTab(QWidget):
 
         # 进度
         self.browse_status = QLabel("")
+
         self.browse_status.setStyleSheet("color: #888; font-size: 11px;")
         ver_layout.addWidget(self.browse_status)
 
@@ -3824,6 +3861,7 @@ class UpgradeTab(QWidget):
         dl_layout.addWidget(self.dl_progress)
 
         self.dl_status_label = QLabel("")
+
         self.dl_status_label.setWordWrap(True)
         dl_layout.addWidget(self.dl_status_label)
 
@@ -3878,6 +3916,7 @@ class UpgradeTab(QWidget):
         tool_top.addWidget(self.check_tool_btn)
         tool_layout.addLayout(tool_top)
         self.tool_update_status = QLabel("")
+
         self.tool_update_status.setWordWrap(True)
         tool_layout.addWidget(self.tool_update_status)
         self.tool_update_group.setLayout(tool_layout)
@@ -3895,9 +3934,6 @@ class UpgradeTab(QWidget):
         color = colors.get(level, "#ffffff")
         self.log_output.append(f'<span style="color:gray">[{ts}]</span> '
                                f'<span style="color:{color}">[{level}]</span> {msg}')
-        # 滚动到底部
-        sb = self.log_output.verticalScrollBar()
-        sb.setValue(sb.maximum())
 
     # (removed old _on_branch_changed)
 
@@ -4456,12 +4492,35 @@ class UpgradeTab(QWidget):
                                                    "备份文件位于 backups/pre_upgrade_* 目录，可手动恢复。")
 
     # ---------- 工具自更新方法 ----------
+    def _scrolled_set_text(self, widget, text):
+        """设置文字但不触发滚动条跳动"""
+        sb = self.scroll_area.verticalScrollBar()
+        pos = sb.value()
+        sb.blockSignals(True)
+        widget.setText(text)
+        sb.blockSignals(False)
+        sb.setValue(pos)
+
+    def _scrolled_log(self, *args, **kwargs):
+        """写日志但不触发滚动条跳动"""
+        sb = self.scroll_area.verticalScrollBar()
+        pos = sb.value()
+        self._log(*args, **kwargs)
+        sb.setValue(pos)
+
     def _check_tool_update(self):
         """检查 BDS Manager 自身是否有新版本"""
-        self.check_tool_btn.setEnabled(False)
-        self.check_tool_btn.setText("检查中...")
-        self.tool_update_status.setText("🔍 正在连接 GitHub...")
-        self._log("正在检查 BDS Manager 自身更新...", "INFO")
+        # 冻结滚动防止跳动
+        self.scroll_area.setUpdatesEnabled(False)
+        try:
+            sp = self.scroll_area.verticalScrollBar().value()
+            self.check_tool_btn.setEnabled(False)
+            self.check_tool_btn.setText("检查中...")
+            self._scrolled_set_text(self.tool_update_status, "🔍 正在连接 GitHub...")
+            self._log("正在检查 BDS Manager 自身更新...", "INFO")
+        finally:
+            self.scroll_area.setUpdatesEnabled(True)
+            self.scroll_area.verticalScrollBar().setValue(sp)
 
         class ToolVersionWorker(BaseWorker):
             result_signal = pyqtSignal(bool, str, str, str)
@@ -4497,14 +4556,17 @@ class UpgradeTab(QWidget):
         self._tool_ver_worker.start()
 
     def _on_tool_update_result(self, ok, remote_ver, release_date, changelog):
+        # 保存滚动位置
+        sp = self.scroll_area.verticalScrollBar().value()
         self.check_tool_btn.setEnabled(True)
         self.check_tool_btn.setText("🔍 检查工具更新")
 
         if not ok:
-            self.tool_update_status.setText(f"❌ 检查失败: {changelog}")
+            self._scrolled_set_text(self.tool_update_status, f"❌ 检查失败: {changelog}")
             self.tool_update_status.setStyleSheet("color: #f44336; padding: 4px;")
             toast_error("检查更新失败", changelog)
             self._log(f"工具更新检查失败: {changelog}", "ERROR")
+            self.scroll_area.verticalScrollBar().setValue(sp)
             return
 
         self._log(f"远程版本: v{remote_ver} | 本地: v{__version__}", "INFO")
@@ -4523,7 +4585,7 @@ class UpgradeTab(QWidget):
             info = f"📢 发现新版本 v{remote_ver}！（当前 v{__version__}）\n发布日期: {release_date}"
             if changelog:
                 info += f"\n\n更新内容:\n{changelog}"
-            self.tool_update_status.setText(info)
+            self._scrolled_set_text(self.tool_update_status, info)
             self.tool_update_status.setStyleSheet("color: #ff9800; font-weight: bold; padding: 4px;")
             self._log(f"发现新版本 v{remote_ver}", "SUCCESS")
 
@@ -4540,15 +4602,16 @@ class UpgradeTab(QWidget):
             if reply == QMessageBox.Yes:
                 self._download_tool_update(remote_ver)
         else:
-            self.tool_update_status.setText(f"✅ 已是最新版本 v{__version__}（远程: v{remote_ver}）")
+            self._scrolled_set_text(self.tool_update_status, f"✅ 已是最新版本 v{__version__}（远程: v{remote_ver}）")
             self.tool_update_status.setStyleSheet("color: #4CAF50; padding: 4px;")
             self._log("已是最新版本", "SUCCESS")
+        self.scroll_area.verticalScrollBar().setValue(sp)
 
     def _download_tool_update(self, remote_ver):
         """下载新版 bds_manager.py"""
         self.check_tool_btn.setEnabled(False)
         self.check_tool_btn.setText("下载中...")
-        self.tool_update_status.setText(f"⬇️ 正在下载 v{remote_ver}...")
+        self._scrolled_set_text(self.tool_update_status, f"⬇️ 正在下载 v{remote_ver}...")
         self._log(f"开始下载 BDS Manager v{remote_ver}...", "INFO")
 
         class DownloadSelfWorker(BaseWorker):
@@ -4588,7 +4651,7 @@ class UpgradeTab(QWidget):
         self.check_tool_btn.setText("🔍 检查工具更新")
 
         if not success:
-            self.tool_update_status.setText(f"❌ 下载失败: {message}")
+            self._scrolled_set_text(self.tool_update_status, f"❌ 下载失败: {message}")
             self.tool_update_status.setStyleSheet("color: #f44336; padding: 4px;")
             toast_error("下载失败", message)
             self._log(f"下载失败: {message}", "ERROR")
@@ -4634,7 +4697,7 @@ class UpgradeTab(QWidget):
                 self._log(f"替换文件失败: {e}", "ERROR")
                 QMessageBox.critical(self, "更新失败", f"替换文件时出错：{e}")
         else:
-            self.tool_update_status.setText("⚠️ 已取消更新。新版本已下载但未安装。")
+            self._scrolled_set_text(self.tool_update_status, "⚠️ 已取消更新。新版本已下载但未安装。")
             self.tool_update_status.setStyleSheet("color: #ff9800; padding: 4px;")
             self._log("用户取消安装更新", "WARN")
 
@@ -5121,6 +5184,9 @@ class BDSManager(QMainWindow):
         self.tab_widget.addTab(self.tunnel_tab, "🚇 隧道")
         self.tab_widget.addTab(self.upgrade_tab, "🔧 升级 & 安装")
         self.tab_widget.addTab(self.settings_tab, "⚙️ 设置")
+        # --- 关于标签页 ---
+        about = self._create_about_tab()
+        self.tab_widget.addTab(about, "ℹ️ 关于")
         # 标签页切换动画
         from PyQt5.QtWidgets import QGraphicsOpacityEffect
         self._tab_fx = QGraphicsOpacityEffect(self.tab_widget)
@@ -5220,6 +5286,44 @@ class BDSManager(QMainWindow):
         self._tab_anim.setEndValue(1.0)
         self._tab_anim.setEasingCurve(QEasingCurve.OutCubic)
         self._tab_anim.start()
+
+    def _create_about_tab(self):
+        """关于标签页"""
+        w = QWidget()
+        layout = QVBoxLayout(w)
+        layout.setContentsMargins(24, 20, 24, 20)
+        layout.setSpacing(12)
+
+        title = QLabel(f"BDS Manager v{__version__}")
+        title.setStyleSheet("font-size: 22px; font-weight: bold; color: #4CAF50;")
+        layout.addWidget(title)
+
+        desc = QLabel(
+            "Minecraft Bedrock 版服务器全功能管理器。\n"
+            "一键启停、实时监控、世界管理、版本升级、隧道穿透、资源包管理。"
+        )
+        desc.setWordWrap(True)
+        desc.setStyleSheet("font-size: 13px; color: #aaa; line-height: 1.5;")
+        layout.addWidget(desc)
+
+        links_group = QGroupBox("🔗 相关链接")
+        links_layout = QVBoxLayout()
+        links = [
+            ("📦 作者仓库", "https://github.com/TussalZeus18028/bds_manager"),
+            ("🌍 BDS 官网下载", "https://www.minecraft.net/zh-hans/download/server/bedrock"),
+            ("🚇 ChmlFrp 隧道", "https://panel.chmlfrp.cn"),
+            ("📋 版本数据库", "https://github.com/TussalZeus18028/bds_version_list"),
+        ]
+        for text, url in links:
+            link = QLabel(f'<a href="{url}" style="color: #88ccff; text-decoration: none;">{text}</a>')
+            link.setOpenExternalLinks(True)
+            link.setStyleSheet("font-size: 13px; padding: 4px 0;")
+            links_layout.addWidget(link)
+        links_group.setLayout(links_layout)
+        layout.addWidget(links_group)
+
+        layout.addStretch()
+        return w
 
     def _refresh_status_bar(self):
         """更新底部状态栏实时信息"""

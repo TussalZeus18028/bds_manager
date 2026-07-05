@@ -1,6 +1,6 @@
 {
-    "version": "2.1.0.01",
+    "version": "2.1.0.02",
     "release_date": "2026-07-05",
     "download_url": "https://github.com/TussalZeus18028/bds_manager",
-    "changelog": "## v2.1.0.01 升级 & 安装重构\n\n### 🔧 升级 & 安装（全新标签页）\n- 当前信息：实时显示已安装版本和服务器目录\n- 可用版本列表：GitHub 抓取 1.18~1.26 稳定版 + HEAD 并发探测 1.26+\n- 一键浏览版本、筛选稳定版/预览版\n- 列表内直接下载，支持停止扫描\n- 手动输入版本号下载\n- Patch/Build 扫描范围可调\n\n### 📦 启动自动扫描\n- 启动 2 秒后自动后台获取版本列表（不阻塞 GUI）\n- 每探测到一个版本实时显示\n- 结果缓存到独立文件（24h 有效）\n\n### ⚙️ 配置拆分\n- 工具配置 → bds_manager_config.json\n- 版本缓存 → bds_version_cache.json\n- 保存时控制台输出提示\n\n### 🎨 UI 优化\n- 升级页 GroupBox 圆角边框\n- 版本列表表格紧凑布局\n- 停止扫描按钮 + 范围调节\n\n### 🐛 修复\n- QPen 缺失导入\n- Toast 透明背景报错\n- 备份弹窗改为 Toast\n- frpc.ini 编辑区锁定 + 白色背景\n- 版本扫描去重"
+    "changelog": "## v2.1.0.02\n\n### 🔧 升级 & 安装\n- 版本列表从自有仓库获取（TussalZeus18028/bds_version_list）\n- HEAD 并发探测 1.26+ 新版本\n- 每个版本实时显示，结果去重\n- 停止扫描按钮 + Patch/Build 范围可调\n- 手动输入版本号下载\n\n### 📦 版本数据库独立仓库\n- 创建 bds_version_list 仓库，存放 65 个 BDS 版本\n- 管理器从 raw.githubusercontent.com 拉取\n- 用户可自行维护版本列表\n\n### ⚙️ 配置拆分\n- 工具配置 → bds_manager_config.json\n- 版本缓存 → bds_version_cache.json\n- 保存时控制台输出提示\n\n### 💬 Toast 时长可调\n- 设置页新增四种提示的显示时长调节（1-30秒）\n- 错误/警告/成功/信息各自可配\n\n### ℹ️ 关于标签页\n- 项目简介 + 版本号\n- 作者仓库、BDS 官网、隧道、版本数据库链接\n\n### 🎨 UI 优化\n- 升级页 GroupBox 圆角边框 + 间距优化\n- 版本列表表格紧凑布局\n- QLabel 固定高度防止滚动跳动\n\n### 🐛 修复\n- frpc.ini 编辑区白色背景 + 锁定防误触\n- 备份弹窗统一为 Toast\n- 版本扫描去重\n- savesConfig 不阻塞 GUI\n- 配置拆分后加载兼容"
 }
