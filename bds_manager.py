@@ -28,7 +28,7 @@ Minecraft Bedrock Dedicated Server 管理工具
   - 多线程优化：所有耗时操作移至后台线程，避免阻塞主界面
 """
 
-__version__ = "2.1.0.06"
+__version__ = "2.1.0.07"
 
 import sys
 import os
@@ -549,7 +549,9 @@ def get_full_pack_info(pack_folder):
     try:
         with open(manifest_path, "r", encoding="utf-8-sig") as f:
             content = f.read()
-        data = json5.loads(content)
+        data = _parse_json(content)
+        if not data:
+            return {}
         header = data.get("header", {})
         modules = data.get("modules", [])
         dependencies = data.get("dependencies", [])
@@ -1693,7 +1695,6 @@ class BackupWorker(BaseWorker):
             self.finished.emit(True, f"备份成功: {backup_name}")
         except Exception as e:
             log_error(f"备份失败: {e}")
-            toast_error("备份失败", str(e))
             self.finished.emit(False, f"备份失败: {e}")
 
 class RestoreWorker(BaseWorker):
@@ -3175,6 +3176,9 @@ class TunnelTab(QWidget):
 
     def _on_tunnel_line(self, text, is_error):
         """信号槽：安全地从工作线程传递到主线程"""
+        if text == "__STOPPED__":
+            self._on_tunnel_stopped()
+            return
         # GUI 输出
         self.append_output(text, is_error)
         # 写入日志文件
@@ -3279,7 +3283,7 @@ class TunnelTab(QWidget):
         except Exception as e:
             log_error(f"读取隧道输出异常: {e}")
         finally:
-            QTimer.singleShot(0, self._on_tunnel_stopped)
+            self.tunnel_line_signal.emit("__STOPPED__", "")
 
     def _on_tunnel_stopped(self):
         if self.start_tunnel_btn.isEnabled():
@@ -3842,7 +3846,7 @@ class UpgradeWorker(BaseWorker):
 # ---------- 版本升级标签页 ----------
 class UpgradeTab(QWidget):
     def __init__(self, parent):
-        super().__init__()
+        super().__init__(parent)
         self.parent = parent
         self.latest_stable_version = None
         self.latest_stable_url = None
@@ -4239,7 +4243,13 @@ class UpgradeTab(QWidget):
         elif branch_filter == "预览版":
             results = [(v,b,u) for v,b,u in results if b == "preview"]
 
-        results.sort(key=lambda x: [int(i) for i in x[0].split(".")], reverse=True)
+        # 安全排序（防止损坏的版本号导致 int("") 崩溃）
+        def _safe_key(x):
+            try:
+                return [int(i) for i in x[0].split(".")]
+            except (ValueError, IndexError):
+                return [0, 0, 0, 0]
+        results.sort(key=_safe_key, reverse=True)
         self.ver_table.setRowCount(len(results))
         for i, (ver, branch, url) in enumerate(results):
             self.ver_table.setItem(i, 0, QTableWidgetItem(ver))
@@ -4475,11 +4485,9 @@ class UpgradeTab(QWidget):
                         self._log("步骤 3/3: 跳过恢复（未备份）", "INFO")
 
                     self._log("✅ 升级完成！", "SUCCESS")
-                    toast_success("升级完成", "请重新启动服务器")
-                    self.finished.emit(True, "升级成功！")
+                    self.finished.emit(True, "升级完成")
                 except Exception as e:
                     self._log(f"❌ 升级失败: {e}", "ERROR")
-                    toast_error("升级失败", str(e))
                     self.finished.emit(False, str(e))
 
             def _backup_critical_files(self):
@@ -5383,7 +5391,7 @@ class BDSManager(QMainWindow):
         self.tab_widget.addTab(self.world_tab, "🌍 世界管理")
         self.tab_widget.addTab(monitor_tab, "📊 系统资源")
         self.tab_widget.addTab(self.tunnel_tab, "🚇 隧道")
-        self.tab_widget.addTab(self.upgrade_tab, "🔧 升级 & 安装")
+        self.tab_widget.addTab(self.upgrade_tab, "🔧 升级&&安装")
         self.tab_widget.addTab(self.settings_tab, "⚙️ 设置")
         # --- 关于标签页 ---
         about = self._create_about_tab()
