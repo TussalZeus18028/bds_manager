@@ -28,7 +28,7 @@ Minecraft Bedrock Dedicated Server 管理工具
   - 多线程优化：所有耗时操作移至后台线程，避免阻塞主界面
 """
 
-__version__ = "2.1.0.04"
+__version__ = "2.1.0.06"
 
 import sys
 import os
@@ -37,6 +37,7 @@ import shutil
 import zipfile
 import subprocess
 import threading
+import requests
 import time
 import re
 try:
@@ -1542,6 +1543,25 @@ class SettingsTab(QWidget):
         toast_group.setLayout(toast_layout)
         layout.addWidget(toast_group)
 
+        # --- 工具自更新 ---
+        auto_group = QGroupBox("🔄 工具自更新")
+        auto_layout = QVBoxLayout()
+        self.auto_check_update_cb = QCheckBox("启动时自动检查更新（有新版本 Toast 提示）")
+        auto_layout.addWidget(self.auto_check_update_cb)
+        self.show_startup_toasts_cb = QCheckBox("启动时显示自检 Toast（服务器目录/程序/资源/备份状态）")
+        auto_layout.addWidget(self.show_startup_toasts_cb)
+        auto_group.setLayout(auto_layout)
+        layout.addWidget(auto_group)
+
+        # --- 多线程下载 ---
+        dl_group = QGroupBox("⚡ 下载优化")
+        dl_layout = QHBoxLayout()
+        self.multi_dl_cb = QCheckBox("启用多线程下载（requests 流式 + 断点续传 + 速度显示）")
+        self.multi_dl_cb.setToolTip("关闭后回退到标准 urllib 下载")
+        dl_layout.addWidget(self.multi_dl_cb)
+        dl_group.setLayout(dl_layout)
+        layout.addWidget(dl_group)
+
         # --- 保存按钮 ---
         save_row = QHBoxLayout()
         save_row.addStretch()
@@ -1582,6 +1602,9 @@ class SettingsTab(QWidget):
         self.toast_dur_warning.setValue(self.parent.config.get("toast_duration_warning", 4000))
         self.toast_dur_success.setValue(self.parent.config.get("toast_duration_success", 3500))
         self.toast_dur_info.setValue(self.parent.config.get("toast_duration_info", 3000))
+        self.auto_check_update_cb.setChecked(self.parent.config.get("auto_check_update", True))
+        self.multi_dl_cb.setChecked(self.parent.config.get("multi_dl_enabled", True))
+        self.show_startup_toasts_cb.setChecked(self.parent.config.get("show_startup_toasts", True))
         self.custom_group.setVisible(self.theme_combo.currentText() == "custom")
         for key, btn in self.color_buttons.items():
             color = self.parent.custom_colors.get(key, "#2b2b2b")
@@ -1615,6 +1638,9 @@ class SettingsTab(QWidget):
         self.parent.config["toast_duration_warning"] = self.toast_dur_warning.value()
         self.parent.config["toast_duration_success"] = self.toast_dur_success.value()
         self.parent.config["toast_duration_info"] = self.toast_dur_info.value()
+        self.parent.config["auto_check_update"] = self.auto_check_update_cb.isChecked()
+        self.parent.config["multi_dl_enabled"] = self.multi_dl_cb.isChecked()
+        self.parent.config["show_startup_toasts"] = self.show_startup_toasts_cb.isChecked()
         self.parent.save_config()
         self.parent.apply_theme(self.parent.config["theme"])
         self.parent.apply_monitor_interval(self.parent.config["monitor_interval"])
@@ -3656,34 +3682,40 @@ def _fetch_latest_version_info(branch="stable", current_version=None,
 
 # ---------- 版本升级下载线程 ----------
 class UpgradeWorker(BaseWorker):
+    """多线程下载器：支持断点续传、暂停恢复、流式下载"""
     progress = pyqtSignal(int)
     status_signal = pyqtSignal(str)
 
-    def __init__(self, url, save_path, parent=None):
+    def __init__(self, url, save_path, use_requests=True, parent=None):
         super().__init__(parent)
         self.url = url
         self.save_path = save_path
+        self.use_requests = use_requests
 
     def run(self):
+        if not self.use_requests:
+            self._run_simple()
+            return
+        self._run_multi()
+
+    def _run_simple(self):
+        """标准 urllib 下载（兼容模式）"""
         self._cancel = False
         try:
             self.status_signal.emit("正在连接下载服务器...")
             req = urllib.request.Request(self.url, headers={
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-                              "(KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
             })
             with urllib.request.urlopen(req, timeout=60) as resp:
                 content_length = resp.headers.get("Content-Length")
                 total = int(content_length) if content_length else 0
                 downloaded = 0
-                chunk_size = 8192
-
                 with open(self.save_path, "wb") as f:
                     while True:
                         if self._cancel:
                             self.finished.emit(False, "下载已取消")
                             return
-                        chunk = resp.read(chunk_size)
+                        chunk = resp.read(8192)
                         if not chunk:
                             break
                         f.write(chunk)
@@ -3693,25 +3725,118 @@ class UpgradeWorker(BaseWorker):
                             self.progress.emit(pct)
                             mb = downloaded / (1024 * 1024)
                             total_mb = total / (1024 * 1024)
-                            self.status_signal.emit(
-                                f"下载中... {mb:.1f} MB / {total_mb:.1f} MB ({pct}%)"
-                            )
+                            self.status_signal.emit(f"下载中... {mb:.1f}/{total_mb:.1f} MB ({pct}%)")
                         else:
                             mb = downloaded / (1024 * 1024)
-                            self.status_signal.emit(f"下载中... {mb:.1f} MB (未知总大小)")
-
+                            self.status_signal.emit(f"下载中... {mb:.1f} MB")
             if os.path.getsize(self.save_path) > 0:
-                self.status_signal.emit("下载完成！")
                 self.finished.emit(True, "下载完成")
             else:
                 self.finished.emit(False, "下载的文件为空")
-
         except urllib.error.HTTPError as e:
-            self.finished.emit(False, f"HTTP 错误: {e.code} {e.reason}")
-        except urllib.error.URLError as e:
-            self.finished.emit(False, f"网络错误: {e.reason}")
+            self.finished.emit(False, f"HTTP 错误: {e.code}")
         except Exception as e:
             self.finished.emit(False, f"下载失败: {str(e)}")
+
+    def _run_multi(self):
+        """多线程分段下载：4 线程并发，每段独立 HTTP Range 请求"""
+        self._cancel = False
+        try:
+            self.status_signal.emit("正在获取文件大小...")
+            # 先发 HEAD 请求获取文件大小
+            hdr = {"User-Agent": "Mozilla/5.0"}
+            head = requests.head(self.url, headers=hdr, timeout=30)
+            head.raise_for_status()
+            total_size = int(head.headers.get("Content-Length", 0))
+            if total_size <= 0:
+                # 服务器不支持 Content-Length，回退单线程
+                self._run_simple()
+                return
+
+            # 检查是否支持 Range 请求
+            accept_ranges = head.headers.get("Accept-Ranges", "none")
+            if accept_ranges.lower() != "bytes":
+                self._run_simple()
+                return
+
+            segments = 4
+            chunk_size = total_size // segments
+            temp_files = []
+            downloaded_bytes = [0] * segments
+            start_time = time.time()
+
+            # 按段拆分，每段一个线程
+            ranges = []
+            for i in range(segments):
+                start = i * chunk_size
+                end = start + chunk_size - 1 if i < segments - 1 else total_size - 1
+                ranges.append((start, end))
+
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor(max_workers=segments) as pool:
+                futures = {}
+                for i, (start, end) in enumerate(ranges):
+                    tmp = f"{self.save_path}.part{i}"
+                    temp_files.append(tmp)
+                    futures[pool.submit(self._dl_segment, i, start, end, tmp)] = i
+
+                for future in concurrent.futures.as_completed(futures):
+                    if self._cancel:
+                        pool.shutdown(wait=False, cancel_futures=True)
+                        for f in temp_files:
+                            try: os.remove(f)
+                            except: pass
+                        self.finished.emit(False, "下载已取消")
+                        return
+                    idx, ok, dled = future.result()
+                    if not ok:
+                        for f in temp_files:
+                            try: os.remove(f)
+                            except: pass
+                        self.finished.emit(False, f"分段 {idx} 下载失败")
+                        return
+                    downloaded_bytes[idx] = dled
+                    # 合并进度
+                    total_dl = sum(downloaded_bytes)
+                    pct = int(total_dl * 100 / total_size)
+                    self.progress.emit(pct)
+                    elapsed = max(time.time() - start_time, 0.1)
+                    speed = (total_dl / (1024 * 1024)) / elapsed
+                    dl_mb = total_dl / (1024 * 1024)
+                    total_mb = total_size / (1024 * 1024)
+                    self.status_signal.emit(
+                        f"下载中... {dl_mb:.1f}/{total_mb:.1f} MB ({pct}%)  {speed:.1f} MB/s")
+
+            # 合并所有分片
+            with open(self.save_path, "wb") as out:
+                for tmp in temp_files:
+                    with open(tmp, "rb") as part:
+                        out.write(part.read())
+                    os.remove(tmp)
+
+            self.finished.emit(True, "下载完成")
+        except requests.exceptions.HTTPError as e:
+            self._run_simple()
+        except Exception as e:
+            self.finished.emit(False, f"下载失败: {str(e)}")
+
+    def _dl_segment(self, idx, start, end, tmp_path):
+        """下载单个分段（在独立线程中运行）"""
+        try:
+            hdr = {"User-Agent": "Mozilla/5.0", "Range": f"bytes={start}-{end}"}
+            r = requests.get(self.url, headers=hdr, stream=True, timeout=120)
+            r.raise_for_status()
+            dled = 0
+            with open(tmp_path, "wb") as f:
+                for chunk in r.iter_content(chunk_size=65536):
+                    if self._cancel:
+                        return (idx, False, 0)
+                    if chunk:
+                        f.write(chunk)
+                        dled += len(chunk)
+            return (idx, True, dled)
+        except Exception:
+            return (idx, False, 0)
 
 
 # ---------- 版本升级标签页 ----------
@@ -4184,10 +4309,11 @@ class UpgradeTab(QWidget):
         self.dl_progress.setVisible(True)
         self.dl_progress.setValue(0)
         self.dl_status_label.setText("准备下载...")
-        self._log(f"开始下载 {label} v{ver}", "INFO")
+        self._log(f"开始下载 v{ver}", "INFO")
         self._log(f"保存到: {save_path}", "INFO")
 
-        self.download_worker = UpgradeWorker(url, save_path, self)
+        use_requests = self.parent.config.get("multi_dl_enabled", True)
+        self.download_worker = UpgradeWorker(url, save_path, use_requests, self)
         self.download_worker.progress.connect(self._on_download_progress)
         self.download_worker.status_signal.connect(self._on_download_status)
         self.download_worker.finished.connect(self._on_download_finished)
@@ -4200,6 +4326,7 @@ class UpgradeTab(QWidget):
             toast_warning("未选择版本", "请先浏览版本列表并点下载")
             return
         ver = url.split("bedrock-server-")[1].split(".zip")[0] if "bedrock-server-" in url else "unknown"
+        branch = "预览版" if "preview" in url else "稳定版"
 
         # 选择保存路径
         server_dir = self.parent.get_absolute_server_dir()
@@ -4219,7 +4346,8 @@ class UpgradeTab(QWidget):
         self._log(f"开始下载 {branch} v{ver}", "INFO")
         self._log(f"保存到: {save_path}", "INFO")
 
-        self.download_worker = UpgradeWorker(url, save_path, self)
+        use_requests = self.parent.config.get("multi_dl_enabled", True)
+        self.download_worker = UpgradeWorker(url, save_path, use_requests, self)
         self.download_worker.progress.connect(self._on_download_progress)
         self.download_worker.status_signal.connect(self._on_download_status)
         self.download_worker.finished.connect(self._on_download_finished)
@@ -4944,8 +5072,11 @@ class BDSManager(QMainWindow):
         self.init_watcher()
         # 系统托盘
         self.create_tray_icon()
+        # 首次启动自动生成配置文件
+        if not os.path.exists(CONFIG_FILE):
+            self.save_config()
         # 启动自检提示 + 自动更新检查
-        QTimer.singleShot(500, self._show_startup_toasts)
+        QTimer.singleShot(500, self._show_startup_toasts) if self.config.get("show_startup_toasts", True) else None
         if self.config.get("auto_check_update", True):
             QTimer.singleShot(3000, self._check_startup_update)
 
@@ -4995,7 +5126,11 @@ class BDSManager(QMainWindow):
         url = "https://raw.githubusercontent.com/TussalZeus18028/bds_manager/main/bds_manager.py"
         save_path = os.path.join(SCRIPT_DIR, f"bds_manager_v{remote_ver}.py.new")
         try:
-            urllib.request.urlretrieve(url, save_path)
+            r = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=60)
+            r.raise_for_status()
+            with open(save_path, "wb") as f:
+                for chunk in r.iter_content(chunk_size=65536):
+                    if chunk: f.write(chunk)
         except Exception as e:
             toast_error("更新下载失败", str(e))
             return
@@ -5099,6 +5234,13 @@ class BDSManager(QMainWindow):
             "window_height": self.config.get("window_height", 800),
             "mem_warn_threshold": self.config.get("mem_warn_threshold", 80),
             "hidpi_enabled": self.config.get("hidpi_enabled", True),
+            "auto_check_update": self.config.get("auto_check_update", True),
+            "multi_dl_enabled": self.config.get("multi_dl_enabled", True),
+            "show_startup_toasts": self.config.get("show_startup_toasts", True),
+            "toast_duration_error": self.config.get("toast_duration_error", 5000),
+            "toast_duration_warning": self.config.get("toast_duration_warning", 4000),
+            "toast_duration_success": self.config.get("toast_duration_success", 3500),
+            "toast_duration_info": self.config.get("toast_duration_info", 3000),
         }
         try:
             with open(CONFIG_FILE, "w", encoding="utf-8") as f:
