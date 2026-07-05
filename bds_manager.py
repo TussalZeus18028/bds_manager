@@ -28,7 +28,7 @@ Minecraft Bedrock Dedicated Server 管理工具
   - 多线程优化：所有耗时操作移至后台线程，避免阻塞主界面
 """
 
-__version__ = "2.1.0.00"
+__version__ = "2.1.0.01"
 
 import sys
 import os
@@ -285,6 +285,7 @@ def toast_info(title, msg=""):
 # ---------- 全局配置：支持脚本与服务器文件夹分离 ----------
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_FILE = os.path.join(SCRIPT_DIR, "bds_manager_config.json")
+VERSION_CACHE_FILE = os.path.join(SCRIPT_DIR, "bds_version_cache.json")
 
 def get_server_dir():
     if os.path.exists(CONFIG_FILE):
@@ -3261,56 +3262,120 @@ class TunnelTab(QWidget):
 
 
 # ---------- 版本浏览 Worker ----------
+def _scrape_github_versions():
+    """从 GitHub mtheintrude23/Bedrock-Server 仓库抓取版本列表"""
+    try:
+        url = "https://raw.githubusercontent.com/mtheintrude23/Bedrock-Server/main/README.md"
+        req = urllib.request.Request(url, headers={
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+        })
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            md = resp.read().decode("utf-8", errors="replace")
+
+        results = []
+        # 匹配: [Download](https://www.minecraft.net/bedrockdedicatedserver/bin-win/bedrock-server-X.Y.Z.W.zip)
+        for m in re.finditer(r'\[Download\]\((https://www\.minecraft\.net/bedrockdedicatedserver/('
+                              r'bin-win(?:-preview)?)/bedrock-server-(\d+\.\d+\.\d+\.\d+)\.zip)\)', md):
+            url, path, ver = m.group(1), m.group(2), m.group(3)
+            branch = "preview" if "preview" in path else "stable"
+            results.append((ver, branch, url))
+
+        # 匹配不带冗余括号的: [Download](https://...)
+        for m in re.finditer(r'\[Download\]\(https://www\.minecraft\.net/bedrockdedicatedserver/'
+                              r'(bin-win(?:-preview)?)/bedrock-server-(\d+\.\d+\.\d+\.\d+)\.zip\)', md):
+            path, ver = m.group(1), m.group(2)
+            branch = "preview" if "preview" in path else "stable"
+            url = f"https://www.minecraft.net/bedrockdedicatedserver/{path}/bedrock-server-{ver}.zip"
+            if (ver, branch, url) not in results:
+                results.append((ver, branch, url))
+
+        return results if results else None
+    except Exception:
+        return None
+
+
 class _BrowseWorker(QThread):
     """扫描所有可用 BDS 版本的 Worker"""
     progress = pyqtSignal(str, int)
     found = pyqtSignal(str, str, str)  # version, branch, url
     finished = pyqtSignal()
 
-    def __init__(self, current_version, cancel=None, parent=None):
+    def __init__(self, current_version, cancel=None, parent=None, append_mode=False):
         super().__init__(parent)
         self.current_version = current_version
         self._cancel = cancel or (lambda: False)
+        self._append_mode = append_mode
+        # 从父控件获取扫描范围（如果可用）
+        self._patch_range = 40
+        self._build_range = 30
+        if parent:
+            self._patch_range = parent.parent.config.get("scan_patch_range", 40)
+            self._build_range = parent.parent.config.get("scan_build_range", 30)
 
     def run(self):
         parts = [int(x) for x in self.current_version.split(".")]
         while len(parts) < 4:
             parts.append(0)
-        # 扫描范围：从 1.18.0.0 到当前版本 + 未来 10 个patch
-        stable_urls = []
-        preview_urls = []
-        min_major = 1
-        for major in range(min_major, parts[0] + 1):
-            end_minor = parts[1] + 5 if major == parts[0] else 20
-            start_minor = 0 if major < parts[0] else max(0, parts[1] - 5)
-            for minor in range(start_minor, end_minor):
-                end_patch = parts[2] + 10 if (major == parts[0] and minor == parts[1]) else 10
-                start_patch = 0
-                for patch in range(start_patch, end_patch):
-                    for build in range(0, 8):
+
+        if self._append_mode:
+            # 只扫描 1.26 及之后的版本
+            stable_urls = []
+            preview_urls = []
+            for patch in range(0, self._patch_range):
+                for build in range(0, self._build_range):
+                    ver = f"{parts[0]}.{parts[1]}.{patch}.{build}"
+                    stable_urls.append((ver, f"https://www.minecraft.net/bedrockdedicatedserver/bin-win/bedrock-server-{ver}.zip", "stable"))
+                    preview_urls.append((ver, f"https://www.minecraft.net/bedrockdedicatedserver/bin-win-preview/bedrock-server-{ver}.zip", "preview"))
+        else:
+            # 全量扫描：从 1.18 到当前版本
+            stable_urls = []
+            preview_urls = []
+            for major in range(1, parts[0] + 1):
+                start_minor = 18 if major == 1 else 0
+                end_minor = parts[1] + 1 if major == parts[0] else 40
+                for minor in range(start_minor, end_minor):
+                    end_patch = parts[2] + 1 if (major == parts[0] and minor == parts[1]) else 140
+                    for patch in range(0, end_patch):
+                        for build in range(0, 35):
+                            ver = f"{major}.{minor}.{patch}.{build}"
+                            stable_urls.append((ver, f"https://www.minecraft.net/bedrockdedicatedserver/bin-win/bedrock-server-{ver}.zip", "stable"))
+                            preview_urls.append((ver, f"https://www.minecraft.net/bedrockdedicatedserver/bin-win-preview/bedrock-server-{ver}.zip", "preview"))
                         ver = f"{major}.{minor}.{patch}.{build}"
                         stable_urls.append((ver, f"https://www.minecraft.net/bedrockdedicatedserver/bin-win/bedrock-server-{ver}.zip", "stable"))
                         preview_urls.append((ver, f"https://www.minecraft.net/bedrockdedicatedserver/bin-win-preview/bedrock-server-{ver}.zip", "preview"))
         total = len(stable_urls) + len(preview_urls)
         checked = 0
-        from concurrent.futures import ThreadPoolExecutor, as_completed
 
-        def check_url(url):
+        def check_url(item):
+            ver, url, branch = item
             try:
-                req = urllib.request.Request(url, method="HEAD", headers={"User-Agent": "Mozilla/5.0"})
-                resp = urllib.request.urlopen(req, timeout=5)
-                return resp.getcode() == 200
+                req = urllib.request.Request(url, method="HEAD",
+                    headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"})
+                resp = urllib.request.urlopen(req, timeout=6)
+                if resp.getcode() == 200:
+                    return (True, ver, branch, url)
             except:
-                return False
+                pass
+            return (False, ver, branch, url)
 
-        for ver, url, branch in stable_urls + preview_urls:
+        all_urls = stable_urls + preview_urls
+        batch_size = 16
+        for i in range(0, len(all_urls), batch_size):
             if self._cancel():
                 break
-            checked += 1
-            pct = min(checked * 100 // total, 99)
-            self.progress.emit(ver, pct)
-            if check_url(url):
-                self.found.emit(ver, branch, url)
+            batch = all_urls[i:i + batch_size]
+            with ThreadPoolExecutor(max_workers=min(batch_size, 10)) as executor:
+                futures = {executor.submit(check_url, item): item for item in batch}
+                for future in as_completed(futures, timeout=20):
+                    try:
+                        ok, ver, branch, url = future.result()
+                        checked += 1
+                        pct = min(checked * 100 // total, 99)
+                        self.progress.emit(ver, pct)
+                        if ok:
+                            self.found.emit(ver, branch, url)
+                    except:
+                        pass
 
         self.progress.emit("", 100)
         self.finished.emit()
@@ -3651,10 +3716,12 @@ class UpgradeTab(QWidget):
 
         content = QWidget()
         layout = QVBoxLayout(content)
-        layout.setContentsMargins(8, 8, 8, 8)
+        layout.setContentsMargins(12, 8, 12, 8)
+        layout.setSpacing(8)
 
         # --- 当前信息 ---
         current_group = QGroupBox("📋 当前信息")
+        current_group.setStyleSheet("QGroupBox { font-weight: bold; font-size: 12px; border: 1px solid #444; border-radius: 6px; margin-top: 8px; padding-top: 16px; } QGroupBox::title { subcontrol-origin: margin; left: 12px; padding: 0 6px; }")
         current_layout = QFormLayout()
         self.current_version_label = QLabel("检测中...")
         self.current_version_label.setStyleSheet("font-weight: bold; font-size: 14px;")
@@ -3675,6 +3742,7 @@ class UpgradeTab(QWidget):
 
         # --- 可用版本列表 ---
         ver_group = QGroupBox("📦 可用版本列表")
+        ver_group.setStyleSheet("QGroupBox { font-weight: bold; font-size: 12px; border: 1px solid #444; border-radius: 6px; margin-top: 8px; padding-top: 16px; } QGroupBox::title { subcontrol-origin: margin; left: 12px; padding: 0 6px; }")
         ver_layout = QVBoxLayout()
 
         # 刷新按钮行
@@ -3683,9 +3751,27 @@ class UpgradeTab(QWidget):
         self.browse_btn.clicked.connect(self._browse_versions)
         self.browse_btn.setStyleSheet("font-weight: bold; min-height: 28px;")
         refresh_row.addWidget(self.browse_btn)
+        self.stop_scan_btn = QPushButton("⏹ 停止")
+        self.stop_scan_btn.clicked.connect(self._stop_scan)
+        self.stop_scan_btn.setEnabled(False)
+        self.stop_scan_btn.setMaximumWidth(60)
+        refresh_row.addWidget(self.stop_scan_btn)
         self.browse_branch = QComboBox()
         self.browse_branch.addItems(["全部", "稳定版", "预览版"])
         refresh_row.addWidget(self.browse_branch)
+        # 扫描范围
+        refresh_row.addWidget(QLabel("Patch:"))
+        self.scan_patch = QSpinBox()
+        self.scan_patch.setRange(10, 200)
+        self.scan_patch.setValue(self.parent.config.get("scan_patch_range", 40))
+        self.scan_patch.setMaximumWidth(55)
+        refresh_row.addWidget(self.scan_patch)
+        refresh_row.addWidget(QLabel("Build:"))
+        self.scan_build = QSpinBox()
+        self.scan_build.setRange(5, 60)
+        self.scan_build.setValue(self.parent.config.get("scan_build_range", 30))
+        self.scan_build.setMaximumWidth(50)
+        refresh_row.addWidget(self.scan_build)
         refresh_row.addStretch()
         ver_layout.addLayout(refresh_row)
 
@@ -3693,13 +3779,16 @@ class UpgradeTab(QWidget):
         self.ver_table = QTableWidget()
         self.ver_table.setColumnCount(3)
         self.ver_table.setHorizontalHeaderLabels(["版本号", "分支", "操作"])
-        self.ver_table.setColumnWidth(0, 160)
-        self.ver_table.setColumnWidth(1, 80)
-        self.ver_table.setColumnWidth(2, 140)
-        self.ver_table.horizontalHeader().setStretchLastSection(True)
+        self.ver_table.setColumnWidth(0, 100)
+        self.ver_table.setColumnWidth(1, 70)
+        self.ver_table.setColumnWidth(2, 80)
+        self.ver_table.horizontalHeader().setStretchLastSection(False)
+        self.ver_table.horizontalHeader().setSectionResizeMode(QHeaderView.Fixed)
+        self.ver_table.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.ver_table.setSelectionBehavior(QTableWidget.SelectRows)
         self.ver_table.setSelectionMode(QTableWidget.SingleSelection)
         self.ver_table.setMaximumHeight(260)
+        self.ver_table.setFixedWidth(360)
         self.ver_table.verticalHeader().setVisible(False)
         ver_layout.addWidget(self.ver_table)
 
@@ -3840,42 +3929,139 @@ class UpgradeTab(QWidget):
         self._browse_versions()
 
     def _auto_scan_versions(self):
-        """启动时后台自动扫描，缓存结果"""
-        # 先尝试加载缓存
+        """启动时后台自动扫描（不阻塞 GUI）"""
         cache = self.parent.config.get("version_list", {})
         if cache.get("timestamp", 0) > time.time() - 86400:
             self._browse_results = cache.get("data", [])
             if self._browse_results:
                 self._populate_table()
-                self.browse_status.setText(f"📦 缓存: 共 {len(self._browse_results)} 个版本（{datetime.fromtimestamp(cache['timestamp']).strftime('%H:%M')}）")
+                self.browse_status.setText(f"📦 缓存: {len(self._browse_results)} 版本（{datetime.fromtimestamp(cache['timestamp']).strftime('%H:%M')}）")
                 return
-        # 后台扫描
-        self._browse_versions(silent=True)
+
+        # 后台线程抓取（不阻塞主线程）
+        class _GitHubFetcher(QThread):
+            result = pyqtSignal(list)
+            def run(self):
+                r = _scrape_github_versions()
+                self.result.emit(r if r else [])
+
+        self._auto_fetcher = _GitHubFetcher(self)
+        self._auto_fetcher.result.connect(self._on_auto_fetch_done)
+        self._auto_fetcher.result.connect(lambda r: self._auto_fetcher.deleteLater())
+        self._auto_fetcher.start()
+
+    def _on_auto_fetch_done(self, results):
+        if results:
+            # GitHub 只保留 1.26 之前的稳定版
+            old = [(v,b,u) for v,b,u in results 
+                   if b == "stable" and tuple(int(x) for x in v.split(".")) < (1, 26, 0, 0)]
+            self._browse_results = old
+            self._populate_table()
+            self._browse_status_prefix = f"📦 GitHub: {len(old)} 版本"
+            self.browse_status.setText(f"{self._browse_status_prefix} + 探测 1.26+ ...")
+            self.stop_scan_btn.setEnabled(True)
+            # 先缓存 GitHub 结果
+            self.parent.config["version_list"] = {"data": old[:], "timestamp": time.time()}
+            self.parent.save_config()
+            # HEAD 并发探测 1.26 之后的版本
+            self._browse_cancelled = False
+            self.browse_worker = _BrowseWorker("1.26.0.0", cancel=lambda: self._browse_cancelled, append_mode=True)
+            self.browse_worker.progress.connect(self._on_browse_progress)
+            self.browse_worker.found.connect(self._on_browse_found)
+            self.browse_worker.finished.connect(self._on_browse_done)
+            self.browse_worker.start()
+        else:
+            self.browse_status.setText("GitHub 抓取失败，HEAD 扫描 1.26+ ...")
+            self._browse_results = []
+            self._browse_cancelled = False
+            self.browse_worker = _BrowseWorker("1.26.0.0", cancel=lambda: self._browse_cancelled, append_mode=True)
+            self.browse_worker.progress.connect(self._on_browse_progress)
+            self.browse_worker.found.connect(self._on_browse_found)
+            self.browse_worker.finished.connect(self._on_browse_done)
+            self.browse_worker.start()
 
     def _browse_versions(self, silent=False):
-        """浏览所有可用BDS版本"""
+        """获取可用版本：优先 GitHub 抓取"""
         if not silent:
             self.ver_table.setRowCount(0)
             self.browse_btn.setEnabled(False)
-            self.browse_btn.setText("⏳ 扫描中...")
-        self.browse_status.setText("正在探测版本，请稍候...")
-        self._browse_results = []
-        self._browse_cancelled = False
-        self._browse_silent = silent
+            self.browse_btn.setText("⏳ 抓取中...")
+            self.stop_scan_btn.setEnabled(True)
+            # 保存扫描范围
+            self.parent.config["scan_patch_range"] = self.scan_patch.value()
+            self.parent.config["scan_build_range"] = self.scan_build.value()
+            self.parent.save_config()
+            self.browse_status.setText("正在从 GitHub 获取版本...")
+            self._browse_cancelled = False
 
-        current_ver = _detect_current_version(self.parent.get_absolute_server_dir()) or "1.20.0.0"
-        self.browse_worker = _BrowseWorker(current_ver, cancel=lambda: self._browse_cancelled)
-        self.browse_worker.progress.connect(self._on_browse_progress)
-        self.browse_worker.found.connect(self._on_browse_found)
-        self.browse_worker.finished.connect(self._on_browse_done)
-        self.browse_worker.start()
+            # 后台 GitHub 抓取
+            class _BGFetcher(QThread):
+                result = pyqtSignal(bool, list)
+                def run(self):
+                    r = _scrape_github_versions()
+                    self.result.emit(r is not None, r if r else [])
+
+            self._browse_fetcher = _BGFetcher(self)
+            self._browse_fetcher.result.connect(self._on_browse_fetch_done)
+            self._browse_fetcher.start()
+        else:
+            # 静默模式用缓存
+            return
+
+    def _stop_scan(self):
+        """停止正在进行的版本扫描"""
+        self._browse_cancelled = True
+        if hasattr(self, 'browse_worker') and self.browse_worker and self.browse_worker.isRunning():
+            self.browse_worker.quit()
+            self.browse_worker.wait(1000)
+        self.stop_scan_btn.setEnabled(False)
+        self.browse_btn.setEnabled(True)
+        self.browse_btn.setText("🌐 浏览可用版本")
+        self.browse_status.setText("已停止")
+
+    def _on_browse_progress(self, ver, pct):
+        self.browse_status.setText(f"正在探测 v{ver} ... ({pct}%)")
+
+    def _on_browse_fetch_done(self, ok, results):
+        self.browse_btn.setEnabled(True)
+        self.browse_btn.setText("🌐 浏览可用版本")
+        if results:
+            self._browse_results = results
+            self._populate_table()
+            # 找出最新版本，HEAD 扫描其后的新版本
+            latest = max(results, key=lambda x: tuple(int(n) for n in x[0].split(".")))
+            self._browse_status_prefix = f"📦 GitHub: {len(results)} 版本"
+            self.browse_status.setText(f"{self._browse_status_prefix} + 探测最新...")
+            self._browse_cancelled = False
+            self.browse_worker = _BrowseWorker(latest[0], cancel=lambda: self._browse_cancelled, append_mode=True)
+            self.browse_worker.progress.connect(self._on_browse_progress)
+            self.browse_worker.found.connect(self._on_browse_found)
+            self.browse_worker.finished.connect(self._on_browse_done)
+            self.browse_worker.start()
+        else:
+            self.browse_status.setText("GitHub 抓取失败，回退 HEAD 扫描...")
+            self._browse_cancelled = False
+            self._browse_status_prefix = ""
+            current_ver = _detect_current_version(self.parent.get_absolute_server_dir()) or "1.20.0.0"
+            self.browse_worker = _BrowseWorker(current_ver, cancel=lambda: self._browse_cancelled, append_mode=False)
+            self.browse_worker.progress.connect(self._on_browse_progress)
+            self.browse_worker.found.connect(self._on_browse_found)
+            self.browse_worker.finished.connect(self._on_browse_done)
+            self.browse_worker.start()
+
+    def _on_browse_found(self, ver, branch, url):
+        # 去重
+        key = (ver, branch)
+        if any(v == ver and b == branch for v, b, u in self._browse_results):
+            return
+        self._browse_results.append((ver, branch, url))
+        self._populate_table()
 
     def _on_browse_done(self):
-        if not self._browse_silent:
-            self.browse_btn.setEnabled(True)
-            self.browse_btn.setText("🌐 浏览可用版本")
+        self.stop_scan_btn.setEnabled(False)
         self._populate_table()
         # 缓存到配置
+        self.browse_status.setText(f"{getattr(self, '_browse_status_prefix', '')} + {len(self._browse_results)} 版本")
         self.parent.config["version_list"] = {
             "data": self._browse_results,
             "timestamp": time.time()
@@ -3885,6 +4071,15 @@ class UpgradeTab(QWidget):
     def _populate_table(self):
         """将扫描结果填入表格"""
         results = self._browse_results
+        # 去重
+        seen = set()
+        deduped = []
+        for v, b, u in results:
+            if (v, b) not in seen:
+                seen.add((v, b))
+                deduped.append((v, b, u))
+        results = deduped
+        self._browse_results = deduped
         branch_filter = self.browse_branch.currentText()
         if branch_filter == "稳定版":
             results = [(v,b,u) for v,b,u in results if b == "stable"]
@@ -3899,7 +4094,9 @@ class UpgradeTab(QWidget):
             item = QTableWidgetItem(branch_label)
             item.setForeground(QColor("#4CAF50" if branch == "stable" else "#ff9800"))
             self.ver_table.setItem(i, 1, item)
-            dl_btn = QPushButton("⬇️ 下载")
+            dl_btn = QPushButton("⬇️下载")
+            dl_btn.setFixedSize(70, 24)
+            dl_btn.setStyleSheet("font-size: 11px; padding: 0px 4px;")
             dl_btn.clicked.connect(lambda checked, u=url, v=ver: self._download_selected(u, v))
             self.ver_table.setCellWidget(i, 2, dl_btn)
         self.browse_status.setText(f"共找到 {len(results)} 个可用版本")
@@ -4748,24 +4945,36 @@ class BDSManager(QMainWindow):
             "monitor_interval": 2000,
             "custom_colors": {},
             "frpc_path": "",
-            "version_cache": {}
+            "version_cache": {},
+            "version_list": {},
         }
         if os.path.exists(CONFIG_FILE):
             try:
                 with open(CONFIG_FILE, "r", encoding="utf-8") as f:
                     loaded = json.load(f)
-                    for k, v in default.items():
-                        if k not in loaded:
-                            loaded[k] = v
-                    return loaded
+                for k, v in default.items():
+                    if k not in loaded:
+                        loaded[k] = v
+                config = loaded
             except Exception as e:
                 log_error(f"加载配置文件失败: {e}")
-                return default
-        return default
+                config = default
+        else:
+            config = default
+        # 加载独立的版本缓存
+        if os.path.exists(VERSION_CACHE_FILE):
+            try:
+                with open(VERSION_CACHE_FILE, "r", encoding="utf-8") as f:
+                    vc = json.load(f)
+                config["version_cache"] = vc.get("version_cache", {})
+                config["version_list"] = vc.get("version_list", {})
+            except:
+                pass
+        return config
 
     def save_config(self):
         config = {
-            "theme": self.config.get("theme", "dark"),
+            "theme": self.config.get("theme", "auto"),
             "server_dir": self.config.get("server_dir", "Server"),
             "server_exe": self.config.get("server_exe", "bedrock_server.exe"),
             "backup_interval": self.config.get("backup_interval", 60),
@@ -4773,6 +4982,9 @@ class BDSManager(QMainWindow):
             "custom_colors": self.custom_colors,
             "frpc_path": self.config.get("frpc_path", ""),
             "version_cache": self.config.get("version_cache", {}),
+            "version_list": self.config.get("version_list", {}),
+            "scan_patch_range": self.config.get("scan_patch_range", 40),
+            "scan_build_range": self.config.get("scan_build_range", 30),
             "window_width": self.config.get("window_width", 1200),
             "window_height": self.config.get("window_height", 800),
             "mem_warn_threshold": self.config.get("mem_warn_threshold", 80),
@@ -4780,7 +4992,7 @@ class BDSManager(QMainWindow):
         }
         try:
             with open(CONFIG_FILE, "w", encoding="utf-8") as f:
-                json.dump(config, f, indent=4)
+                json.dump(config, f, indent=4, ensure_ascii=False, sort_keys=True)
         except Exception as e:
             log_error(f"保存配置文件失败: {e}")
         self.update_global_paths()
