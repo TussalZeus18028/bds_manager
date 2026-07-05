@@ -3259,6 +3259,57 @@ class TunnelTab(QWidget):
         if self.is_tunnel_running():
             self.stop_tunnel()
 
+
+# ---------- 版本浏览 Worker ----------
+class _BrowseWorker(QThread):
+    """扫描所有可用 BDS 版本的 Worker"""
+    progress = pyqtSignal(str, int)
+    found = pyqtSignal(str, str, str)  # version, branch, url
+    finished = pyqtSignal()
+
+    def __init__(self, current_version, cancel=None, parent=None):
+        super().__init__(parent)
+        self.current_version = current_version
+        self._cancel = cancel or (lambda: False)
+
+    def run(self):
+        parts = [int(x) for x in self.current_version.split(".")]
+        while len(parts) < 4:
+            parts.append(0)
+        base = f"{parts[0]}.{parts[1]}"
+        # 扫描稳定版: 不同 patch 和 build
+        stable_urls = []
+        preview_urls = []
+        total = 0
+        for patch in range(parts[2], parts[2] + 20):
+            for build in range(0, 10):
+                ver = f"{parts[0]}.{parts[1]}.{patch}.{build}"
+                stable_urls.append((ver, f"https://www.minecraft.net/bedrockdedicatedserver/bin-win/bedrock-server-{ver}.zip", "stable"))
+                preview_urls.append((ver, f"https://www.minecraft.net/bedrockdedicatedserver/bin-win-preview/bedrock-server-{ver}.zip", "preview"))
+        total = len(stable_urls) + len(preview_urls)
+        checked = 0
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+
+        def check_url(url):
+            try:
+                req = urllib.request.Request(url, method="HEAD", headers={"User-Agent": "Mozilla/5.0"})
+                resp = urllib.request.urlopen(req, timeout=5)
+                return resp.getcode() == 200
+            except:
+                return False
+
+        for ver, url, branch in stable_urls + preview_urls:
+            if self._cancel():
+                break
+            checked += 1
+            pct = min(checked * 100 // total, 99)
+            self.progress.emit(ver, pct)
+            if check_url(url):
+                self.found.emit(ver, branch, url)
+
+        self.progress.emit("", 100)
+        self.finished.emit()
+
 # ---------- 版本升级辅助 ----------
 def _detect_current_version(server_dir):
     """从服务器目录检测当前 BDS 版本"""
@@ -3617,95 +3668,67 @@ class UpgradeTab(QWidget):
         current_group.setLayout(current_layout)
         layout.addWidget(current_group)
 
-        # --- 版本检查 ---
-        check_group = QGroupBox("🔍 版本检查")
-        check_layout = QFormLayout()
-        self.stable_version_label = QLabel("未检查")
-        self.preview_version_label = QLabel("未检查")
-        self.check_status_label = QLabel("")
-        check_layout.addRow("最新稳定版:", self.stable_version_label)
-        check_layout.addRow("最新预览版:", self.preview_version_label)
+        # --- 可用版本列表 ---
+        ver_group = QGroupBox("📦 可用版本列表")
+        ver_layout = QVBoxLayout()
 
-        check_btn_layout = QHBoxLayout()
-        self.check_stable_btn = QPushButton("🔍 检查稳定版更新")
-        self.check_stable_btn.clicked.connect(lambda: self.check_updates("stable"))
-        self.check_preview_btn = QPushButton("🔍 检查预览版更新")
-        self.check_preview_btn.clicked.connect(lambda: self.check_updates("preview"))
-        check_btn_layout.addWidget(self.check_stable_btn)
-        check_btn_layout.addWidget(self.check_preview_btn)
-        check_btn_layout.addStretch()
-        check_layout.addRow(check_btn_layout)
+        # 刷新按钮行
+        refresh_row = QHBoxLayout()
+        self.browse_btn = QPushButton("🌐 浏览可用版本")
+        self.browse_btn.clicked.connect(self._browse_versions)
+        self.browse_btn.setStyleSheet("font-weight: bold; min-height: 28px;")
+        refresh_row.addWidget(self.browse_btn)
+        self.browse_branch = QComboBox()
+        self.browse_branch.addItems(["全部", "稳定版", "预览版"])
+        refresh_row.addWidget(self.browse_branch)
+        refresh_row.addStretch()
+        ver_layout.addLayout(refresh_row)
 
-        # 探测进度条 + 取消按钮
-        progress_row = QHBoxLayout()
-        self.check_progress_bar = QProgressBar()
-        self.check_progress_bar.setRange(0, 100)
-        self.check_progress_bar.setValue(0)
-        self.check_progress_bar.setVisible(False)
-        self.check_progress_bar.setMaximumHeight(18)
-        progress_row.addWidget(self.check_progress_bar)
-        self.cancel_check_btn = QPushButton("取消检查")
-        self.cancel_check_btn.clicked.connect(self.cancel_version_check)
-        self.cancel_check_btn.setVisible(False)
-        self.cancel_check_btn.setEnabled(False)
-        self.cancel_check_btn.setMaximumWidth(90)
-        progress_row.addWidget(self.cancel_check_btn)
-        check_layout.addRow(progress_row)
+        # 版本列表表格
+        self.ver_table = QTableWidget()
+        self.ver_table.setColumnCount(3)
+        self.ver_table.setHorizontalHeaderLabels(["版本号", "分支", "操作"])
+        self.ver_table.setColumnWidth(0, 160)
+        self.ver_table.setColumnWidth(1, 80)
+        self.ver_table.setColumnWidth(2, 140)
+        self.ver_table.horizontalHeader().setStretchLastSection(True)
+        self.ver_table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.ver_table.setSelectionMode(QTableWidget.SingleSelection)
+        self.ver_table.setMaximumHeight(260)
+        self.ver_table.verticalHeader().setVisible(False)
+        ver_layout.addWidget(self.ver_table)
 
-        self.check_progress_label = QLabel("")
-        self.check_progress_label.setVisible(False)
-        self.check_progress_label.setStyleSheet("color: #888; font-size: 11px;")
-        check_layout.addRow(self.check_progress_label)
+        # 进度
+        self.browse_status = QLabel("")
+        self.browse_status.setStyleSheet("color: #888; font-size: 11px;")
+        ver_layout.addWidget(self.browse_status)
 
-        check_layout.addRow(self.check_status_label)
-        check_group.setLayout(check_layout)
-        layout.addWidget(check_group)
-
-        # --- 手动指定版本 ---
-        manual_group = QGroupBox("✏️ 手动指定版本")
-        manual_layout = QHBoxLayout()
-        manual_layout.addWidget(QLabel("版本号:"))
+        # 手动输入版本
+        manual_row = QHBoxLayout()
+        manual_row.addWidget(QLabel("手动输入版本:"))
         self.manual_version_input = QLineEdit()
-        self.manual_version_input.setPlaceholderText("例如: 1.26.32.2")
-        self.manual_version_input.setMaximumWidth(140)
-        manual_layout.addWidget(self.manual_version_input)
-        manual_layout.addWidget(QLabel("分支:"))
-        self.manual_branch_combo = QComboBox()
-        self.manual_branch_combo.addItem("稳定版", "stable")
-        self.manual_branch_combo.addItem("预览版", "preview")
-        self.manual_branch_combo.setMaximumWidth(90)
-        manual_layout.addWidget(self.manual_branch_combo)
-        self.manual_download_btn = QPushButton("⬇️ 直接下载")
+        self.manual_version_input.setPlaceholderText("1.26.32.2")
+        self.manual_version_input.setMaximumWidth(120)
+        manual_row.addWidget(self.manual_version_input)
+        self.manual_download_btn = QPushButton("⬇️ 手动下载")
         self.manual_download_btn.clicked.connect(self.download_manual_version)
         self.manual_download_btn.setMaximumWidth(100)
-        manual_layout.addWidget(self.manual_download_btn)
-        manual_layout.addStretch()
-        manual_group.setLayout(manual_layout)
-        layout.addWidget(manual_group)
+        manual_row.addWidget(self.manual_download_btn)
+        manual_row.addStretch()
+        ver_layout.addLayout(manual_row)
 
-        # --- 下载 ---
-        dl_group = QGroupBox("⬇️ 下载")
+        ver_group.setLayout(ver_layout)
+        layout.addWidget(ver_group)
+
+        # --- 下载进度 ---
+        dl_group = QGroupBox("⬇️ 下载进度")
         dl_layout = QVBoxLayout()
 
-        dl_row1 = QHBoxLayout()
-        dl_row1.addWidget(QLabel("版本选择:"))
-        self.branch_combo = QComboBox()
-        self.branch_combo.addItem("稳定版 (Stable)", "stable")
-        self.branch_combo.addItem("预览版 (Preview)", "preview")
-        self.branch_combo.currentIndexChanged.connect(self._on_branch_changed)
-        dl_row1.addWidget(self.branch_combo)
-        dl_row1.addStretch()
-        dl_layout.addLayout(dl_row1)
-
         dl_row2 = QHBoxLayout()
-        self.download_btn = QPushButton("⬇️ 下载最新版本")
-        self.download_btn.clicked.connect(self.start_download)
-        self.download_btn.setMinimumWidth(160)
         self.cancel_dl_btn = QPushButton("取消下载")
         self.cancel_dl_btn.clicked.connect(self.cancel_download)
         self.cancel_dl_btn.setEnabled(False)
         self.cancel_dl_btn.setMinimumWidth(100)
-        dl_row2.addWidget(self.download_btn)
         dl_row2.addWidget(self.cancel_dl_btn)
         dl_row2.addStretch()
         dl_layout.addLayout(dl_row2)
@@ -3792,8 +3815,7 @@ class UpgradeTab(QWidget):
         sb = self.log_output.verticalScrollBar()
         sb.setValue(sb.maximum())
 
-    def _on_branch_changed(self, idx):
-        self.selected_branch = self.branch_combo.itemData(idx)
+    # (removed old _on_branch_changed)
 
     def refresh_current_info(self):
         server_dir = self.parent.get_absolute_server_dir()
@@ -3808,93 +3830,66 @@ class UpgradeTab(QWidget):
         self._log(f"当前版本检测: {'v' + ver if ver else '未检测到'}", "INFO")
 
     def check_updates(self, branch="stable"):
-        """检查版本更新（优先使用缓存）"""
-        # 缓存检查
-        cache = self.parent.config.get("version_cache", {})
-        now = time.time()
-        cache_key = f"latest_{branch}"
-        if cache_key in cache:
-            entry = cache[cache_key]
-            cached_time = entry.get("timestamp", 0)
-            if now - cached_time < 3600:  # 1 小时内有效
-                ver = entry.get("version")
-                url = entry.get("url")
-                label = entry.get("label", "")
-                if ver and url:
-                    self._on_check_result(branch, True, ver, url, label)
-                    self._log(f"使用缓存结果: {branch} v{ver}（上次检查: {datetime.fromtimestamp(cached_time).strftime('%H:%M:%S')}）", "INFO")
-                    return
+        """兼容旧接口，聚焦对应分支筛选"""
+        self.browse_branch.setCurrentText({"stable": "稳定版", "preview": "预览版"}.get(branch, "全部"))
+        self._browse_versions()
 
-        if branch == "stable":
-            self.check_stable_btn.setEnabled(False)
-            self.check_stable_btn.setText("检查中...")
-            self.stable_version_label.setText("检查中...")
-        else:
-            self.check_preview_btn.setEnabled(False)
-            self.check_preview_btn.setText("检查中...")
-            self.preview_version_label.setText("检查中...")
+    def _browse_versions(self):
+        """浏览所有可用BDS版本"""
+        self.ver_table.setRowCount(0)
+        self.browse_btn.setEnabled(False)
+        self.browse_btn.setText("⏳ 扫描中...")
+        self.browse_status.setText("正在探测版本，请稍候...")
+        self._browse_results = []
+        self._browse_cancelled = False
 
-        self._log(f"正在检查 {branch} 更新...", "INFO")
+        current_ver = _detect_current_version(self.parent.get_absolute_server_dir()) or "1.20.0.0"
+        self.browse_worker = _BrowseWorker(current_ver, cancel=lambda: self._browse_cancelled)
+        self.browse_worker.progress.connect(self._on_browse_progress)
+        self.browse_worker.found.connect(self._on_browse_found)
+        self.browse_worker.finished.connect(self._on_browse_done)
+        self.browse_worker.start()
 
-        # 显示探测进度条和取消按钮
-        self.check_progress_bar.setVisible(True)
-        self.check_progress_bar.setValue(0)
-        self.cancel_check_btn.setVisible(True)
-        self.cancel_check_btn.setEnabled(True)
-        self.check_progress_label.setVisible(True)
-        self.check_progress_label.setText("准备探测...")
+    def _on_browse_progress(self, ver, pct):
+        self.browse_status.setText(f"正在探测 v{ver} ... ({pct}%)")
 
-        # 获取当前版本作为探测起点
-        server_dir = self.parent.get_absolute_server_dir()
-        current_ver = _detect_current_version(server_dir)
+    def _on_browse_found(self, ver, branch, url):
+        self._browse_results.append((ver, branch, url))
 
-        self._check_cancelled = False
+    def _on_browse_done(self):
+        self.browse_btn.setEnabled(True)
+        self.browse_btn.setText("🌐 浏览可用版本")
+        self._populate_table()
 
-        class CheckWorker(BaseWorker):
-            progress_signal = pyqtSignal(str, int)
-            result_signal = pyqtSignal(bool, str, str, str)
+    def _populate_table(self):
+        """将扫描结果填入表格"""
+        results = self._browse_results
+        branch_filter = self.browse_branch.currentText()
+        if branch_filter == "稳定版":
+            results = [(v,b,u) for v,b,u in results if b == "stable"]
+        elif branch_filter == "预览版":
+            results = [(v,b,u) for v,b,u in results if b == "preview"]
 
-            def __init__(self, branch, current_ver, cancel_fn, parent=None):
-                super().__init__(parent)
-                self.branch = branch
-                self.current_ver = current_ver
-                self.cancel_fn = cancel_fn
+        results.sort(key=lambda x: [int(i) for i in x[0].split(".")], reverse=True)
+        self.ver_table.setRowCount(len(results))
+        for i, (ver, branch, url) in enumerate(results):
+            self.ver_table.setItem(i, 0, QTableWidgetItem(ver))
+            branch_label = "🟢 稳定版" if branch == "stable" else "🟠 预览版"
+            item = QTableWidgetItem(branch_label)
+            item.setForeground(QColor("#4CAF50" if branch == "stable" else "#ff9800"))
+            self.ver_table.setItem(i, 1, item)
+            dl_btn = QPushButton("⬇️ 下载")
+            dl_btn.clicked.connect(lambda checked, u=url, v=ver: self._download_selected(u, v))
+            self.ver_table.setCellWidget(i, 2, dl_btn)
+        self.browse_status.setText(f"共找到 {len(results)} 个可用版本")
 
-            def run(self):
-                def progress_cb(ver, pct):
-                    self.progress_signal.emit(ver, pct)
-
-                def cancel_cb():
-                    return self.cancel_fn() if self.cancel_fn else False
-
-                ver, url, label = _fetch_latest_version_info(
-                    self.branch, self.current_ver, progress_cb, cancel_cb
-                )
-                self.result_signal.emit(ver is not None, ver or "", url or "", label)
-
-        self.check_worker = CheckWorker(branch, current_ver, lambda: self._check_cancelled, self)
-        self.check_worker.progress_signal.connect(self._on_check_progress)
-        self.check_worker.result_signal.connect(
-            lambda ok, ver, url, label: self._on_check_result(branch, ok, ver, url, label))
-        self.check_worker.finished.connect(self._on_check_finished)
-        self.check_worker.start()
-
-    def cancel_version_check(self):
-        self._check_cancelled = True
-        self.check_cancel_btn.setEnabled(False)
-        self._log("正在取消版本检查...", "WARN")
-
-    def _on_check_progress(self, ver, pct):
-        self.check_progress_bar.setValue(pct)
-        if ver:
-            self.check_progress_label.setText(f"探测中... {ver} ({pct}%)")
-        else:
-            self.check_progress_label.setText(f"探测中... ({pct}%)")
-
-    def _on_check_finished(self):
-        self.check_progress_bar.setVisible(False)
-        self.cancel_check_btn.setVisible(False)
-        self.check_progress_label.setVisible(False)
+    def _download_selected(self, url, version):
+        """下载选中的版本"""
+        self.dl_status_label.setText(f"准备下载 v{version}...")
+        self.downloaded_zip = None
+        self.upgrade_btn.setEnabled(False)
+        if url:
+            self.start_download(url)
 
     def download_manual_version(self):
         """手动指定版本号直接下载"""
@@ -3908,12 +3903,9 @@ class UpgradeTab(QWidget):
             toast_warning("格式错误", "版本号格式应为 X.Y.Z.W")
             return
 
-        branch = self.manual_branch_combo.currentData()
-        base_pattern = "bin-win-preview" if branch == "preview" else "bin-win"
-        url = f"https://www.minecraft.net/bedrockdedicatedserver/{base_pattern}/bedrock-server-{ver}.zip"
-        label = "预览版" if branch == "preview" else "稳定版"
-
-        self._log(f"手动指定版本: v{ver} ({label})", "INFO")
+        # 先试稳定版 URL
+        url = f"https://www.minecraft.net/bedrockdedicatedserver/bin-win/bedrock-server-{ver}.zip"
+        self._log(f"手动指定版本: v{ver}", "INFO")
         self._log(f"URL: {url}", "INFO")
 
         # 先验证 URL 是否有效
@@ -3925,8 +3917,6 @@ class UpgradeTab(QWidget):
             self.manual_download_btn.setEnabled(True)
             self.manual_download_btn.setText("⬇️ 直接下载")
             toast_error("版本不存在", "请确认版本号正确")
-            return
-            self._log(f"版本 v{ver} 不存在 (HTTP 404)", "ERROR")
             return
 
         self.manual_download_btn.setEnabled(True)
@@ -3942,16 +3932,8 @@ class UpgradeTab(QWidget):
             return
 
         # 设置下载参数并启动
-        if branch == "stable":
-            self.latest_stable_version = ver
-            self.latest_stable_url = url
-        else:
-            self.latest_preview_version = ver
-            self.latest_preview_url = url
-        self.branch_combo.setCurrentIndex(0 if branch == "stable" else 1)
         self.downloaded_zip = save_path
 
-        self.download_btn.setEnabled(False)
         self.cancel_dl_btn.setEnabled(True)
         self.dl_progress.setVisible(True)
         self.dl_progress.setValue(0)
@@ -3965,75 +3947,13 @@ class UpgradeTab(QWidget):
         self.download_worker.finished.connect(self._on_download_finished)
         self.download_worker.start()
 
-    def _on_check_result(self, branch, ok, ver, url, label):
-        self._last_check_branch = branch
+    # (旧 check 回调已移除，改用 _browse_versions 流程)
 
-        # 重置按钮
-        if branch == "stable":
-            self.check_stable_btn.setEnabled(True)
-            self.check_stable_btn.setText("🔍 检查稳定版更新")
-        else:
-            self.check_preview_btn.setEnabled(True)
-            self.check_preview_btn.setText("🔍 检查预览版更新")
-
-        if ok:
-            if branch == "stable":
-                self.latest_stable_version = ver
-                self.latest_stable_url = url
-                self.stable_version_label.setText(f"v{ver} ({label})")
-                self.stable_version_label.setStyleSheet("color: #4CAF50; font-weight: bold;")
-            else:
-                self.latest_preview_version = ver
-                self.latest_preview_url = url
-                self.preview_version_label.setText(f"v{ver} ({label})")
-                self.preview_version_label.setStyleSheet("color: #4CAF50; font-weight: bold;")
-
-            current = _detect_current_version(self.parent.get_absolute_server_dir())
-            if current and current == ver:
-                self.check_status_label.setText(f"✅ 当前已是最新版本 (v{current})")
-                self.check_status_label.setStyleSheet("color: #4CAF50; font-weight: bold;")
-            else:
-                self.check_status_label.setText(f"📢 发现新版本 v{ver}，可下载升级")
-                self.check_status_label.setStyleSheet("color: #ff9800; font-weight: bold;")
-                self.download_btn.setEnabled(True)
-            self._log(f"{branch}最新版本: v{ver}", "SUCCESS")
-
-            # 缓存结果
-            if "version_cache" not in self.parent.config:
-                self.parent.config["version_cache"] = {}
-            self.parent.config["version_cache"][f"latest_{branch}"] = {
-                "version": ver, "url": url, "label": label,
-                "timestamp": time.time()
-            }
-            self.parent.save_config()
-        else:
-            if branch == "stable":
-                self.stable_version_label.setText(f"检查失败: {label}")
-                self.stable_version_label.setStyleSheet("color: #f44336;")
-            else:
-                self.preview_version_label.setText(f"检查失败: {label}")
-                self.preview_version_label.setStyleSheet("color: #f44336;")
-            self.check_status_label.setText(f"❌ 检查失败: {label}")
-            self.check_status_label.setStyleSheet("color: #f44336;")
-            self._log(f"版本检查失败: {label}", "ERROR")
-
-    def _on_check_finished(self):
-        self.check_progress_bar.setVisible(False)
-        self.cancel_check_btn.setVisible(False)
-        self.check_progress_label.setVisible(False)
-
-    def start_download(self):
-        branch = self.selected_branch
-        if branch == "stable":
-            url = self.latest_stable_url
-            ver = self.latest_stable_version
-        else:
-            url = self.latest_preview_url
-            ver = self.latest_preview_version
-
+    def start_download(self, url=None):
         if not url:
-            toast_warning("未检查更新", "请先点击「检查更新」按钮")
+            toast_warning("未选择版本", "请先浏览版本列表并点下载")
             return
+        ver = url.split("bedrock-server-")[1].split(".zip")[0] if "bedrock-server-" in url else "unknown"
 
         # 选择保存路径
         server_dir = self.parent.get_absolute_server_dir()
@@ -4045,7 +3965,7 @@ class UpgradeTab(QWidget):
             return
 
         self.downloaded_zip = save_path
-        self.download_btn.setEnabled(False)
+        pass  # (download_btn removed)
         self.cancel_dl_btn.setEnabled(True)
         self.dl_progress.setVisible(True)
         self.dl_progress.setValue(0)
@@ -4072,7 +3992,7 @@ class UpgradeTab(QWidget):
         self.dl_status_label.setText(msg)
 
     def _on_download_finished(self, success, message):
-        self.download_btn.setEnabled(True)
+        pass  # (download_btn removed)
         self.cancel_dl_btn.setEnabled(False)
         if success:
             self.dl_progress.setValue(100)
@@ -4089,7 +4009,7 @@ class UpgradeTab(QWidget):
             self._log(f"下载失败: {message}", "ERROR")
 
     def _reset_download_ui(self):
-        self.download_btn.setEnabled(True)
+        pass  # (download_btn removed)
         self.cancel_dl_btn.setEnabled(False)
         self.dl_progress.setVisible(False)
         self.dl_progress.setValue(0)
@@ -4962,7 +4882,7 @@ class BDSManager(QMainWindow):
         self.tab_widget.addTab(self.world_tab, "🌍 世界管理")
         self.tab_widget.addTab(monitor_tab, "📊 系统资源")
         self.tab_widget.addTab(self.tunnel_tab, "🚇 隧道")
-        self.tab_widget.addTab(self.upgrade_tab, "🔄 版本升级")
+        self.tab_widget.addTab(self.upgrade_tab, "🔧 升级 & 安装")
         self.tab_widget.addTab(self.settings_tab, "⚙️ 设置")
         # 标签页切换动画
         from PyQt5.QtWidgets import QGraphicsOpacityEffect
