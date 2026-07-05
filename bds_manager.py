@@ -286,6 +286,7 @@ def toast_info(title, msg=""):
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_FILE = os.path.join(SCRIPT_DIR, "bds_manager_config.json")
 VERSION_CACHE_FILE = os.path.join(SCRIPT_DIR, "bds_version_cache.json")
+VERSION_LIST_URL = "https://raw.githubusercontent.com/TussalZeus18028/bds_version_list/main/bds_versions.json"
 
 def get_server_dir():
     if os.path.exists(CONFIG_FILE):
@@ -3263,32 +3264,21 @@ class TunnelTab(QWidget):
 
 # ---------- 版本浏览 Worker ----------
 def _scrape_github_versions():
-    """从 GitHub mtheintrude23/Bedrock-Server 仓库抓取版本列表"""
+    """从 BDS 版本列表仓库获取版本数据"""
     try:
-        url = "https://raw.githubusercontent.com/mtheintrude23/Bedrock-Server/main/README.md"
-        req = urllib.request.Request(url, headers={
+        req = urllib.request.Request(VERSION_LIST_URL, headers={
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
         })
         with urllib.request.urlopen(req, timeout=15) as resp:
-            md = resp.read().decode("utf-8", errors="replace")
+            data = json.loads(resp.read().decode("utf-8"))
 
         results = []
-        # 匹配: [Download](https://www.minecraft.net/bedrockdedicatedserver/bin-win/bedrock-server-X.Y.Z.W.zip)
-        for m in re.finditer(r'\[Download\]\((https://www\.minecraft\.net/bedrockdedicatedserver/('
-                              r'bin-win(?:-preview)?)/bedrock-server-(\d+\.\d+\.\d+\.\d+)\.zip)\)', md):
-            url, path, ver = m.group(1), m.group(2), m.group(3)
-            branch = "preview" if "preview" in path else "stable"
-            results.append((ver, branch, url))
-
-        # 匹配不带冗余括号的: [Download](https://...)
-        for m in re.finditer(r'\[Download\]\(https://www\.minecraft\.net/bedrockdedicatedserver/'
-                              r'(bin-win(?:-preview)?)/bedrock-server-(\d+\.\d+\.\d+\.\d+)\.zip\)', md):
-            path, ver = m.group(1), m.group(2)
-            branch = "preview" if "preview" in path else "stable"
-            url = f"https://www.minecraft.net/bedrockdedicatedserver/{path}/bedrock-server-{ver}.zip"
-            if (ver, branch, url) not in results:
+        for entry in data.get("versions", []):
+            ver = entry.get("version", "")
+            branch = entry.get("branch", "stable")
+            url = entry.get("url", "")
+            if ver and url:
                 results.append((ver, branch, url))
-
         return results if results else None
     except Exception:
         return None
