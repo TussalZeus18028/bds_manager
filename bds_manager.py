@@ -28,7 +28,7 @@ Minecraft Bedrock Dedicated Server 管理工具
   - 多线程优化：所有耗时操作移至后台线程，避免阻塞主界面
 """
 
-__version__ = "2.1.0"
+__version__ = "2.1.0.00"
 
 import sys
 import os
@@ -3276,16 +3276,21 @@ class _BrowseWorker(QThread):
         parts = [int(x) for x in self.current_version.split(".")]
         while len(parts) < 4:
             parts.append(0)
-        base = f"{parts[0]}.{parts[1]}"
-        # 扫描稳定版: 不同 patch 和 build
+        # 扫描范围：从 1.18.0.0 到当前版本 + 未来 10 个patch
         stable_urls = []
         preview_urls = []
-        total = 0
-        for patch in range(parts[2], parts[2] + 20):
-            for build in range(0, 10):
-                ver = f"{parts[0]}.{parts[1]}.{patch}.{build}"
-                stable_urls.append((ver, f"https://www.minecraft.net/bedrockdedicatedserver/bin-win/bedrock-server-{ver}.zip", "stable"))
-                preview_urls.append((ver, f"https://www.minecraft.net/bedrockdedicatedserver/bin-win-preview/bedrock-server-{ver}.zip", "preview"))
+        min_major = 1
+        for major in range(min_major, parts[0] + 1):
+            end_minor = parts[1] + 5 if major == parts[0] else 20
+            start_minor = 0 if major < parts[0] else max(0, parts[1] - 5)
+            for minor in range(start_minor, end_minor):
+                end_patch = parts[2] + 10 if (major == parts[0] and minor == parts[1]) else 10
+                start_patch = 0
+                for patch in range(start_patch, end_patch):
+                    for build in range(0, 8):
+                        ver = f"{major}.{minor}.{patch}.{build}"
+                        stable_urls.append((ver, f"https://www.minecraft.net/bedrockdedicatedserver/bin-win/bedrock-server-{ver}.zip", "stable"))
+                        preview_urls.append((ver, f"https://www.minecraft.net/bedrockdedicatedserver/bin-win-preview/bedrock-server-{ver}.zip", "preview"))
         total = len(stable_urls) + len(preview_urls)
         checked = 0
         from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -3834,14 +3839,29 @@ class UpgradeTab(QWidget):
         self.browse_branch.setCurrentText({"stable": "稳定版", "preview": "预览版"}.get(branch, "全部"))
         self._browse_versions()
 
-    def _browse_versions(self):
+    def _auto_scan_versions(self):
+        """启动时后台自动扫描，缓存结果"""
+        # 先尝试加载缓存
+        cache = self.parent.config.get("version_list", {})
+        if cache.get("timestamp", 0) > time.time() - 86400:
+            self._browse_results = cache.get("data", [])
+            if self._browse_results:
+                self._populate_table()
+                self.browse_status.setText(f"📦 缓存: 共 {len(self._browse_results)} 个版本（{datetime.fromtimestamp(cache['timestamp']).strftime('%H:%M')}）")
+                return
+        # 后台扫描
+        self._browse_versions(silent=True)
+
+    def _browse_versions(self, silent=False):
         """浏览所有可用BDS版本"""
-        self.ver_table.setRowCount(0)
-        self.browse_btn.setEnabled(False)
-        self.browse_btn.setText("⏳ 扫描中...")
+        if not silent:
+            self.ver_table.setRowCount(0)
+            self.browse_btn.setEnabled(False)
+            self.browse_btn.setText("⏳ 扫描中...")
         self.browse_status.setText("正在探测版本，请稍候...")
         self._browse_results = []
         self._browse_cancelled = False
+        self._browse_silent = silent
 
         current_ver = _detect_current_version(self.parent.get_absolute_server_dir()) or "1.20.0.0"
         self.browse_worker = _BrowseWorker(current_ver, cancel=lambda: self._browse_cancelled)
@@ -3850,16 +3870,17 @@ class UpgradeTab(QWidget):
         self.browse_worker.finished.connect(self._on_browse_done)
         self.browse_worker.start()
 
-    def _on_browse_progress(self, ver, pct):
-        self.browse_status.setText(f"正在探测 v{ver} ... ({pct}%)")
-
-    def _on_browse_found(self, ver, branch, url):
-        self._browse_results.append((ver, branch, url))
-
     def _on_browse_done(self):
-        self.browse_btn.setEnabled(True)
-        self.browse_btn.setText("🌐 浏览可用版本")
+        if not self._browse_silent:
+            self.browse_btn.setEnabled(True)
+            self.browse_btn.setText("🌐 浏览可用版本")
         self._populate_table()
+        # 缓存到配置
+        self.parent.config["version_list"] = {
+            "data": self._browse_results,
+            "timestamp": time.time()
+        }
+        self.parent.save_config()
 
     def _populate_table(self):
         """将扫描结果填入表格"""
@@ -4965,6 +4986,8 @@ class BDSManager(QMainWindow):
                 toast_info("备份状态", "暂无备份")
         # 版本信息
         toast_info(f"BDS Manager v{__version__}", "就绪，等待操作")
+        # 后台自动扫描 BDS 版本
+        QTimer.singleShot(2000, self.upgrade_tab._auto_scan_versions)
 
     def show_normal(self):
         self.showNormal()
