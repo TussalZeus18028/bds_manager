@@ -1,6 +1,6 @@
 {
-    "version": "2.1.0.02",
+    "version": "2.1.0.03",
     "release_date": "2026-07-05",
     "download_url": "https://github.com/TussalZeus18028/bds_manager",
-    "changelog": "## v2.1.0.02\n\n### 🔧 升级 & 安装\n- 版本列表从自有仓库获取（TussalZeus18028/bds_version_list）\n- HEAD 并发探测 1.26+ 新版本\n- 每个版本实时显示，结果去重\n- 停止扫描按钮 + Patch/Build 范围可调\n- 手动输入版本号下载\n\n### 📦 版本数据库独立仓库\n- 创建 bds_version_list 仓库，存放 65 个 BDS 版本\n- 管理器从 raw.githubusercontent.com 拉取\n- 用户可自行维护版本列表\n\n### ⚙️ 配置拆分\n- 工具配置 → bds_manager_config.json\n- 版本缓存 → bds_version_cache.json\n- 保存时控制台输出提示\n\n### 💬 Toast 时长可调\n- 设置页新增四种提示的显示时长调节（1-30秒）\n- 错误/警告/成功/信息各自可配\n\n### ℹ️ 关于标签页\n- 项目简介 + 版本号\n- 作者仓库、BDS 官网、隧道、版本数据库链接\n\n### 🎨 UI 优化\n- 升级页 GroupBox 圆角边框 + 间距优化\n- 版本列表表格紧凑布局\n- QLabel 固定高度防止滚动跳动\n\n### 🐛 修复\n- frpc.ini 编辑区白色背景 + 锁定防误触\n- 备份弹窗统一为 Toast\n- 版本扫描去重\n- savesConfig 不阻塞 GUI\n- 配置拆分后加载兼容"
+    "changelog": "## v2.1.0.03\n\n### 🔧 升级 & 安装\n- 版本列表从自有仓库获取（TussalZeus18028/bds_version_list）\n- HEAD 并发探测 1.26+ 新版本\n- 启动自动扫描 + 24h 缓存\n- 停止扫描按钮 + 范围可调\n\n### 💬 Toast 时长可调\n- 四种提示各自独立调节（1-30秒）\n\n### ℹ️ 关于标签页\n- 项目简介 + 仓库/官网/隧道链接\n\n### 🛡️ 代码质量\n- 修复 BackupWorker 线程安全问题（toast 从工作线程移至主线程）\n- 裸 except 改为 except Exception\n- Git 抓取失败加 debug 日志\n- 终端输出统一为 log_* 函数\n- 项目目录整理（移除 bak/debug.log/__pycache__）\n\n### 🐛 修复\n- QPen 缺失导入\n- Toast 透明背景报错\n- frpc.ini 编辑区锁定\n- 滚动条跳动（setUpdatesEnabled 冻结）\n- 配置拆分后加载兼容"
 }

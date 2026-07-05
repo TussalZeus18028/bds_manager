@@ -28,7 +28,7 @@ Minecraft Bedrock Dedicated Server 管理工具
   - 多线程优化：所有耗时操作移至后台线程，避免阻塞主界面
 """
 
-__version__ = "2.1.0.02"
+__version__ = "2.1.0.03"
 
 import sys
 import os
@@ -52,7 +52,7 @@ def _parse_json(text):
         try:
             return json5.loads(text), True
         except Exception:
-            pass
+            log_debug("send_command 忽略异常")
     return json.loads(text), False
 import socket
 import psutil
@@ -78,7 +78,7 @@ try:
         plt.rcParams['font.sans-serif'] = ['Microsoft YaHei', 'SimHei', 'DejaVu Sans']
         plt.rcParams['axes.unicode_minus'] = False
     except Exception as e:
-        print(f"[WARN] 中文字体设置失败: {e}")
+        log_warning(f"中文字体设置失败: {e}")
 except ImportError:
     MATPLOTLIB_AVAILABLE = False
     print("[WARN] matplotlib 未安装，折线图功能将不可用。请执行: pip install matplotlib")
@@ -1663,7 +1663,7 @@ class BackupWorker(BaseWorker):
                         if total_files % 100 == 0:
                             self.progress.emit(f"已打包 {total_files} 个文件...")
             self.progress.emit(f"备份完成: {backup_name}")
-            toast_success("备份完成", backup_name)
+            # toast 由 on_backup_finished 在主线程处理
             self.finished.emit(True, f"备份成功: {backup_name}")
         except Exception as e:
             log_error(f"备份失败: {e}")
@@ -2146,7 +2146,7 @@ class PacksTab(QWidget):
                                 if any(e.get("pack_id") == uuid for e in data_json):
                                     is_active = True
                             except Exception:
-                                pass
+                                pass  # JSON 解析兼容处理
                     if is_active:
                         deactivate_action = menu.addAction("从当前世界注销")
                         deactivate_action.triggered.connect(lambda: self.deactivate_pack(item))
@@ -2810,6 +2810,7 @@ class WorldTab(QWidget):
         self.parent.status_label.setText("就绪")
         if success:
             toast_success("备份完成", message)
+            # BackupWorker 的 toast 也在这里统一触发
             log_success(message)
         else:
             toast_error("备份失败", message)
@@ -3315,7 +3316,8 @@ def _scrape_github_versions():
             if ver and url:
                 results.append((ver, branch, url))
         return results if results else None
-    except Exception:
+    except Exception as e:
+        log_debug(f"版本列表抓取失败: {e}")
         return None
 
 
@@ -3379,7 +3381,7 @@ class _BrowseWorker(QThread):
                 resp = urllib.request.urlopen(req, timeout=6)
                 if resp.getcode() == 200:
                     return (True, ver, branch, url)
-            except:
+            except Exception:
                 pass
             return (False, ver, branch, url)
 
@@ -3399,8 +3401,8 @@ class _BrowseWorker(QThread):
                         self.progress.emit(ver, pct)
                         if ok:
                             self.found.emit(ver, branch, url)
-                    except:
-                        pass
+                    except Exception:
+                        pass  # HEAD 探测异步异常
 
         self.progress.emit("", 100)
         self.finished.emit()
@@ -5347,7 +5349,7 @@ class BDSManager(QMainWindow):
             c = "#4CAF50" if mem < 60 else "#ffaa33" if mem < 80 else "#f44336"
             self.status_mem.setText(f"💾 {mem:.0f}%")
             self.status_mem.setStyleSheet(f"font-size:11px; color:{c}; padding:0 8px;")
-        except:
+        except Exception:
             pass
         # 隧道
         t_running = hasattr(self, 'tunnel_tab') and self.tunnel_tab.is_tunnel_running()
@@ -5503,7 +5505,8 @@ def _load_hidpi_config():
         try:
             with open(CONFIG_FILE, "r", encoding="utf-8") as f:
                 return json.load(f).get("hidpi_enabled", True)
-        except: pass
+        except Exception:
+            pass
     return True
 
 if __name__ == "__main__":

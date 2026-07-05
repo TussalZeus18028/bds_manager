@@ -1,8 +1,10 @@
 __pycache__/
+.workbuddy/
 *.pyc
 *.pyo
-logs/
 debug.log
-test/
 *.bak
 bds_manager_config.json
+bds_version_cache.json
+web_ui/
+Earlier version/
