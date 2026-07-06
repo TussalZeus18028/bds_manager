@@ -1,6 +1,6 @@
 {
-    "version": "2.1.0.07",
-    "release_date": "2026-07-05",
+    "version": "2.1.0.08",
+    "release_date": "2026-07-06",
     "download_url": "https://github.com/TussalZeus18028/bds_manager",
-    "changelog": "## v2.1.0.07 稳定性修复\n\n### 🛡️ 线程安全\n- BackupWorker/UpgradeExecWorker 不再在工作线程调 Toast\n- 隧道停止信号改用 pyqtSignal 代替 QTimer.singleShot\n- UpgradeTab 补充 parent 参数\n\n### 🐛 崩溃修复\n- json5 未安装时 pack 详情不崩溃（fallback _parse_json）\n- 版本列表排序遇坏数据不崩溃（safe_key 兜底）\n- PacksTab 添加/移除包增加 30s 超时恢复\n\n### ⚡ 多线程分段下载\n- 4 线程 HTTP Range 分段并发\n- 不支持 Range 的服务器自动回退\n\n### ⚙️ 配置\n- 7 个新设置键全部写入配置文件\n- 新电脑首次启动自动生成 config\n\n### 💬 设置页面\n- 启动自检 Toast 可开关\n- 多线程下载可开关\n- 启动自动检查更新可开关"
+    "changelog": "## v2.1.0.08 GitHub 认证 & 稳定性\n\n### 🔑 GitHub Token 认证\n- 设置页新增 Token 输入（密码框 + 🔒锁定防误触）\n- 启用后每小时限额 60→5000，避免 Too Many Requests\n- _github_headers() 统一注入认证头\n- Token 保存后即时刷新缓存\n\n### 🔧 请求优化\n- 启动 GitHub 请求间隔从 1s 扩至 2s\n- 工具更新检查提前至 3s，版本列表延后至 5s\n\n### 🛡️ 代码质量\n- _save_version_cache 误调用修复\n- auto_backup 改用后台线程（不阻塞 UI）\n- 主线程 time.sleep 轮询改为 QTimer\n- 正则编译缓存（ConsoleTab 性能提升）\n- ServerProcess 信号断开防泄漏\n- PacksTab worker 竞态修复 + 超时恢复\n- load_config 默认配置补全\n- 日志文件句柄显式关闭\n\n### 🐛 修复\n- tunnel_line_signal 类型不匹配\n- update_global_paths 逻辑修复\n- 多项线程安全与异常处理完善"
 }

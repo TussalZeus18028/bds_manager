@@ -28,7 +28,7 @@ Minecraft Bedrock Dedicated Server 管理工具
   - 多线程优化：所有耗时操作移至后台线程，避免阻塞主界面
 """
 
-__version__ = "2.1.0.07"
+__version__ = "2.1.0.08"
 
 import sys
 import os
@@ -84,7 +84,7 @@ except ImportError:
     MATPLOTLIB_AVAILABLE = False
     print("[WARN] matplotlib 未安装，折线图功能将不可用。请执行: pip install matplotlib")
 
-from PyQt5.QtWidgets import (
+from PyQt5.QtWidgets import (QGraphicsOpacityEffect, 
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
     QTabWidget, QTextEdit, QLineEdit, QPushButton, QLabel, QMessageBox,
     QFileDialog, QTableWidget, QTableWidgetItem, QHeaderView, QDialog,
@@ -292,6 +292,34 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_FILE = os.path.join(SCRIPT_DIR, "bds_manager_config.json")
 VERSION_CACHE_FILE = os.path.join(SCRIPT_DIR, "bds_version_cache.json")
 VERSION_LIST_URL = "https://raw.githubusercontent.com/TussalZeus18028/bds_version_list/main/bds_versions.json"
+
+# ---------- GitHub 请求辅助 ----------
+_github_token_cache = None  # 缓存配置中的 token
+
+def _github_headers():
+    """返回 GitHub 请求头，如果配置了 token 则附加认证"""
+    global _github_token_cache
+    if _github_token_cache is None:
+        try:
+            cfg = os.path.join(SCRIPT_DIR, "bds_manager_config.json")
+            if os.path.exists(cfg):
+                with open(cfg, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                if data.get("github_auth_enabled") and data.get("github_token"):
+                    _github_token_cache = data["github_token"]
+                else:
+                    _github_token_cache = ""
+        except Exception:
+            _github_token_cache = ""
+    h = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+    if _github_token_cache:
+        h["Authorization"] = f"token {_github_token_cache}"
+    return h
+
+def _refresh_github_token():
+    """配置变更后刷新缓存的 token"""
+    global _github_token_cache
+    _github_token_cache = None
 
 def get_server_dir():
     if os.path.exists(CONFIG_FILE):
@@ -1564,6 +1592,34 @@ class SettingsTab(QWidget):
         dl_group.setLayout(dl_layout)
         layout.addWidget(dl_group)
 
+        # --- GitHub Token 认证 ---
+        gh_group = QGroupBox("🔑 GitHub 实名请求")
+        gh_layout = QVBoxLayout()
+        gh_row1 = QHBoxLayout()
+        self.github_auth_cb = QCheckBox("启用 GitHub Token 认证（免除 60次/小时匿名限速）")
+        self.github_auth_cb.setToolTip("开启后每小时请求上限从 60 提升至 5000")
+        self.github_auth_cb.toggled.connect(lambda v: self.github_token_edit.setEnabled(v))
+        gh_row1.addWidget(self.github_auth_cb)
+        gh_row1.addStretch()
+        gh_layout.addLayout(gh_row1)
+        gh_row2 = QHBoxLayout()
+        gh_row2.addWidget(QLabel("Token:"))
+        self.github_token_edit = QLineEdit()
+        self.github_token_edit.setEchoMode(QLineEdit.Password)
+        self.github_token_edit.setPlaceholderText("ghp_xxxxxxxxxx（仅需 public_repo 权限）")
+        self.github_token_edit.setEnabled(False)
+        self.github_token_edit.setReadOnly(True)
+        self.github_token_edit.setStyleSheet("QLineEdit { font-family: monospace; }")
+        gh_row2.addWidget(self.github_token_edit)
+        self.github_token_lock_btn = QPushButton("🔒")
+        self.github_token_lock_btn.setFixedWidth(36)
+        self.github_token_lock_btn.setToolTip("点击解锁以编辑 Token")
+        self.github_token_lock_btn.clicked.connect(self._toggle_token_lock)
+        gh_row2.addWidget(self.github_token_lock_btn)
+        gh_layout.addLayout(gh_row2)
+        gh_group.setLayout(gh_layout)
+        layout.addWidget(gh_group)
+
         # --- 保存按钮 ---
         save_row = QHBoxLayout()
         save_row.addStretch()
@@ -1607,6 +1663,10 @@ class SettingsTab(QWidget):
         self.auto_check_update_cb.setChecked(self.parent.config.get("auto_check_update", True))
         self.multi_dl_cb.setChecked(self.parent.config.get("multi_dl_enabled", True))
         self.show_startup_toasts_cb.setChecked(self.parent.config.get("show_startup_toasts", True))
+        self.github_auth_cb.setChecked(self.parent.config.get("github_auth_enabled", False))
+        if self.parent.config.get("github_token"):
+            self.github_token_edit.setText(self.parent.config["github_token"])
+            self.github_token_edit.setEnabled(self.parent.config.get("github_auth_enabled", False))
         self.custom_group.setVisible(self.theme_combo.currentText() == "custom")
         for key, btn in self.color_buttons.items():
             color = self.parent.custom_colors.get(key, "#2b2b2b")
@@ -1643,12 +1703,29 @@ class SettingsTab(QWidget):
         self.parent.config["auto_check_update"] = self.auto_check_update_cb.isChecked()
         self.parent.config["multi_dl_enabled"] = self.multi_dl_cb.isChecked()
         self.parent.config["show_startup_toasts"] = self.show_startup_toasts_cb.isChecked()
+        self.parent.config["github_auth_enabled"] = self.github_auth_cb.isChecked()
+        self.parent.config["github_token"] = self.github_token_edit.text().strip() if self.github_auth_cb.isChecked() else ""
+        _refresh_github_token()
         self.parent.save_config()
         self.parent.apply_theme(self.parent.config["theme"])
         self.parent.apply_monitor_interval(self.parent.config["monitor_interval"])
         self.parent.init_watcher()
         self.parent.update_backup_timer()
         toast_success("设置已保存", "新设置已生效")
+        log_info("用户手动保存设置")
+
+    def _toggle_token_lock(self):
+        """切换 Token 输入框的锁定状态"""
+        locked = self.github_token_edit.isReadOnly()
+        if locked:
+            self.github_token_edit.setReadOnly(False)
+            self.github_token_lock_btn.setText("🔓")
+            self.github_token_lock_btn.setToolTip("点击锁定以保护 Token")
+        else:
+            self.github_token_edit.setReadOnly(True)
+            self.github_token_lock_btn.setText("🔒")
+            self.github_token_lock_btn.setToolTip("点击解锁以编辑 Token")
+
 
 # ---------- 后台工作线程（用于耗时操作）----------
 class BaseWorker(QThread):
@@ -1883,7 +1960,8 @@ class ConsoleTab(QWidget):
 
     def append_output(self, text):
         # 1. 定义颜色规则（按优先级从高到低匹配）
-        rules = [
+        if ConsoleTab._log_rules is None:
+            ConsoleTab._log_rules = [
             # 严重错误（最高优先级）
             (re.compile(r'(?:ERROR|FATAL|Exception|Traceback|失败|崩溃|crash)', re.I), '#ff3333', True),
             # 警告
@@ -3195,6 +3273,8 @@ class TunnelTab(QWidget):
         else:
             log_info(f"[隧道] {text}")
 
+    _log_rules = None  # class-level regex cache
+
     def append_output(self, text, is_error=False):
         timestamp = datetime.now().strftime("%H:%M:%S")
         if is_error:
@@ -3283,7 +3363,7 @@ class TunnelTab(QWidget):
         except Exception as e:
             log_error(f"读取隧道输出异常: {e}")
         finally:
-            self.tunnel_line_signal.emit("__STOPPED__", "")
+            self.tunnel_line_signal.emit("__STOPPED__", False)
 
     def _on_tunnel_stopped(self):
         if self.start_tunnel_btn.isEnabled():
@@ -3332,9 +3412,7 @@ class TunnelTab(QWidget):
 def _scrape_github_versions():
     """从 BDS 版本列表仓库获取版本数据"""
     try:
-        req = urllib.request.Request(VERSION_LIST_URL, headers={
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
-        })
+        req = urllib.request.Request(VERSION_LIST_URL, headers=_github_headers())
         with urllib.request.urlopen(req, timeout=15) as resp:
             data = json.loads(resp.read().decode("utf-8"))
 
@@ -4667,9 +4745,7 @@ class UpgradeTab(QWidget):
                 try:
                     url = ("https://raw.githubusercontent.com/TussalZeus18028/"
                            "bds_manager/main/version.json")
-                    req = urllib.request.Request(url, headers={
-                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
-                    })
+                    req = urllib.request.Request(url, headers=_github_headers())
                     with urllib.request.urlopen(req, timeout=10) as resp:
                         data = json.loads(resp.read().decode("utf-8"))
                         remote_ver = data.get("version", "")
@@ -4757,9 +4833,7 @@ class UpgradeTab(QWidget):
                 try:
                     url = ("https://raw.githubusercontent.com/TussalZeus18028/"
                            "bds_manager/main/bds_manager.py")
-                    req = urllib.request.Request(url, headers={
-                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
-                    })
+                    req = urllib.request.Request(url, headers=_github_headers())
                     with urllib.request.urlopen(req, timeout=60) as resp:
                         new_content = resp.read()
 
@@ -5096,7 +5170,7 @@ class BDSManager(QMainWindow):
                 try:
                     req = urllib.request.Request(
                         "https://raw.githubusercontent.com/TussalZeus18028/bds_manager/main/version.json",
-                        headers={"User-Agent": "Mozilla/5.0"})
+                        headers=_github_headers())
                     with urllib.request.urlopen(req, timeout=10) as resp:
                         data = json.loads(resp.read().decode())
                     remote = data.get("version", "")
@@ -5134,7 +5208,7 @@ class BDSManager(QMainWindow):
         url = "https://raw.githubusercontent.com/TussalZeus18028/bds_manager/main/bds_manager.py"
         save_path = os.path.join(SCRIPT_DIR, f"bds_manager_v{remote_ver}.py.new")
         try:
-            r = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=60)
+            r = requests.get(url, headers=_github_headers(), timeout=60)
             r.raise_for_status()
             with open(save_path, "wb") as f:
                 for chunk in r.iter_content(chunk_size=65536):
@@ -5154,12 +5228,8 @@ class BDSManager(QMainWindow):
                                              QMessageBox.Yes | QMessageBox.No | QMessageBox.Cancel)
                 if reply == QMessageBox.Yes:
                     self.console_tab.stop_server()
-                    # 等待服务器退出（最多 3 秒）
-                    for _ in range(30):
-                        QApplication.processEvents()
-                        if not self.is_server_running():
-                            break
-                        time.sleep(0.1)
+                    QTimer.singleShot(3000, self.quit_app)
+                    return
                 elif reply == QMessageBox.Cancel:
                     return
             self.quit_app()
@@ -5202,6 +5272,19 @@ class BDSManager(QMainWindow):
             "frpc_path": "",
             "version_cache": {},
             "version_list": {},
+            "mem_warn_threshold": 80,
+            "hidpi_enabled": True,
+            "auto_check_update": True,
+            "multi_dl_enabled": True,
+            "show_startup_toasts": True,
+            "toast_duration_error": 5000,
+            "toast_duration_warning": 4000,
+            "toast_duration_success": 3500,
+            "toast_duration_info": 3000,
+            "window_width": 1200,
+            "window_height": 800,
+            "github_auth_enabled": False,
+            "github_token": "",
         }
         if os.path.exists(CONFIG_FILE):
             try:
@@ -5249,6 +5332,8 @@ class BDSManager(QMainWindow):
             "toast_duration_warning": self.config.get("toast_duration_warning", 4000),
             "toast_duration_success": self.config.get("toast_duration_success", 3500),
             "toast_duration_info": self.config.get("toast_duration_info", 3000),
+            "github_auth_enabled": self.config.get("github_auth_enabled", False),
+            "github_token": self.config.get("github_token", ""),
         }
         try:
             with open(CONFIG_FILE, "w", encoding="utf-8") as f:
@@ -5258,6 +5343,9 @@ class BDSManager(QMainWindow):
             log_error(f"保存配置文件失败: {e}")
         # 版本数据单独存
         self._save_version_cache()
+        self.update_global_paths()
+        log_info(f"服务器目录已更新: {SERVER_DIR}")
+        self.init_watcher()
 
     def _save_version_cache(self):
         """保存版本缓存到独立文件"""
@@ -5271,9 +5359,9 @@ class BDSManager(QMainWindow):
             log_info(f"版本缓存已保存: {os.path.basename(VERSION_CACHE_FILE)}")
         except Exception as e:
             log_error(f"保存版本缓存失败: {e}")
-        self.update_global_paths()
-        log_info(f"服务器目录已更新: {SERVER_DIR}")
-        self.init_watcher()
+        # (moved to save_config)
+        # (moved to save_config)
+        # (moved to save_config)
 
     def update_global_paths(self):
         global SERVER_DIR, SERVER_PROPERTIES, ALLOWLIST_FILE, PERMISSIONS_FILE
@@ -5397,7 +5485,6 @@ class BDSManager(QMainWindow):
         about = self._create_about_tab()
         self.tab_widget.addTab(about, "ℹ️ 关于")
         # 标签页切换动画
-        from PyQt5.QtWidgets import QGraphicsOpacityEffect
         self._tab_fx = QGraphicsOpacityEffect(self.tab_widget)
         self._tab_fx.setOpacity(1.0)
         self.tab_widget.setGraphicsEffect(self._tab_fx)
@@ -5478,7 +5565,7 @@ class BDSManager(QMainWindow):
         # 版本信息
         toast_info(f"BDS Manager v{__version__}", "就绪，等待操作")
         # 后台自动扫描 BDS 版本
-        QTimer.singleShot(2000, self.upgrade_tab._auto_scan_versions)
+        QTimer.singleShot(5000, self.upgrade_tab._auto_scan_versions)
 
     def show_normal(self):
         self.showNormal()
