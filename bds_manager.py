@@ -3488,7 +3488,7 @@ class TunnelTab(QWidget):
         finally:
             if self.tunnel_process and self.tunnel_process.stdout:
                 try: self.tunnel_process.stdout.close()
-                except: pass
+                except OSError: pass
             self.tunnel_line_signal.emit("__STOPPED__", False)
 
     def _on_tunnel_stopped(self):
@@ -4043,7 +4043,7 @@ class UpgradeWorker(BaseWorker):
         finally:
             for f in temp_files:
                 try: os.remove(f)
-                except: pass
+                except OSError: pass
 
     def _dl_segment(self, idx, start, end, tmp_path):
         """下载单个分段（在独立线程中运行）"""
@@ -5332,7 +5332,7 @@ class BDSManager(QMainWindow):
                             while len(x) < 4: x.append(0)
                             while len(y) < 4: y.append(0)
                             return (x > y) - (x < y)
-                        except:
+                        except (ValueError, IndexError):
                             return 0
                     if _cmp(remote, __version__) > 0:
                         self.result.emit("update", remote, "")
