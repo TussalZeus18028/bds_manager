@@ -4990,43 +4990,68 @@ class UpgradeTab(QWidget):
         self.scroll_area.verticalScrollBar().setValue(sp)
 
     def _download_tool_update(self, remote_ver):
-        """下载新版 bds_manager.py"""
+        """下载 ZIP 更新包"""
+        meta = getattr(self, "_tool_update_meta", {})
+        dl_url = meta.get("download_url", "")
+        expected_sha = meta.get("sha256", "")
+
+        # 若元数据无 download_url，回退旧式单文件下载
+        if not dl_url:
+            dl_url = "https://raw.githubusercontent.com/TussalZeus18028/bds_manager/main/bds_manager.py"
+            expected_sha = ""
+
         self.check_tool_btn.setEnabled(False)
         self.check_tool_btn.setText("下载中...")
         self._scrolled_set_text(self.tool_update_status, f"⬇️ 正在下载 v{remote_ver}...")
         self._log(f"开始下载 BDS Manager v{remote_ver}...", "INFO")
 
-        class DownloadSelfWorker(BaseWorker):
+        class DownloadUpdateWorker(BaseWorker):
             def run(self):
+                zip_path = os.path.join(SCRIPT_DIR, f"_update_v{remote_ver}.zip")
+                self._zip_path = zip_path
                 try:
-                    url = ("https://raw.githubusercontent.com/TussalZeus18028/"
-                           "bds_manager/main/bds_manager.py")
-                    req = urllib.request.Request(url, headers=_github_headers())
-                    with urllib.request.urlopen(req, timeout=60) as resp:
-                        new_content = resp.read()
-
-                    if not new_content:
-                        self.finished.emit(False, "下载的文件为空")
-                        return
-                    if len(new_content) < 1000:
-                        self.finished.emit(False, f"文件异常（仅 {len(new_content)} 字节）")
-                        return
-
-                    self._new_content = new_content
-                    self.finished.emit(True, f"下载完成（{len(new_content)/1024:.1f} KB）")
-                except urllib.error.HTTPError as e:
-                    self.finished.emit(False, f"HTTP {e.code}: {e.reason}")
-                except urllib.error.URLError as e:
-                    self.finished.emit(False, f"网络错误: {e.reason}")
+                    hdr = _github_headers()
+                    r = requests.get(dl_url, headers=hdr, stream=True, timeout=120)
+                    r.raise_for_status()
+                    total = int(r.headers.get("Content-Length", 0))
+                    dl_bytes = 0
+                    with open(zip_path, "wb") as f:
+                        for chunk in r.iter_content(chunk_size=65536):
+                            if chunk:
+                                f.write(chunk)
+                                dl_bytes += len(chunk)
+                                if total > 0:
+                                    pct = int(dl_bytes * 100 / total)
+                                    self.status_signal.emit(f"下载中... {dl_bytes/1024:.0f}/{total/1024:.0f} KB ({pct}%)")
+                    self.finished.emit(True, f"下载完成（{dl_bytes/1024:.1f} KB）", zip_path)
+                except requests.exceptions.RequestException as e:
+                    self.finished.emit(False, f"网络错误: {e}", "")
                 except Exception as e:
-                    self.finished.emit(False, f"下载失败: {e}")
+                    self.finished.emit(False, f"下载失败: {e}", "")
 
-        self._dl_self_worker = DownloadSelfWorker(self)
-        self._dl_self_worker.finished.connect(
-            lambda ok, msg: self._on_tool_download_finished(ok, msg))
+        self._dl_self_worker = DownloadUpdateWorker(self)
+        self._dl_self_worker.finished.connect(self._on_tool_download_finished)
         self._dl_self_worker.start()
 
-    def _on_tool_download_finished(self, success, message):
+    @staticmethod
+    def _verify_sha256(filepath, expected_hash):
+        """校验文件 SHA256，返回 (bool, str)"""
+        import hashlib
+        if not expected_hash:
+            return True, "跳过校验（版本元数据未提供 SHA256）"
+        try:
+            h = hashlib.sha256()
+            with open(filepath, "rb") as f:
+                for chunk in iter(lambda: f.read(65536), b""):
+                    h.update(chunk)
+            actual = h.hexdigest()
+            if actual.lower() == expected_hash.lower():
+                return True, "SHA256 校验通过"
+            return False, f"SHA256 不匹配！\n期望: {expected_hash[:16]}...\n实际: {actual[:16]}..."
+        except OSError as e:
+            return False, f"读取文件失败: {e}"
+
+    def _on_tool_download_finished(self, success, message, zip_path=""):
         self.check_tool_btn.setEnabled(True)
         self.check_tool_btn.setText("🔍 检查工具更新")
 
@@ -5037,46 +5062,37 @@ class UpgradeTab(QWidget):
             self._log(f"下载失败: {message}", "ERROR")
             return
 
-        new_content = getattr(self._dl_self_worker, "_new_content", None)
-        if not new_content:
-            self._log("下载内容为空", "ERROR")
+        if not zip_path or not os.path.exists(zip_path):
+            self._scrolled_set_text(self.tool_update_status, "❌ 下载文件丢失")
             return
 
-        toast_success("下载完成", message)
-        self._log(f"下载完成: {message}", "SUCCESS")
+        # 校验 SHA256
+        meta = getattr(self, "_tool_update_meta", {})
+        expected_sha = meta.get("sha256", "")
+        ok, msg = self._verify_sha256(zip_path, expected_sha)
+        if not ok:
+            self._scrolled_set_text(self.tool_update_status, f"❌ 校验失败: {msg}")
+            self.tool_update_status.setStyleSheet("color: #f44336; padding: 4px;")
+            toast_error("SHA256 校验失败", "更新包可能已损坏，请手动下载")
+            self._log(f"SHA256 校验失败: {msg}", "ERROR")
+            try: os.remove(zip_path)
+            except OSError: pass
+            return
+
+        toast_success("下载完成", f"{message}\n{msg}")
+        self._log(f"下载完成: {message} | {msg}", "SUCCESS")
+        self._update_zip_path = zip_path
 
         reply = QMessageBox.question(
             self, "下载完成",
-            f"新版本已下载完成！（{message}）\n\n"
-            "是否立即替换当前文件并重启？\n"
-            "⚠️ 替换后程序将自动重启。",
+            f"新版本已下载并通过校验！\n\n{message}\n{msg}\n\n"
+            "是否立即安装并重启？\n⚠️ 安装后程序将自动重启。",
             QMessageBox.Yes | QMessageBox.No,
             QMessageBox.Yes
         )
 
         if reply == QMessageBox.Yes:
-            try:
-                current_path = os.path.join(SCRIPT_DIR, "bds_manager.py")
-                backup_path = current_path + ".bak"
-                shutil.copy2(current_path, backup_path)
-                with open(current_path, "wb") as f:
-                    f.write(new_content)
-                self._log("文件已替换，旧文件备份为 .bak", "SUCCESS")
-                QMessageBox.information(
-                    self, "更新完成",
-                    "BDS Manager 已更新！\n\n"
-                    f"旧文件已备份为 bds_manager.py.bak\n\n"
-                    "程序即将自动重启。"
-                )
-                import subprocess
-                subprocess.Popen([sys.executable] + sys.argv,
-                                 creationflags=subprocess.CREATE_NO_WINDOW
-                                 if sys.platform == "win32" else 0)
-                QApplication.quit()
-            except Exception as e:
-                self._log(f"替换文件失败: {e}", "ERROR")
-                toast_error("更新失败", str(e))
-                QMessageBox.critical(self, "更新失败", f"替换文件时出错：{e}")
+            self._apply_tool_update()
         else:
             self._scrolled_set_text(self.tool_update_status, "⚠️ 已取消更新。新版本已下载但未安装。")
             self.tool_update_status.setStyleSheet("color: #ff9800; padding: 4px;")
