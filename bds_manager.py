@@ -3642,12 +3642,12 @@ class _BrowseWorker(QThread):
             return (False, ver, branch, url)
 
         all_urls = stable_urls + preview_urls
-        batch_size = 16
+        batch_size = constants.HEAD_SCAN_BATCH_SIZE if constants else 16
         for i in range(0, len(all_urls), batch_size):
             if self._cancel():
                 break
             batch = all_urls[i:i + batch_size]
-            with ThreadPoolExecutor(max_workers=min(batch_size, 10)) as executor:
+            with ThreadPoolExecutor(max_workers=min(batch_size, constants.HEAD_SCAN_MAX_WORKERS if constants else 10)) as executor:
                 futures = {executor.submit(check_url, item): item for item in batch}
                 for future in as_completed(futures, timeout=20):
                     try:
@@ -3988,7 +3988,7 @@ class UpgradeWorker(BaseWorker):
                 self._run_simple()
                 return
 
-            segments = 4
+            segments = constants.DEFAULT_DL_SEGMENTS if constants else 4
             chunk_size = total_size // segments
             downloaded_bytes = [0] * segments
             start_time = time.time()
