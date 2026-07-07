@@ -5098,6 +5098,61 @@ class UpgradeTab(QWidget):
             self.tool_update_status.setStyleSheet("color: #ff9800; padding: 4px;")
             self._log("用户取消安装更新", "WARN")
 
+    def _backup_script_dir(self):
+        """备份脚本目录核心文件到 backups/upgrade_backup_时间戳/"""
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        backup_dir = os.path.join(SCRIPT_DIR, "backups", f"upgrade_backup_{ts}")
+        os.makedirs(backup_dir, exist_ok=True)
+        # 备份所有 .py 和 .json 核心文件
+        for f in os.listdir(SCRIPT_DIR):
+            if f.endswith((".py", ".json", ".txt", ".md")) and os.path.isfile(os.path.join(SCRIPT_DIR, f)):
+                shutil.copy2(os.path.join(SCRIPT_DIR, f), os.path.join(backup_dir, f))
+        self._log(f"已备份核心文件到: {backup_dir}", "INFO")
+        return backup_dir
+
+    def _extract_update_zip(self, zip_path):
+        """解压更新 ZIP 到脚本目录，跳过用户数据文件"""
+        skip_files = {
+            "bds_manager_config.json", "bds_version_cache.json",
+        }
+        skip_dirs = {"logs", "backups", "Server", "Earlier version", ".git"}
+        import zipfile
+        with zipfile.ZipFile(zip_path, "r") as zf:
+            for name in zf.namelist():
+                # 跳过目录
+                if name.endswith("/") or name.endswith("\\"):
+                    continue
+                basename = os.path.basename(name)
+                top = name.split("/")[0]
+                if basename in skip_files or top in skip_dirs:
+                    continue
+                target = os.path.join(SCRIPT_DIR, basename)
+                os.makedirs(os.path.dirname(target) or SCRIPT_DIR, exist_ok=True)
+                with zf.open(name) as src, open(target, "wb") as dst:
+                    dst.write(src.read())
+        self._log("ZIP 更新包已解压到脚本目录", "INFO")
+
+    def _apply_tool_update(self):
+        """执行更新：备份→解压→重启"""
+        zip_path = getattr(self, "_update_zip_path", "")
+        if not zip_path or not os.path.exists(zip_path):
+            toast_error("更新失败", "找不到下载的 ZIP 包")
+            return
+        try:
+            self._backup_script_dir()
+            self._extract_update_zip(zip_path)
+            os.remove(zip_path)
+            self._log("更新安装成功，即将重启", "SUCCESS")
+            QMessageBox.information(self, "更新完成",
+                "BDS Manager 已更新！\n\n旧文件已备份到 backups/upgrade_backup_*/\n程序即将自动重启。")
+            # 调用主窗口的重启方法
+            self.parent._restart_app()
+        except Exception as e:
+            self._log(f"安装更新失败: {e}", "ERROR")
+            toast_error("安装失败", str(e))
+            QMessageBox.critical(self, "更新失败",
+                f"安装更新时出错：{e}\n\n备份文件已保留，可手动恢复。")
+
 # ---------- 仪表盘标签页 ----------
 class DashboardTab(QWidget):
     """首页仪表盘：状态概览 + 玩家列表 + 快捷指令"""
