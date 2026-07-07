@@ -98,8 +98,8 @@ python bds_manager.py
 # 1. 打包（自动计算 SHA256 + 写入 version.json）
 python build_release.py
 
-# 2. 双击发布（一键 push + 创建 GitHub Release）
-release\publish.bat
+# 2. 发布（一键 push + GitHub Release）
+python publish.py
 ```
 
 发布脚本从 `version.json` 动态读取版本号，无需手动修改任何硬编码。

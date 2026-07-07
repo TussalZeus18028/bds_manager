@@ -30,6 +30,7 @@ EXCLUDE_FILES = {
     "bds_manager_config.json",
     "bds_version_cache.json",
     "build_release.py",
+    "publish.py",
 }
 EXCLUDE_DIRS = {"logs", "backups", "Server", "Earlier version", "release", ".git", "__pycache__", "web_ui",
                 ".workbuddy"}
