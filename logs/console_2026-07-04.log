@@ -1,0 +1,471 @@
+
+--- 会话开始: 2026-07-04 16:31:44 ---
+[2026-07-04 16:32:10] >>> 服务器启动中... <<<
+[2026-07-04 16:32:11] NO LOG FILE! - setting up server logging...
+[2026-07-04 16:32:11] [2026-07-04 16:32:11:067 INFO] Starting Server
+[2026-07-04 16:32:11] [2026-07-04 16:32:11:067 INFO] Version: 1.26.32.2
+[2026-07-04 16:32:11] [2026-07-04 16:32:11:067 INFO] Session ID: 5a1386ac-5c89-439f-a319-03875311d064
+[2026-07-04 16:32:11] [2026-07-04 16:32:11:067 INFO] Build ID: 46948664
+[2026-07-04 16:32:11] [2026-07-04 16:32:11:067 INFO] Branch: r/26_u3
+[2026-07-04 16:32:11] [2026-07-04 16:32:11:067 INFO] Commit ID: 8dfd7355e9ce6a57bcb09bd2cea696b7b76b6cff
+[2026-07-04 16:32:11] [2026-07-04 16:32:11:067 INFO] Configuration: Publish
+[2026-07-04 16:32:11] [2026-07-04 16:32:11:068 INFO] Level Name: onelife
+[2026-07-04 16:32:11] [2026-07-04 16:32:11:070 INFO] No CDN config file found at: cdn_config.json for dedicated server
+[2026-07-04 16:32:11] [2026-07-04 16:32:11:070 INFO] Game mode: 0 Survival
+[2026-07-04 16:32:11] [2026-07-04 16:32:11:070 INFO] Difficulty: 3 HARD
+[2026-07-04 16:32:11] [2026-07-04 16:32:11:070 WARN] Content logging to console is disabled.  Enable it with content-log-console-output-enabled=true in server.properties
+[2026-07-04 16:32:11] [2026-07-04 16:32:11:072 INFO]
+[2026-07-04 16:32:11] 
+[2026-07-04 16:32:11] #####################################################
+[2026-07-04 16:32:11] #                                                   #
+[2026-07-04 16:32:11] #               LOADING VANILLA WORLD               #
+[2026-07-04 16:32:11] #                                                   #
+[2026-07-04 16:32:11] #####################################################
+[2026-07-04 16:32:11] [2026-07-04 16:32:11:678 INFO] Content logging to disk is enabled. Writing log to: ContentLog2026-07-04_16-32-11
+[2026-07-04 16:32:11] [2026-07-04 16:32:11:680 INFO] Opening level 'worlds/onelife/db'
+[2026-07-04 16:32:12] [2026-07-04 16:32:12:121 INFO] Pack Stack - None
+[2026-07-04 16:32:13] [2026-07-04 16:32:13:386 INFO] IPv4 supported, port: 19132: Used for gameplay and LAN discovery
+[2026-07-04 16:32:13] [2026-07-04 16:32:13:386 INFO] IPv6 supported, port: 19133: Used for gameplay
+[2026-07-04 16:32:13] [2026-07-04 16:32:13:474 INFO] Waiting for Minecraft services...
+[2026-07-04 16:32:13] [2026-07-04 16:32:13:988 INFO] Server started.
+[2026-07-04 16:32:13] [2026-07-04 16:32:13:988 INFO] ================ TELEMETRY MESSAGE ===================
+[2026-07-04 16:32:13] [2026-07-04 16:32:13:988 INFO] Server Telemetry is currently not enabled.
+[2026-07-04 16:32:13] [2026-07-04 16:32:13:988 INFO] Enabling this telemetry helps us improve the game.
+[2026-07-04 16:32:13] [2026-07-04 16:32:13:988 INFO]
+[2026-07-04 16:32:13] [2026-07-04 16:32:13:988 INFO] To enable this feature, add the line 'emit-server-telemetry=true'
+[2026-07-04 16:32:13] [2026-07-04 16:32:13:988 INFO] to the server.properties file in the handheld/src-server directory
+[2026-07-04 16:32:13] [2026-07-04 16:32:13:988 INFO] ======================================================
+[2026-07-04 16:32:18] >>> 正在停止服务器... <<<
+[2026-07-04 16:32:19] >>> 服务器已停止 <<<
+
+--- 会话开始: 2026-07-04 17:57:26 ---
+[2026-07-04 17:57:30] >>> 服务器启动中... <<<
+[2026-07-04 17:57:30] NO LOG FILE! - setting up server logging...
+[2026-07-04 17:57:30] [2026-07-04 17:57:30:345 INFO] Starting Server
+[2026-07-04 17:57:30] [2026-07-04 17:57:30:345 INFO] Version: 1.26.32.2
+[2026-07-04 17:57:30] [2026-07-04 17:57:30:345 INFO] Session ID: e0afa487-3bbf-42b0-9ade-ed7a9a3deef8
+[2026-07-04 17:57:30] [2026-07-04 17:57:30:345 INFO] Build ID: 46948664
+[2026-07-04 17:57:30] [2026-07-04 17:57:30:345 INFO] Branch: r/26_u3
+[2026-07-04 17:57:30] [2026-07-04 17:57:30:345 INFO] Commit ID: 8dfd7355e9ce6a57bcb09bd2cea696b7b76b6cff
+[2026-07-04 17:57:30] [2026-07-04 17:57:30:345 INFO] Configuration: Publish
+[2026-07-04 17:57:30] [2026-07-04 17:57:30:345 INFO] Level Name: onelife
+[2026-07-04 17:57:30] [2026-07-04 17:57:30:347 INFO] No CDN config file found at: cdn_config.json for dedicated server
+[2026-07-04 17:57:30] [2026-07-04 17:57:30:347 INFO] Game mode: 0 Survival
+[2026-07-04 17:57:30] [2026-07-04 17:57:30:347 INFO] Difficulty: 3 HARD
+[2026-07-04 17:57:30] [2026-07-04 17:57:30:348 WARN] Content logging to console is disabled.  Enable it with content-log-console-output-enabled=true in server.properties
+[2026-07-04 17:57:30] [2026-07-04 17:57:30:350 INFO]
+[2026-07-04 17:57:30] 
+[2026-07-04 17:57:30] #####################################################
+[2026-07-04 17:57:30] #                                                   #
+[2026-07-04 17:57:30] #               LOADING VANILLA WORLD               #
+[2026-07-04 17:57:30] #                                                   #
+[2026-07-04 17:57:30] #####################################################
+[2026-07-04 17:57:30] [2026-07-04 17:57:30:938 INFO] Content logging to disk is enabled. Writing log to: ContentLog2026-07-04_17-57-30
+[2026-07-04 17:57:30] [2026-07-04 17:57:30:939 INFO] Opening level 'worlds/onelife/db'
+[2026-07-04 17:57:31] [2026-07-04 17:57:31:416 INFO] Pack Stack - None
+[2026-07-04 17:57:32] [2026-07-04 17:57:32:654 INFO] IPv4 supported, port: 19132: Used for gameplay and LAN discovery
+[2026-07-04 17:57:32] [2026-07-04 17:57:32:654 INFO] IPv6 supported, port: 19133: Used for gameplay
+[2026-07-04 17:57:32] [2026-07-04 17:57:32:748 INFO] Waiting for Minecraft services...
+[2026-07-04 17:57:32] [2026-07-04 17:57:32:935 INFO] Server started.
+[2026-07-04 17:57:32] [2026-07-04 17:57:32:936 INFO] ================ TELEMETRY MESSAGE ===================
+[2026-07-04 17:57:32] [2026-07-04 17:57:32:936 INFO] Server Telemetry is currently not enabled.
+[2026-07-04 17:57:32] [2026-07-04 17:57:32:936 INFO] Enabling this telemetry helps us improve the game.
+[2026-07-04 17:57:32] [2026-07-04 17:57:32:936 INFO]
+[2026-07-04 17:57:32] [2026-07-04 17:57:32:936 INFO] To enable this feature, add the line 'emit-server-telemetry=true'
+[2026-07-04 17:57:32] [2026-07-04 17:57:32:936 INFO] to the server.properties file in the handheld/src-server directory
+[2026-07-04 17:57:32] [2026-07-04 17:57:32:936 INFO] ======================================================
+[2026-07-04 17:57:50] >>> 正在停止服务器... <<<
+[2026-07-04 17:57:51] >>> 服务器已停止 <<<
+
+--- 会话开始: 2026-07-04 20:20:30 ---
+[2026-07-04 20:20:37] >>> 服务器启动中... <<<
+[2026-07-04 20:20:37] NO LOG FILE! - setting up server logging...
+[2026-07-04 20:20:37] [2026-07-04 20:20:37:539 INFO] Starting Server
+[2026-07-04 20:20:37] [2026-07-04 20:20:37:539 INFO] Version: 1.26.32.2
+[2026-07-04 20:20:37] [2026-07-04 20:20:37:539 INFO] Session ID: f5294603-96df-4ae3-bc72-043929840e20
+[2026-07-04 20:20:37] [2026-07-04 20:20:37:539 INFO] Build ID: 46948664
+[2026-07-04 20:20:37] [2026-07-04 20:20:37:539 INFO] Branch: r/26_u3
+[2026-07-04 20:20:37] [2026-07-04 20:20:37:539 INFO] Commit ID: 8dfd7355e9ce6a57bcb09bd2cea696b7b76b6cff
+[2026-07-04 20:20:37] [2026-07-04 20:20:37:539 INFO] Configuration: Publish
+[2026-07-04 20:20:37] [2026-07-04 20:20:37:540 INFO] Level Name: onelife
+[2026-07-04 20:20:37] [2026-07-04 20:20:37:542 INFO] No CDN config file found at: cdn_config.json for dedicated server
+[2026-07-04 20:20:37] [2026-07-04 20:20:37:542 INFO] Game mode: 0 Survival
+[2026-07-04 20:20:37] [2026-07-04 20:20:37:542 INFO] Difficulty: 3 HARD
+[2026-07-04 20:20:37] [2026-07-04 20:20:37:543 WARN] Content logging to console is disabled.  Enable it with content-log-console-output-enabled=true in server.properties
+[2026-07-04 20:20:37] [2026-07-04 20:20:37:544 INFO]
+[2026-07-04 20:20:37] 
+[2026-07-04 20:20:37] #####################################################
+[2026-07-04 20:20:37] #                                                   #
+[2026-07-04 20:20:37] #               LOADING VANILLA WORLD               #
+[2026-07-04 20:20:37] #                                                   #
+[2026-07-04 20:20:37] #####################################################
+[2026-07-04 20:20:38] [2026-07-04 20:20:38:127 INFO] Content logging to disk is enabled. Writing log to: ContentLog2026-07-04_20-20-38
+[2026-07-04 20:20:38] [2026-07-04 20:20:38:128 INFO] Opening level 'worlds/onelife/db'
+[2026-07-04 20:20:38] [2026-07-04 20:20:38:532 INFO] Pack Stack - None
+[2026-07-04 20:20:39] [2026-07-04 20:20:39:774 INFO] IPv4 supported, port: 19132: Used for gameplay and LAN discovery
+[2026-07-04 20:20:39] [2026-07-04 20:20:39:774 INFO] IPv6 supported, port: 19133: Used for gameplay
+[2026-07-04 20:20:39] [2026-07-04 20:20:39:862 INFO] Waiting for Minecraft services...
+[2026-07-04 20:20:40] [2026-07-04 20:20:40:418 INFO] Server started.
+[2026-07-04 20:20:40] [2026-07-04 20:20:40:418 INFO] ================ TELEMETRY MESSAGE ===================
+[2026-07-04 20:20:40] [2026-07-04 20:20:40:418 INFO] Server Telemetry is currently not enabled.
+[2026-07-04 20:20:40] [2026-07-04 20:20:40:418 INFO] Enabling this telemetry helps us improve the game.
+[2026-07-04 20:20:40] [2026-07-04 20:20:40:418 INFO]
+[2026-07-04 20:20:40] [2026-07-04 20:20:40:418 INFO] To enable this feature, add the line 'emit-server-telemetry=true'
+[2026-07-04 20:20:40] [2026-07-04 20:20:40:418 INFO] to the server.properties file in the handheld/src-server directory
+[2026-07-04 20:20:40] [2026-07-04 20:20:40:418 INFO] ======================================================
+[2026-07-04 20:21:00] >>> 正在停止服务器... <<<
+[2026-07-04 20:21:01] >>> 服务器已停止 <<<
+
+--- 会话开始: 2026-07-04 20:23:15 ---
+[2026-07-04 20:23:20] >>> 服务器启动中... <<<
+[2026-07-04 20:23:20] NO LOG FILE! - setting up server logging...
+[2026-07-04 20:23:20] [2026-07-04 20:23:20:559 INFO] Starting Server
+[2026-07-04 20:23:20] [2026-07-04 20:23:20:559 INFO] Version: 1.26.32.2
+[2026-07-04 20:23:20] [2026-07-04 20:23:20:559 INFO] Session ID: 852192cd-3c32-4a7a-9049-9f73de63f24a
+[2026-07-04 20:23:20] [2026-07-04 20:23:20:559 INFO] Build ID: 46948664
+[2026-07-04 20:23:20] [2026-07-04 20:23:20:559 INFO] Branch: r/26_u3
+[2026-07-04 20:23:20] [2026-07-04 20:23:20:559 INFO] Commit ID: 8dfd7355e9ce6a57bcb09bd2cea696b7b76b6cff
+[2026-07-04 20:23:20] [2026-07-04 20:23:20:559 INFO] Configuration: Publish
+[2026-07-04 20:23:20] [2026-07-04 20:23:20:560 INFO] Level Name: onelife
+[2026-07-04 20:23:20] [2026-07-04 20:23:20:562 INFO] No CDN config file found at: cdn_config.json for dedicated server
+[2026-07-04 20:23:20] [2026-07-04 20:23:20:562 INFO] Game mode: 0 Survival
+[2026-07-04 20:23:20] [2026-07-04 20:23:20:562 INFO] Difficulty: 3 HARD
+[2026-07-04 20:23:20] [2026-07-04 20:23:20:563 WARN] Content logging to console is disabled.  Enable it with content-log-console-output-enabled=true in server.properties
+[2026-07-04 20:23:20] [2026-07-04 20:23:20:564 INFO]
+[2026-07-04 20:23:20] 
+[2026-07-04 20:23:20] #####################################################
+[2026-07-04 20:23:20] #                                                   #
+[2026-07-04 20:23:20] #               LOADING VANILLA WORLD               #
+[2026-07-04 20:23:20] #                                                   #
+[2026-07-04 20:23:20] #####################################################
+[2026-07-04 20:23:21] [2026-07-04 20:23:21:136 INFO] Content logging to disk is enabled. Writing log to: ContentLog2026-07-04_20-23-21
+[2026-07-04 20:23:21] [2026-07-04 20:23:21:138 INFO] Opening level 'worlds/onelife/db'
+[2026-07-04 20:23:22] [2026-07-04 20:23:22:080 INFO] Pack Stack - None
+[2026-07-04 20:23:23] [2026-07-04 20:23:23:328 INFO] IPv4 supported, port: 19132: Used for gameplay and LAN discovery
+[2026-07-04 20:23:23] [2026-07-04 20:23:23:328 INFO] IPv6 supported, port: 19133: Used for gameplay
+[2026-07-04 20:23:23] [2026-07-04 20:23:23:419 INFO] Waiting for Minecraft services...
+[2026-07-04 20:23:23] [2026-07-04 20:23:23:837 INFO] Server started.
+[2026-07-04 20:23:23] [2026-07-04 20:23:23:837 INFO] ================ TELEMETRY MESSAGE ===================
+[2026-07-04 20:23:23] [2026-07-04 20:23:23:837 INFO] Server Telemetry is currently not enabled.
+[2026-07-04 20:23:23] [2026-07-04 20:23:23:837 INFO] Enabling this telemetry helps us improve the game.
+[2026-07-04 20:23:23] [2026-07-04 20:23:23:837 INFO]
+[2026-07-04 20:23:23] [2026-07-04 20:23:23:837 INFO] To enable this feature, add the line 'emit-server-telemetry=true'
+[2026-07-04 20:23:23] [2026-07-04 20:23:23:837 INFO] to the server.properties file in the handheld/src-server directory
+[2026-07-04 20:23:23] [2026-07-04 20:23:23:837 INFO] ======================================================
+[2026-07-04 20:23:33] >>> 正在停止服务器... <<<
+[2026-07-04 20:23:34] >>> 服务器已停止 <<<
+
+--- 会话开始: 2026-07-04 20:26:58 ---
+[2026-07-04 20:27:02] >>> 服务器启动中... <<<
+
+--- 会话开始: 2026-07-04 20:27:37 ---
+[2026-07-04 20:27:41] >>> 服务器启动中... <<<
+[2026-07-04 20:27:41] NO LOG FILE! - setting up server logging...
+[2026-07-04 20:27:41] [2026-07-04 20:27:41:913 INFO] Starting Server
+[2026-07-04 20:27:41] [2026-07-04 20:27:41:913 INFO] Version: 1.26.32.2
+[2026-07-04 20:27:41] [2026-07-04 20:27:41:913 INFO] Session ID: a962a38d-664a-4454-b3c3-33bd9ed8ac04
+[2026-07-04 20:27:41] [2026-07-04 20:27:41:913 INFO] Build ID: 46948664
+[2026-07-04 20:27:41] [2026-07-04 20:27:41:913 INFO] Branch: r/26_u3
+[2026-07-04 20:27:41] [2026-07-04 20:27:41:913 INFO] Commit ID: 8dfd7355e9ce6a57bcb09bd2cea696b7b76b6cff
+[2026-07-04 20:27:41] [2026-07-04 20:27:41:913 INFO] Configuration: Publish
+[2026-07-04 20:27:41] [2026-07-04 20:27:41:914 INFO] Level Name: onelife
+[2026-07-04 20:27:41] [2026-07-04 20:27:41:916 INFO] No CDN config file found at: cdn_config.json for dedicated server
+[2026-07-04 20:27:41] [2026-07-04 20:27:41:916 INFO] Game mode: 0 Survival
+[2026-07-04 20:27:41] [2026-07-04 20:27:41:916 INFO] Difficulty: 3 HARD
+[2026-07-04 20:27:41] [2026-07-04 20:27:41:916 WARN] Content logging to console is disabled.  Enable it with content-log-console-output-enabled=true in server.properties
+[2026-07-04 20:27:41] [2026-07-04 20:27:41:918 INFO]
+[2026-07-04 20:27:41] 
+[2026-07-04 20:27:41] #####################################################
+[2026-07-04 20:27:41] #                                                   #
+[2026-07-04 20:27:41] #               LOADING VANILLA WORLD               #
+[2026-07-04 20:27:41] #                                                   #
+[2026-07-04 20:27:41] #####################################################
+[2026-07-04 20:27:42] [2026-07-04 20:27:42:503 INFO] Content logging to disk is enabled. Writing log to: ContentLog2026-07-04_20-27-42
+[2026-07-04 20:27:42] [2026-07-04 20:27:42:505 INFO] Opening level 'worlds/onelife/db'
+[2026-07-04 20:27:44] [2026-07-04 20:27:44:153 INFO] Pack Stack - None
+[2026-07-04 20:27:45] [2026-07-04 20:27:45:411 INFO] IPv4 supported, port: 19132: Used for gameplay and LAN discovery
+[2026-07-04 20:27:45] [2026-07-04 20:27:45:411 INFO] IPv6 supported, port: 19133: Used for gameplay
+[2026-07-04 20:27:45] [2026-07-04 20:27:45:507 INFO] Waiting for Minecraft services...
+[2026-07-04 20:27:46] [2026-07-04 20:27:46:407 INFO] Server started.
+[2026-07-04 20:27:46] [2026-07-04 20:27:46:407 INFO] ================ TELEMETRY MESSAGE ===================
+[2026-07-04 20:27:46] [2026-07-04 20:27:46:407 INFO] Server Telemetry is currently not enabled.
+[2026-07-04 20:27:46] [2026-07-04 20:27:46:407 INFO] Enabling this telemetry helps us improve the game.
+[2026-07-04 20:27:46] [2026-07-04 20:27:46:407 INFO]
+[2026-07-04 20:27:46] [2026-07-04 20:27:46:407 INFO] To enable this feature, add the line 'emit-server-telemetry=true'
+[2026-07-04 20:27:46] [2026-07-04 20:27:46:407 INFO] to the server.properties file in the handheld/src-server directory
+[2026-07-04 20:27:46] [2026-07-04 20:27:46:407 INFO] ======================================================
+[2026-07-04 20:27:51] >>> 正在停止服务器... <<<
+[2026-07-04 20:27:53] >>> 服务器已停止 <<<
+
+--- 会话开始: 2026-07-04 20:33:44 ---
+[2026-07-04 20:33:51] >>> 服务器启动中... <<<
+[2026-07-04 20:33:51] NO LOG FILE! - setting up server logging...
+[2026-07-04 20:33:51] [2026-07-04 20:33:51:378 INFO] Starting Server
+[2026-07-04 20:33:51] [2026-07-04 20:33:51:378 INFO] Version: 1.26.32.2
+[2026-07-04 20:33:51] [2026-07-04 20:33:51:378 INFO] Session ID: cc7663e1-2c44-47ca-aa4f-42e464abd951
+[2026-07-04 20:33:51] [2026-07-04 20:33:51:378 INFO] Build ID: 46948664
+[2026-07-04 20:33:51] [2026-07-04 20:33:51:378 INFO] Branch: r/26_u3
+[2026-07-04 20:33:51] [2026-07-04 20:33:51:378 INFO] Commit ID: 8dfd7355e9ce6a57bcb09bd2cea696b7b76b6cff
+[2026-07-04 20:33:51] [2026-07-04 20:33:51:378 INFO] Configuration: Publish
+[2026-07-04 20:33:51] [2026-07-04 20:33:51:379 INFO] Level Name: onelife
+[2026-07-04 20:33:51] [2026-07-04 20:33:51:381 INFO] No CDN config file found at: cdn_config.json for dedicated server
+[2026-07-04 20:33:51] [2026-07-04 20:33:51:381 INFO] Game mode: 0 Survival
+[2026-07-04 20:33:51] [2026-07-04 20:33:51:381 INFO] Difficulty: 3 HARD
+[2026-07-04 20:33:51] [2026-07-04 20:33:51:381 WARN] Content logging to console is disabled.  Enable it with content-log-console-output-enabled=true in server.properties
+[2026-07-04 20:33:51] [2026-07-04 20:33:51:383 INFO]
+[2026-07-04 20:33:51] 
+[2026-07-04 20:33:51] #####################################################
+[2026-07-04 20:33:51] #                                                   #
+[2026-07-04 20:33:51] #               LOADING VANILLA WORLD               #
+[2026-07-04 20:33:51] #                                                   #
+[2026-07-04 20:33:51] #####################################################
+[2026-07-04 20:33:51] [2026-07-04 20:33:51:974 INFO] Content logging to disk is enabled. Writing log to: ContentLog2026-07-04_20-33-51
+[2026-07-04 20:33:51] [2026-07-04 20:33:51:975 INFO] Opening level 'worlds/onelife/db'
+[2026-07-04 20:33:52] [2026-07-04 20:33:52:403 INFO] Pack Stack - None
+[2026-07-04 20:33:53] [2026-07-04 20:33:53:637 INFO] IPv4 supported, port: 19132: Used for gameplay and LAN discovery
+[2026-07-04 20:33:53] [2026-07-04 20:33:53:637 INFO] IPv6 supported, port: 19133: Used for gameplay
+[2026-07-04 20:33:53] [2026-07-04 20:33:53:726 INFO] Waiting for Minecraft services...
+[2026-07-04 20:33:54] [2026-07-04 20:33:54:107 INFO] Server started.
+[2026-07-04 20:33:54] [2026-07-04 20:33:54:107 INFO] ================ TELEMETRY MESSAGE ===================
+[2026-07-04 20:33:54] [2026-07-04 20:33:54:107 INFO] Server Telemetry is currently not enabled.
+[2026-07-04 20:33:54] [2026-07-04 20:33:54:107 INFO] Enabling this telemetry helps us improve the game.
+[2026-07-04 20:33:54] [2026-07-04 20:33:54:107 INFO]
+[2026-07-04 20:33:54] [2026-07-04 20:33:54:107 INFO] To enable this feature, add the line 'emit-server-telemetry=true'
+[2026-07-04 20:33:54] [2026-07-04 20:33:54:107 INFO] to the server.properties file in the handheld/src-server directory
+[2026-07-04 20:33:54] [2026-07-04 20:33:54:107 INFO] ======================================================
+[2026-07-04 20:34:02] >>> 正在停止服务器... <<<
+[2026-07-04 20:34:03] >>> 服务器已停止 <<<
+
+--- 会话开始: 2026-07-04 20:45:44 ---
+[2026-07-04 20:46:19] >>> 服务器启动中... <<<
+[2026-07-04 20:46:20] NO LOG FILE! - setting up server logging...
+[2026-07-04 20:46:20] [2026-07-04 20:46:20:038 INFO] Starting Server
+[2026-07-04 20:46:20] [2026-07-04 20:46:20:038 INFO] Version: 1.26.32.2
+[2026-07-04 20:46:20] [2026-07-04 20:46:20:038 INFO] Session ID: 3d9212b3-d087-4977-ab6f-4b61e25133ca
+[2026-07-04 20:46:20] [2026-07-04 20:46:20:038 INFO] Build ID: 46948664
+[2026-07-04 20:46:20] [2026-07-04 20:46:20:038 INFO] Branch: r/26_u3
+[2026-07-04 20:46:20] [2026-07-04 20:46:20:038 INFO] Commit ID: 8dfd7355e9ce6a57bcb09bd2cea696b7b76b6cff
+[2026-07-04 20:46:20] [2026-07-04 20:46:20:038 INFO] Configuration: Publish
+[2026-07-04 20:46:20] [2026-07-04 20:46:20:039 INFO] Level Name: onelife
+[2026-07-04 20:46:20] [2026-07-04 20:46:20:041 INFO] No CDN config file found at: cdn_config.json for dedicated server
+[2026-07-04 20:46:20] [2026-07-04 20:46:20:041 INFO] Game mode: 0 Survival
+[2026-07-04 20:46:20] [2026-07-04 20:46:20:041 INFO] Difficulty: 3 HARD
+[2026-07-04 20:46:20] [2026-07-04 20:46:20:041 WARN] Content logging to console is disabled.  Enable it with content-log-console-output-enabled=true in server.properties
+[2026-07-04 20:46:20] [2026-07-04 20:46:20:043 INFO]
+[2026-07-04 20:46:20] 
+[2026-07-04 20:46:20] #####################################################
+[2026-07-04 20:46:20] #                                                   #
+[2026-07-04 20:46:20] #               LOADING VANILLA WORLD               #
+[2026-07-04 20:46:20] #                                                   #
+[2026-07-04 20:46:20] #####################################################
+[2026-07-04 20:46:20] [2026-07-04 20:46:20:650 INFO] Content logging to disk is enabled. Writing log to: ContentLog2026-07-04_20-46-20
+[2026-07-04 20:46:20] [2026-07-04 20:46:20:652 INFO] Opening level 'worlds/onelife/db'
+[2026-07-04 20:46:21] [2026-07-04 20:46:21:083 INFO] Pack Stack - None
+[2026-07-04 20:46:22] [2026-07-04 20:46:22:309 INFO] IPv4 supported, port: 19132: Used for gameplay and LAN discovery
+[2026-07-04 20:46:22] [2026-07-04 20:46:22:309 INFO] IPv6 supported, port: 19133: Used for gameplay
+[2026-07-04 20:46:22] [2026-07-04 20:46:22:397 INFO] Waiting for Minecraft services...
+[2026-07-04 20:46:23] [2026-07-04 20:46:23:528 INFO] Server started.
+[2026-07-04 20:46:23] [2026-07-04 20:46:23:529 INFO] ================ TELEMETRY MESSAGE ===================
+[2026-07-04 20:46:23] [2026-07-04 20:46:23:529 INFO] Server Telemetry is currently not enabled.
+[2026-07-04 20:46:23] [2026-07-04 20:46:23:529 INFO] Enabling this telemetry helps us improve the game.
+[2026-07-04 20:46:23] [2026-07-04 20:46:23:529 INFO]
+[2026-07-04 20:46:23] [2026-07-04 20:46:23:529 INFO] To enable this feature, add the line 'emit-server-telemetry=true'
+[2026-07-04 20:46:23] [2026-07-04 20:46:23:529 INFO] to the server.properties file in the handheld/src-server directory
+[2026-07-04 20:46:23] [2026-07-04 20:46:23:529 INFO] ======================================================
+[2026-07-04 20:46:26] >>> 正在停止服务器... <<<
+[2026-07-04 20:46:27] >>> 服务器已停止 <<<
+
+--- 会话开始: 2026-07-04 21:09:06 ---
+[2026-07-04 21:09:17] >>> 服务器启动中... <<<
+[2026-07-04 21:09:17] NO LOG FILE! - setting up server logging...
+[2026-07-04 21:09:17] [2026-07-04 21:09:17:988 INFO] Starting Server
+[2026-07-04 21:09:17] [2026-07-04 21:09:17:988 INFO] Version: 1.26.32.2
+[2026-07-04 21:09:17] [2026-07-04 21:09:17:988 INFO] Session ID: 9d8b0f9a-7704-4099-9ea2-6bafb955803e
+[2026-07-04 21:09:17] [2026-07-04 21:09:17:988 INFO] Build ID: 46948664
+[2026-07-04 21:09:17] [2026-07-04 21:09:17:988 INFO] Branch: r/26_u3
+[2026-07-04 21:09:17] [2026-07-04 21:09:17:988 INFO] Commit ID: 8dfd7355e9ce6a57bcb09bd2cea696b7b76b6cff
+[2026-07-04 21:09:17] [2026-07-04 21:09:17:988 INFO] Configuration: Publish
+[2026-07-04 21:09:17] [2026-07-04 21:09:17:989 INFO] Level Name: onelife
+[2026-07-04 21:09:18] [2026-07-04 21:09:17:991 INFO] No CDN config file found at: cdn_config.json for dedicated server
+[2026-07-04 21:09:18] [2026-07-04 21:09:17:991 INFO] Game mode: 0 Survival
+[2026-07-04 21:09:18] [2026-07-04 21:09:17:991 INFO] Difficulty: 3 HARD
+[2026-07-04 21:09:18] [2026-07-04 21:09:17:992 WARN] Content logging to console is disabled.  Enable it with content-log-console-output-enabled=true in server.properties
+[2026-07-04 21:09:18] [2026-07-04 21:09:17:994 INFO]
+[2026-07-04 21:09:18] 
+[2026-07-04 21:09:18] #####################################################
+[2026-07-04 21:09:18] #                                                   #
+[2026-07-04 21:09:18] #               LOADING VANILLA WORLD               #
+[2026-07-04 21:09:18] #                                                   #
+[2026-07-04 21:09:18] #####################################################
+[2026-07-04 21:09:18] [2026-07-04 21:09:18:580 INFO] Content logging to disk is enabled. Writing log to: ContentLog2026-07-04_21-09-18
+[2026-07-04 21:09:18] [2026-07-04 21:09:18:581 INFO] Opening level 'worlds/onelife/db'
+[2026-07-04 21:09:18] [2026-07-04 21:09:18:989 INFO] Pack Stack - None
+[2026-07-04 21:09:20] [2026-07-04 21:09:20:281 INFO] IPv4 supported, port: 19132: Used for gameplay and LAN discovery
+[2026-07-04 21:09:20] [2026-07-04 21:09:20:281 INFO] IPv6 supported, port: 19133: Used for gameplay
+[2026-07-04 21:09:20] [2026-07-04 21:09:20:369 INFO] Waiting for Minecraft services...
+[2026-07-04 21:09:20] [2026-07-04 21:09:20:498 INFO] Server started.
+[2026-07-04 21:09:20] [2026-07-04 21:09:20:498 INFO] ================ TELEMETRY MESSAGE ===================
+[2026-07-04 21:09:20] [2026-07-04 21:09:20:498 INFO] Server Telemetry is currently not enabled.
+[2026-07-04 21:09:20] [2026-07-04 21:09:20:498 INFO] Enabling this telemetry helps us improve the game.
+[2026-07-04 21:09:20] [2026-07-04 21:09:20:498 INFO]
+[2026-07-04 21:09:20] [2026-07-04 21:09:20:498 INFO] To enable this feature, add the line 'emit-server-telemetry=true'
+[2026-07-04 21:09:20] [2026-07-04 21:09:20:498 INFO] to the server.properties file in the handheld/src-server directory
+[2026-07-04 21:09:20] [2026-07-04 21:09:20:498 INFO] ======================================================
+[2026-07-04 21:09:30] >>> 正在停止服务器... <<<
+[2026-07-04 21:09:31] >>> 服务器已停止 <<<
+
+--- 会话开始: 2026-07-04 21:23:32 ---
+[2026-07-04 21:23:40] >>> 服务器启动中... <<<
+[2026-07-04 21:23:40] NO LOG FILE! - setting up server logging...
+[2026-07-04 21:23:40] [2026-07-04 21:23:40:880 INFO] Starting Server
+[2026-07-04 21:23:40] [2026-07-04 21:23:40:880 INFO] Version: 1.26.32.2
+[2026-07-04 21:23:40] [2026-07-04 21:23:40:880 INFO] Session ID: d7f8271d-860c-406a-a6f9-dad1af23e7fc
+[2026-07-04 21:23:40] [2026-07-04 21:23:40:880 INFO] Build ID: 46948664
+[2026-07-04 21:23:40] [2026-07-04 21:23:40:880 INFO] Branch: r/26_u3
+[2026-07-04 21:23:40] [2026-07-04 21:23:40:880 INFO] Commit ID: 8dfd7355e9ce6a57bcb09bd2cea696b7b76b6cff
+[2026-07-04 21:23:40] [2026-07-04 21:23:40:880 INFO] Configuration: Publish
+[2026-07-04 21:23:40] [2026-07-04 21:23:40:880 INFO] Level Name: onelife
+[2026-07-04 21:23:40] [2026-07-04 21:23:40:883 INFO] No CDN config file found at: cdn_config.json for dedicated server
+[2026-07-04 21:23:40] [2026-07-04 21:23:40:883 INFO] Game mode: 0 Survival
+[2026-07-04 21:23:40] [2026-07-04 21:23:40:883 INFO] Difficulty: 3 HARD
+[2026-07-04 21:23:40] [2026-07-04 21:23:40:883 WARN] Content logging to console is disabled.  Enable it with content-log-console-output-enabled=true in server.properties
+[2026-07-04 21:23:40] [2026-07-04 21:23:40:885 INFO]
+[2026-07-04 21:23:40] 
+[2026-07-04 21:23:40] #####################################################
+[2026-07-04 21:23:40] #                                                   #
+[2026-07-04 21:23:40] #               LOADING VANILLA WORLD               #
+[2026-07-04 21:23:40] #                                                   #
+[2026-07-04 21:23:40] #####################################################
+[2026-07-04 21:23:41] [2026-07-04 21:23:41:472 INFO] Content logging to disk is enabled. Writing log to: ContentLog2026-07-04_21-23-41
+[2026-07-04 21:23:41] [2026-07-04 21:23:41:474 INFO] Opening level 'worlds/onelife/db'
+[2026-07-04 21:23:41] [2026-07-04 21:23:41:883 INFO] Pack Stack - None
+[2026-07-04 21:23:43] [2026-07-04 21:23:43:149 INFO] IPv4 supported, port: 19132: Used for gameplay and LAN discovery
+[2026-07-04 21:23:43] [2026-07-04 21:23:43:149 INFO] IPv6 supported, port: 19133: Used for gameplay
+[2026-07-04 21:23:43] [2026-07-04 21:23:43:253 INFO] Waiting for Minecraft services...
+[2026-07-04 21:23:43] [2026-07-04 21:23:43:403 INFO] Server started.
+[2026-07-04 21:23:43] [2026-07-04 21:23:43:403 INFO] ================ TELEMETRY MESSAGE ===================
+[2026-07-04 21:23:43] [2026-07-04 21:23:43:403 INFO] Server Telemetry is currently not enabled.
+[2026-07-04 21:23:43] [2026-07-04 21:23:43:403 INFO] Enabling this telemetry helps us improve the game.
+[2026-07-04 21:23:43] [2026-07-04 21:23:43:403 INFO]
+[2026-07-04 21:23:43] [2026-07-04 21:23:43:403 INFO] To enable this feature, add the line 'emit-server-telemetry=true'
+[2026-07-04 21:23:43] [2026-07-04 21:23:43:403 INFO] to the server.properties file in the handheld/src-server directory
+[2026-07-04 21:23:43] [2026-07-04 21:23:43:403 INFO] ======================================================
+[2026-07-04 21:23:46] >>> 正在停止服务器... <<<
+[2026-07-04 21:23:47] >>> 服务器已停止 <<<
+
+--- 会话开始: 2026-07-04 21:34:38 ---
+[2026-07-04 21:35:06] >>> 服务器启动中... <<<
+[2026-07-04 21:35:06] NO LOG FILE! - setting up server logging...
+[2026-07-04 21:35:06] [2026-07-04 21:35:06:342 INFO] Starting Server
+[2026-07-04 21:35:06] [2026-07-04 21:35:06:342 INFO] Version: 1.26.32.2
+[2026-07-04 21:35:06] [2026-07-04 21:35:06:342 INFO] Session ID: 8694c3bc-0322-4fe1-b8d4-67a7157e9750
+[2026-07-04 21:35:06] [2026-07-04 21:35:06:342 INFO] Build ID: 46948664
+[2026-07-04 21:35:06] [2026-07-04 21:35:06:342 INFO] Branch: r/26_u3
+[2026-07-04 21:35:06] [2026-07-04 21:35:06:342 INFO] Commit ID: 8dfd7355e9ce6a57bcb09bd2cea696b7b76b6cff
+[2026-07-04 21:35:06] [2026-07-04 21:35:06:342 INFO] Configuration: Publish
+[2026-07-04 21:35:06] [2026-07-04 21:35:06:342 INFO] Level Name: onelife
+[2026-07-04 21:35:06] [2026-07-04 21:35:06:345 INFO] No CDN config file found at: cdn_config.json for dedicated server
+[2026-07-04 21:35:06] [2026-07-04 21:35:06:345 INFO] Game mode: 0 Survival
+[2026-07-04 21:35:06] [2026-07-04 21:35:06:345 INFO] Difficulty: 3 HARD
+[2026-07-04 21:35:06] [2026-07-04 21:35:06:345 WARN] Content logging to console is disabled.  Enable it with content-log-console-output-enabled=true in server.properties
+[2026-07-04 21:35:06] [2026-07-04 21:35:06:347 INFO]
+[2026-07-04 21:35:06] 
+[2026-07-04 21:35:06] #####################################################
+[2026-07-04 21:35:06] #                                                   #
+[2026-07-04 21:35:06] #               LOADING VANILLA WORLD               #
+[2026-07-04 21:35:06] #                                                   #
+[2026-07-04 21:35:06] #####################################################
+[2026-07-04 21:35:06] [2026-07-04 21:35:06:931 INFO] Content logging to disk is enabled. Writing log to: ContentLog2026-07-04_21-35-06
+[2026-07-04 21:35:06] [2026-07-04 21:35:06:933 INFO] Opening level 'worlds/onelife/db'
+[2026-07-04 21:35:07] [2026-07-04 21:35:07:346 INFO] Pack Stack - None
+[2026-07-04 21:35:08] [2026-07-04 21:35:08:578 INFO] IPv4 supported, port: 19132: Used for gameplay and LAN discovery
+[2026-07-04 21:35:08] [2026-07-04 21:35:08:578 INFO] IPv6 supported, port: 19133: Used for gameplay
+[2026-07-04 21:35:08] [2026-07-04 21:35:08:672 INFO] Waiting for Minecraft services...
+[2026-07-04 21:35:09] [2026-07-04 21:35:09:764 INFO] Server started.
+[2026-07-04 21:35:09] [2026-07-04 21:35:09:764 INFO] ================ TELEMETRY MESSAGE ===================
+[2026-07-04 21:35:09] [2026-07-04 21:35:09:764 INFO] Server Telemetry is currently not enabled.
+[2026-07-04 21:35:09] [2026-07-04 21:35:09:764 INFO] Enabling this telemetry helps us improve the game.
+[2026-07-04 21:35:09] [2026-07-04 21:35:09:764 INFO]
+[2026-07-04 21:35:09] [2026-07-04 21:35:09:764 INFO] To enable this feature, add the line 'emit-server-telemetry=true'
+[2026-07-04 21:35:09] [2026-07-04 21:35:09:764 INFO] to the server.properties file in the handheld/src-server directory
+[2026-07-04 21:35:09] [2026-07-04 21:35:09:764 INFO] ======================================================
+[2026-07-04 21:35:14] >>> 正在停止服务器... <<<
+[2026-07-04 21:35:16] >>> 服务器已停止 <<<
+
+--- 会话开始: 2026-07-04 22:17:40 ---
+[2026-07-04 22:17:52] >>> 服务器启动中... <<<
+[2026-07-04 22:17:52] NO LOG FILE! - setting up server logging...
+[2026-07-04 22:17:52] [2026-07-04 22:17:52:307 INFO] Starting Server
+[2026-07-04 22:17:52] [2026-07-04 22:17:52:307 INFO] Version: 1.26.32.2
+[2026-07-04 22:17:52] [2026-07-04 22:17:52:307 INFO] Session ID: 9b73f961-cc38-46fc-8786-77c58c89c905
+[2026-07-04 22:17:52] [2026-07-04 22:17:52:307 INFO] Build ID: 46948664
+[2026-07-04 22:17:52] [2026-07-04 22:17:52:307 INFO] Branch: r/26_u3
+[2026-07-04 22:17:52] [2026-07-04 22:17:52:307 INFO] Commit ID: 8dfd7355e9ce6a57bcb09bd2cea696b7b76b6cff
+[2026-07-04 22:17:52] [2026-07-04 22:17:52:307 INFO] Configuration: Publish
+[2026-07-04 22:17:52] [2026-07-04 22:17:52:307 INFO] Level Name: onelife
+[2026-07-04 22:17:52] [2026-07-04 22:17:52:309 INFO] No CDN config file found at: cdn_config.json for dedicated server
+[2026-07-04 22:17:52] [2026-07-04 22:17:52:309 INFO] Game mode: 0 Survival
+[2026-07-04 22:17:52] [2026-07-04 22:17:52:309 INFO] Difficulty: 3 HARD
+[2026-07-04 22:17:52] [2026-07-04 22:17:52:309 WARN] Content logging to console is disabled.  Enable it with content-log-console-output-enabled=true in server.properties
+[2026-07-04 22:17:52] [2026-07-04 22:17:52:311 INFO]
+[2026-07-04 22:17:52] 
+[2026-07-04 22:17:52] #####################################################
+[2026-07-04 22:17:52] #                                                   #
+[2026-07-04 22:17:52] #               LOADING VANILLA WORLD               #
+[2026-07-04 22:17:52] #                                                   #
+[2026-07-04 22:17:52] #####################################################
+[2026-07-04 22:17:52] [2026-07-04 22:17:52:907 INFO] Content logging to disk is enabled. Writing log to: ContentLog2026-07-04_22-17-52
+[2026-07-04 22:17:52] [2026-07-04 22:17:52:908 INFO] Opening level 'worlds/onelife/db'
+[2026-07-04 22:17:53] [2026-07-04 22:17:53:318 INFO] Pack Stack - None
+[2026-07-04 22:17:54] [2026-07-04 22:17:54:561 INFO] IPv4 supported, port: 19132: Used for gameplay and LAN discovery
+[2026-07-04 22:17:54] [2026-07-04 22:17:54:561 INFO] IPv6 supported, port: 19133: Used for gameplay
+[2026-07-04 22:17:54] [2026-07-04 22:17:54:653 INFO] Waiting for Minecraft services...
+[2026-07-04 22:17:56] [2026-07-04 22:17:56:379 INFO] Server started.
+[2026-07-04 22:17:56] [2026-07-04 22:17:56:379 INFO] ================ TELEMETRY MESSAGE ===================
+[2026-07-04 22:17:56] [2026-07-04 22:17:56:379 INFO] Server Telemetry is currently not enabled.
+[2026-07-04 22:17:56] [2026-07-04 22:17:56:379 INFO] Enabling this telemetry helps us improve the game.
+[2026-07-04 22:17:56] [2026-07-04 22:17:56:379 INFO]
+[2026-07-04 22:17:56] [2026-07-04 22:17:56:379 INFO] To enable this feature, add the line 'emit-server-telemetry=true'
+[2026-07-04 22:17:56] [2026-07-04 22:17:56:379 INFO] to the server.properties file in the handheld/src-server directory
+[2026-07-04 22:17:56] [2026-07-04 22:17:56:379 INFO] ======================================================
+[2026-07-04 22:17:59] >>> 正在停止服务器... <<<
+[2026-07-04 22:18:00] >>> 服务器已停止 <<<
+
+--- 会话开始: 2026-07-04 22:21:10 ---
+[2026-07-04 22:23:25] >>> 服务器启动中... <<<
+[2026-07-04 22:23:25] NO LOG FILE! - setting up server logging...
+[2026-07-04 22:23:25] [2026-07-04 22:23:25:793 INFO] Starting Server
+[2026-07-04 22:23:25] [2026-07-04 22:23:25:793 INFO] Version: 1.26.32.2
+[2026-07-04 22:23:25] [2026-07-04 22:23:25:793 INFO] Session ID: bd9f8d2c-7a47-46fd-976d-34526263f5d4
+[2026-07-04 22:23:25] [2026-07-04 22:23:25:793 INFO] Build ID: 46948664
+[2026-07-04 22:23:25] [2026-07-04 22:23:25:793 INFO] Branch: r/26_u3
+[2026-07-04 22:23:25] [2026-07-04 22:23:25:793 INFO] Commit ID: 8dfd7355e9ce6a57bcb09bd2cea696b7b76b6cff
+[2026-07-04 22:23:25] [2026-07-04 22:23:25:793 INFO] Configuration: Publish
+[2026-07-04 22:23:25] [2026-07-04 22:23:25:793 INFO] Level Name: onelife
+[2026-07-04 22:23:25] [2026-07-04 22:23:25:796 INFO] No CDN config file found at: cdn_config.json for dedicated server
+[2026-07-04 22:23:25] [2026-07-04 22:23:25:796 INFO] Game mode: 0 Survival
+[2026-07-04 22:23:25] [2026-07-04 22:23:25:796 INFO] Difficulty: 3 HARD
+[2026-07-04 22:23:25] [2026-07-04 22:23:25:796 WARN] Content logging to console is disabled.  Enable it with content-log-console-output-enabled=true in server.properties
+[2026-07-04 22:23:25] [2026-07-04 22:23:25:798 INFO]
+[2026-07-04 22:23:25] 
+[2026-07-04 22:23:25] #####################################################
+[2026-07-04 22:23:25] #                                                   #
+[2026-07-04 22:23:25] #               LOADING VANILLA WORLD               #
+[2026-07-04 22:23:25] #                                                   #
+[2026-07-04 22:23:25] #####################################################
+[2026-07-04 22:23:26] [2026-07-04 22:23:26:379 INFO] Content logging to disk is enabled. Writing log to: ContentLog2026-07-04_22-23-26
+[2026-07-04 22:23:26] [2026-07-04 22:23:26:381 INFO] Opening level 'worlds/onelife/db'
+[2026-07-04 22:23:26] [2026-07-04 22:23:26:793 INFO] Pack Stack - None
+[2026-07-04 22:23:28] [2026-07-04 22:23:28:011 INFO] IPv4 supported, port: 19132: Used for gameplay and LAN discovery
+[2026-07-04 22:23:28] [2026-07-04 22:23:28:011 INFO] IPv6 supported, port: 19133: Used for gameplay
+[2026-07-04 22:23:28] [2026-07-04 22:23:28:098 INFO] Waiting for Minecraft services...
+[2026-07-04 22:23:29] [2026-07-04 22:23:29:568 INFO] Server started.
+[2026-07-04 22:23:29] [2026-07-04 22:23:29:568 INFO] ================ TELEMETRY MESSAGE ===================
+[2026-07-04 22:23:29] [2026-07-04 22:23:29:568 INFO] Server Telemetry is currently not enabled.
+[2026-07-04 22:23:29] [2026-07-04 22:23:29:568 INFO] Enabling this telemetry helps us improve the game.
+[2026-07-04 22:23:29] [2026-07-04 22:23:29:568 INFO]
+[2026-07-04 22:23:29] [2026-07-04 22:23:29:569 INFO] To enable this feature, add the line 'emit-server-telemetry=true'
+[2026-07-04 22:23:29] [2026-07-04 22:23:29:569 INFO] to the server.properties file in the handheld/src-server directory
+[2026-07-04 22:23:29] [2026-07-04 22:23:29:569 INFO] ======================================================
+[2026-07-04 22:23:34] >>> 正在停止服务器... <<<
+[2026-07-04 22:23:35] >>> 服务器已停止 <<<

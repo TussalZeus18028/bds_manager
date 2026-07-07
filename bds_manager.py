@@ -1886,6 +1886,7 @@ class RemovePackWorker(BaseWorker):
 
 # ---------- 服务器控制台标签页 ----------
 class ConsoleTab(QWidget):
+    _log_rules = None  # class-level regex cache
     def __init__(self, parent):
         super().__init__(parent)
         self.parent = parent
@@ -1995,7 +1996,7 @@ class ConsoleTab(QWidget):
 
         # 2. 依次匹配规则
         matched = False
-        for pattern, color, full_match in rules:
+        for pattern, color, full_match in ConsoleTab._log_rules:
             if full_match:
                 if pattern.search(text):
                     self.output_area.append(f'<span style="color:{color};">{text}</span>')
@@ -3273,8 +3274,6 @@ class TunnelTab(QWidget):
             log_warning(f"[隧道] {text}")
         else:
             log_info(f"[隧道] {text}")
-
-    _log_rules = None  # class-level regex cache
 
     def append_output(self, text, is_error=False):
         timestamp = datetime.now().strftime("%H:%M:%S")
