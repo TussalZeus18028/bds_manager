@@ -1623,6 +1623,10 @@ class SettingsTab(QWidget):
         self.backup_interval.setToolTip("0 = 禁用自动备份")
         backup_layout.addWidget(QLabel("备份间隔:"))
         backup_layout.addWidget(self.backup_interval)
+        backup_layout.addSpacing(20)
+        self.force_backup_cb = QCheckBox("服务器运行时强制备份（先暂停→备份→恢复）")
+        self.force_backup_cb.setToolTip("开启后，即使服务器正在运行，自动备份也会先暂停服务器再执行")
+        backup_layout.addWidget(self.force_backup_cb)
         backup_layout.addStretch()
         backup_group.setLayout(backup_layout)
         layout.addWidget(backup_group)
@@ -1769,6 +1773,7 @@ class SettingsTab(QWidget):
         self.server_dir_edit.setText(self.parent.config.get("server_dir", "Server"))
         self.server_exe_edit.setText(self.parent.config.get("server_exe", "bedrock_server.exe"))
         self.backup_interval.setValue(self.parent.config.get("backup_interval", 60))
+        self.force_backup_cb.setChecked(self.parent.config.get("force_backup", False))
         self.monitor_interval.setValue(self.parent.config.get("monitor_interval", 2000))
         self.mem_warn.setValue(self.parent.config.get("mem_warn_threshold", 80))
         self.hidpi_cb.setChecked(self.parent.config.get("hidpi_enabled", True))
@@ -1813,6 +1818,7 @@ class SettingsTab(QWidget):
         self.parent.config["server_dir"] = new_dir
         self.parent.config["server_exe"] = new_exe
         self.parent.config["backup_interval"] = self.backup_interval.value()
+        self.parent.config["force_backup"] = self.force_backup_cb.isChecked()
         self.parent.config["monitor_interval"] = self.monitor_interval.value()
         self.parent.config["mem_warn_threshold"] = self.mem_warn.value()
         self.parent.config["hidpi_enabled"] = self.hidpi_cb.isChecked()
@@ -3606,16 +3612,38 @@ class _BrowseWorker(QThread):
         total = len(stable_urls) + len(preview_urls)
         checked = 0
 
+        import random
+        _UA_POOL_BROWSE = [
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_5) AppleWebKit/605.1.15",
+            "Mozilla/5.0 (X11; Linux x86_64; rv:126.0) Gecko/20100101 Firefox/126.0",
+        ]
+
         def check_url(item):
             ver, url, branch = item
-            try:
-                req = urllib.request.Request(url, method="HEAD",
-                    headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"})
-                resp = urllib.request.urlopen(req, timeout=6)
-                if resp.getcode() == 200:
-                    return (True, ver, branch, url)
-            except Exception:
-                pass
+            # 3 次重试 + 指数退避 + UA 轮换
+            for attempt in range(3):
+                try:
+                    ua = random.choice(_UA_POOL_BROWSE)
+                    req = urllib.request.Request(url, method="HEAD",
+                        headers={"User-Agent": ua})
+                    resp = urllib.request.urlopen(req, timeout=6)
+                    if resp.getcode() == 200:
+                        return (True, ver, branch, url)
+                    break  # 非 200 不重试
+                except urllib.error.HTTPError as e:
+                    if e.code == 429:
+                        time.sleep(min(2 ** attempt, 8))  # 1s, 2s, 4s
+                    else:
+                        break
+                except (urllib.error.URLError, socket.timeout):
+                    if attempt < 2:
+                        time.sleep(0.5 * (attempt + 1))
+                    else:
+                        break
+                except Exception:
+                    break
             return (False, ver, branch, url)
 
         all_urls = stable_urls + preview_urls
@@ -4884,6 +4912,8 @@ class UpgradeTab(QWidget):
                     self.result_signal.emit(False, "", "", f"网络错误: {e.reason}")
                 except json.JSONDecodeError as e:
                     self.result_signal.emit(False, "", "", f"JSON 解析失败: {e}")
+                except (urllib.error.URLError, urllib.error.HTTPError, socket.timeout) as e:
+                    self.result_signal.emit(False, "", "", f"网络错误: {e}")
                 except Exception as e:
                     self.result_signal.emit(False, "", "", f"未知错误: {e}")
 
@@ -5395,6 +5425,7 @@ class BDSManager(QMainWindow):
             "server_dir": "Server",
             "server_exe": "bedrock_server.exe",
             "backup_interval": 60,
+            "force_backup": False,
             "monitor_interval": 2000,
             "custom_colors": {},
             "frpc_path": "",
@@ -5422,7 +5453,7 @@ class BDSManager(QMainWindow):
                     if k not in loaded:
                         loaded[k] = v
                 config = loaded
-            except Exception as e:
+            except (json.JSONDecodeError, FileNotFoundError, UnicodeDecodeError) as e:
                 log_error(f"加载配置文件失败: {e}")
                 config = default
         else:
@@ -5444,6 +5475,7 @@ class BDSManager(QMainWindow):
             "server_dir": self.config.get("server_dir", "Server"),
             "server_exe": self.config.get("server_exe", "bedrock_server.exe"),
             "backup_interval": self.config.get("backup_interval", 60),
+            "force_backup": self.config.get("force_backup", False),
             "monitor_interval": self.config.get("monitor_interval", 2000),
             "custom_colors": self.custom_colors,
             "frpc_path": self.config.get("frpc_path", ""),
@@ -5468,7 +5500,7 @@ class BDSManager(QMainWindow):
             with open(CONFIG_FILE, "w", encoding="utf-8") as f:
                 json.dump(config, f, indent=4, ensure_ascii=False, sort_keys=True)
             log_info(f"配置已保存: {os.path.basename(CONFIG_FILE)}")
-        except Exception as e:
+        except (PermissionError, OSError) as e:
             log_error(f"保存配置文件失败: {e}")
         # 版本数据单独存
         self._save_version_cache()
@@ -5526,26 +5558,47 @@ class BDSManager(QMainWindow):
     def auto_backup(self):
         level_name = self.get_level_name()
         world_path = get_world_path(level_name)
-        if os.path.exists(world_path) and not self.is_server_running():
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            backup_name = f"auto_{level_name}_{timestamp}.zip"
-            backup_path = os.path.join(BACKUP_DIR, backup_name)
-            try:
-                with zipfile.ZipFile(backup_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
-                    for root, dirs, files in os.walk(world_path):
-                        for file in files:
-                            file_path = os.path.join(root, file)
-                            arcname = os.path.relpath(file_path, os.path.dirname(world_path))
-                            zipf.write(file_path, arcname)
-                log_success(f"自动备份完成: {backup_name}")
-                toast_success("自动备份完成", backup_name)
-                # 清理旧备份：保留最近 20 个，删除多余的
-                self._cleanup_old_backups(keep=20)
-            except Exception as e:
-                log_error(f"自动备份失败: {e}")
-                toast_error("备份失败", str(e))
-        else:
-            log_debug("自动备份跳过：世界不存在或服务器正在运行")
+        if not os.path.exists(world_path):
+            log_debug("自动备份跳过：世界不存在")
+            return
+
+        server_was_running = self.is_server_running()
+        if server_was_running and not self.config.get("force_backup", False):
+            log_debug("自动备份跳过：服务器运行中（可开启强制备份）")
+            return
+
+        if server_was_running:
+            log_info("强制备份：暂停服务器...")
+            self.console_tab.stop_server()
+            # 等待服务器完全退出（最多 5 秒）
+            for _ in range(50):
+                if not self.is_server_running():
+                    break
+                time.sleep(0.1)
+            if self.is_server_running():
+                log_error("强制备份失败：服务器未能停止")
+                return
+
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        backup_name = f"auto_{level_name}_{timestamp}.zip"
+        backup_path = os.path.join(BACKUP_DIR, backup_name)
+        try:
+            with zipfile.ZipFile(backup_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+                for root, dirs, files in os.walk(world_path):
+                    for file in files:
+                        file_path = os.path.join(root, file)
+                        arcname = os.path.relpath(file_path, os.path.dirname(world_path))
+                        zipf.write(file_path, arcname)
+            log_success(f"自动备份完成: {backup_name}")
+            toast_success("自动备份完成", backup_name)
+            self._cleanup_old_backups(keep=20)
+        except Exception as e:
+            log_error(f"自动备份失败: {e}")
+            toast_error("备份失败", str(e))
+        finally:
+            if server_was_running:
+                log_info("强制备份：恢复服务器...")
+                self.console_tab.start_server()
 
     def _cleanup_old_backups(self, keep=20):
         """清理旧备份文件，仅保留最近 keep 个"""
