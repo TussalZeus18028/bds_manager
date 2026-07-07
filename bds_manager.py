@@ -55,6 +55,32 @@ def _parse_json(text):
         except Exception as e:
             log_debug(f"JSON/JSON5 解析失败，回退 json.loads: {e}")
     return json.loads(text), False
+
+def safe_read_json(path, default=None):
+    """安全读取 JSON 文件，失败返回默认值"""
+    if default is None:
+        default = {}
+    try:
+        with open(path, "r", encoding="utf-8-sig") as f:
+            return json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError, UnicodeDecodeError) as e:
+        log_debug(f"safe_read_json({os.path.basename(path)}): {e}")
+        return default
+    except Exception as e:
+        log_error(f"safe_read_json({os.path.basename(path)}) 异常: {e}")
+        return default
+
+def safe_write_json(path, data, indent=4):
+    """安全写入 JSON 文件，失败返回 False"""
+    try:
+        os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=indent, ensure_ascii=False)
+        return True
+    except Exception as e:
+        log_error(f"safe_write_json({os.path.basename(path)}): {e}")
+        return False
+
 import socket
 import psutil
 import ctypes
@@ -351,9 +377,50 @@ def get_server_dir():
     os.makedirs(default, exist_ok=True)
     return default
 
-SERVER_DIR = get_server_dir()
-log_info(f"服务器目录: {SERVER_DIR}")
+# ---------- 服务器上下文（集中管理路径，替代散落全局变量）----------
+class ServerContext:
+    """单例：集中管理所有服务器文件路径"""
+    def __init__(self, server_dir):
+        self.server_dir = server_dir
+        self.server_properties = os.path.join(server_dir, "server.properties")
+        self.allowlist_file = os.path.join(server_dir, "allowlist.json")
+        self.permissions_file = os.path.join(server_dir, "permissions.json")
+        self.packet_limit_file = os.path.join(server_dir, "packetlimitconfig.json")
+        self.worlds_dir = os.path.join(server_dir, "worlds")
+        self.resource_packs_dir = os.path.join(server_dir, "resource_packs")
+        self.behavior_packs_dir = os.path.join(server_dir, "behavior_packs")
+        self.backup_dir = os.path.join(server_dir, "backups")
 
+    def update(self, server_dir):
+        self.__init__(server_dir)
+        for d in [self.worlds_dir, self.resource_packs_dir, self.behavior_packs_dir, self.backup_dir]:
+            os.makedirs(d, exist_ok=True)
+
+    # 向后兼容：通过属性访问模拟旧全局变量
+    @property
+    def SERVER_DIR(self): return self.server_dir
+    @property
+    def SERVER_PROPERTIES(self): return self.server_properties
+    @property
+    def ALLOWLIST_FILE(self): return self.allowlist_file
+    @property
+    def PERMISSIONS_FILE(self): return self.permissions_file
+    @property
+    def PACKET_LIMIT_FILE(self): return self.packet_limit_file
+    @property
+    def WORLDS_DIR(self): return self.worlds_dir
+    @property
+    def RESOURCE_PACKS_DIR(self): return self.resource_packs_dir
+    @property
+    def BEHAVIOR_PACKS_DIR(self): return self.behavior_packs_dir
+    @property
+    def BACKUP_DIR(self): return self.backup_dir
+
+_ctx = ServerContext(get_server_dir())
+log_info(f"服务器目录: {_ctx.server_dir}")
+
+# 模块级全局别名（向后兼容），update_global_paths 会同步更新
+SERVER_DIR = get_server_dir()
 SERVER_PROPERTIES = os.path.join(SERVER_DIR, "server.properties")
 ALLOWLIST_FILE = os.path.join(SERVER_DIR, "allowlist.json")
 PERMISSIONS_FILE = os.path.join(SERVER_DIR, "permissions.json")
@@ -1982,39 +2049,29 @@ class ConsoleTab(QWidget):
                 return True
         return super().eventFilter(obj, event)
 
-    def append_output(self, text):
-        # 1. 定义颜色规则（按优先级从高到低匹配）
-        if ConsoleTab._log_rules is None:
-            ConsoleTab._log_rules = [
-            # 严重错误（最高优先级）
+    @staticmethod
+    def _get_highlight_rules():
+        """返回日志语法高亮规则列表 (pattern, color, full_match)"""
+        return [
             (re.compile(r'(?:ERROR|FATAL|Exception|Traceback|失败|崩溃|crash)', re.I), '#ff3333', True),
-            # 警告
             (re.compile(r'(?:WARN|WARNING|警告|deprecated)', re.I), '#ffaa33', True),
-            # 成功/启动/加载完成
             (re.compile(r'(?:Server started|Done|Started|Loaded|成功|完成|✅)', re.I), '#55ff55', True),
-            # 玩家连接/生成
             (re.compile(r'Player (?:connected|Spawned):', re.I), '#66ccff', True),
-            # 玩家断开
             (re.compile(r'Player disconnected:', re.I), '#ff66aa', True),
-            # OP/Deop/权限变更
             (re.compile(r'(?:Opped|De-opped|Permission)', re.I), '#ffdd44', True),
-            # 命令执行（行首 >）
             (re.compile(r'^>\s', re.M), '#ffaa00', False),
-            # 世界保存
             (re.compile(r'(?:Saving|Saved|save complete)', re.I), '#aaddff', True),
-            # 自动保存 / 备份
             (re.compile(r'(?:Autosave|backup|Backup)', re.I), '#88cc88', True),
-            # 服务器版本/核心信息
             (re.compile(r'(?:Version|v\d+\.\d+\.\d+|Bedrock)', re.I), '#88ddff', True),
-            # 玩家列表/数量
             (re.compile(r'(?:There are \d+ of|players online|\d+ players)', re.I), '#aaffaa', True),
-            # 网络/端口绑定
             (re.compile(r'(?:port|bind|listening|UDP|IPv[46])', re.I), '#dd88ff', True),
-            # 世界加载/区块
             (re.compile(r'(?:Loading|level|chunk|dimension|world)', re.I), '#ccddff', True),
-            # 遥测
             (re.compile(r'(?:TELEMETRY|telemetry)', re.I), '#888888', True),
         ]
+
+    def append_output(self, text):
+        if ConsoleTab._log_rules is None:
+            ConsoleTab._log_rules = ConsoleTab._get_highlight_rules()
 
         # 2. 依次匹配规则
         matched = False
@@ -4174,7 +4231,6 @@ class UpgradeTab(QWidget):
         self.log_output.append(f'<span style="color:gray">[{ts}]</span> '
                                f'<span style="color:{color}">[{level}]</span> {msg}')
 
-    # (removed old _on_branch_changed)
 
     def refresh_current_info(self):
         server_dir = self.parent.get_absolute_server_dir()
@@ -4437,7 +4493,6 @@ class UpgradeTab(QWidget):
         self.download_worker.finished.connect(self._on_download_finished)
         self.download_worker.start()
 
-    # (旧 check 回调已移除，改用 _browse_versions 流程)
 
     def start_download(self, url=None):
         if not url:
@@ -4456,7 +4511,6 @@ class UpgradeTab(QWidget):
             return
 
         self.downloaded_zip = save_path
-        pass  # (download_btn removed)
         self.cancel_dl_btn.setEnabled(True)
         self.dl_progress.setVisible(True)
         self.dl_progress.setValue(0)
@@ -4485,7 +4539,6 @@ class UpgradeTab(QWidget):
         self.dl_status_label.setText(msg)
 
     def _on_download_finished(self, success, message):
-        pass  # (download_btn removed)
         self.cancel_dl_btn.setEnabled(False)
         if success:
             self.dl_progress.setValue(100)
@@ -4502,7 +4555,6 @@ class UpgradeTab(QWidget):
             self._log(f"下载失败: {message}", "ERROR")
 
     def _reset_download_ui(self):
-        pass  # (download_btn removed)
         self.cancel_dl_btn.setEnabled(False)
         self.dl_progress.setVisible(False)
         self.dl_progress.setValue(0)
@@ -5400,9 +5452,6 @@ class BDSManager(QMainWindow):
             log_info(f"版本缓存已保存: {os.path.basename(VERSION_CACHE_FILE)}")
         except Exception as e:
             log_error(f"保存版本缓存失败: {e}")
-        # (moved to save_config)
-        # (moved to save_config)
-        # (moved to save_config)
 
     def update_global_paths(self):
         global SERVER_DIR, SERVER_PROPERTIES, ALLOWLIST_FILE, PERMISSIONS_FILE
