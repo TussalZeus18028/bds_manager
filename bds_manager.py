@@ -5460,7 +5460,7 @@ class BDSManager(QMainWindow):
                     vc = json.load(f)
                 config["version_cache"] = vc.get("version_cache", {})
                 config["version_list"] = vc.get("version_list", {})
-            except:
+            except (json.JSONDecodeError, FileNotFoundError):
                 pass
         return config
 
