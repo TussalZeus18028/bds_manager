@@ -186,6 +186,8 @@ class ToastNotification(QWidget):
         self.mousePressEvent = lambda e: self._dismiss()
         QTimer.singleShot(duration, self._dismiss)
         ToastNotification._instances.append(self)
+        # 父窗口移动/缩放时重新计算位置
+        parent.installEventFilter(self)
 
     def _apply_mask(self):
         """圆角遮罩"""
@@ -242,9 +244,16 @@ class ToastNotification(QWidget):
     def _cleanup(self):
         if self in ToastNotification._instances:
             ToastNotification._instances.remove(self)
+            self._window.removeEventFilter(self)
         self.deleteLater()
         for inst in ToastNotification._instances:
             inst._calc_position()
+
+    def eventFilter(self, obj, event):
+        if obj == self._window and event.type() in (QEvent.Resize, QEvent.Move):
+            for inst in ToastNotification._instances:
+                inst._calc_position()
+        return super().eventFilter(obj, event)
 
 # ---------- 启用 Windows 控制台 ANSI 颜色 ----------
 if sys.platform == "win32":
