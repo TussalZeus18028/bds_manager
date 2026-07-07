@@ -28,7 +28,7 @@ Minecraft Bedrock Dedicated Server 管理工具
   - 多线程优化：所有耗时操作移至后台线程，避免阻塞主界面
 """
 
-__version__ = "2.1.0.09"
+__version__ = "2.1.0.10"
 
 import sys
 import os
@@ -3644,7 +3644,7 @@ class _BrowseWorker(QThread):
         all_urls = stable_urls + preview_urls
         batch_size = constants.HEAD_SCAN_BATCH_SIZE if constants else 16
         for i in range(0, len(all_urls), batch_size):
-            if self._cancel():
+            if self._cancel() or self.isInterruptionRequested():
                 break
             batch = all_urls[i:i + batch_size]
             with ThreadPoolExecutor(max_workers=min(batch_size, constants.HEAD_SCAN_MAX_WORKERS if constants else 10)) as executor:
@@ -4389,6 +4389,7 @@ class UpgradeTab(QWidget):
         """停止正在进行的版本扫描"""
         self._browse_cancelled = True
         if hasattr(self, 'browse_worker') and self.browse_worker and self.browse_worker.isRunning():
+            self.browse_worker.requestInterruption()
             self.browse_worker.quit()
             self.browse_worker.wait(1000)
         self.stop_scan_btn.setEnabled(False)
