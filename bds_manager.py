@@ -4390,32 +4390,32 @@ class UpgradeTab(QWidget):
     def _on_browse_progress(self, ver, pct):
         self.browse_status.setText(f"正在探测 v{ver} ... ({pct}%)")
 
+    def _start_head_worker(self, start_version, append_mode=True):
+        """启动 HEAD 扫描后台线程"""
+        self.browse_worker = _BrowseWorker(start_version,
+            cancel=lambda: self._browse_cancelled, append_mode=append_mode)
+        self.browse_worker.progress.connect(self._on_browse_progress)
+        self.browse_worker.found.connect(self._on_browse_found)
+        self.browse_worker.finished.connect(self._on_browse_done)
+        self.browse_worker.start()
+
     def _on_browse_fetch_done(self, ok, results):
         self.browse_btn.setEnabled(True)
         self.browse_btn.setText("🌐 浏览可用版本")
         if results:
             self._browse_results = results
             self._populate_table()
-            # 找出最新版本，HEAD 扫描其后的新版本
             latest = max(results, key=lambda x: tuple(int(n) for n in x[0].split(".")))
             self._browse_status_prefix = f"📦 GitHub: {len(results)} 版本"
             self.browse_status.setText(f"{self._browse_status_prefix} + 探测最新...")
             self._browse_cancelled = False
-            self.browse_worker = _BrowseWorker(latest[0], cancel=lambda: self._browse_cancelled, append_mode=True)
-            self.browse_worker.progress.connect(self._on_browse_progress)
-            self.browse_worker.found.connect(self._on_browse_found)
-            self.browse_worker.finished.connect(self._on_browse_done)
-            self.browse_worker.start()
+            self._start_head_worker(latest[0], append_mode=True)
         else:
             self.browse_status.setText("GitHub 抓取失败，回退 HEAD 扫描...")
             self._browse_cancelled = False
             self._browse_status_prefix = ""
             current_ver = _detect_current_version(self.parent.get_absolute_server_dir()) or "1.20.0.0"
-            self.browse_worker = _BrowseWorker(current_ver, cancel=lambda: self._browse_cancelled, append_mode=False)
-            self.browse_worker.progress.connect(self._on_browse_progress)
-            self.browse_worker.found.connect(self._on_browse_found)
-            self.browse_worker.finished.connect(self._on_browse_done)
-            self.browse_worker.start()
+            self._start_head_worker(current_ver, append_mode=False)
 
     def _on_browse_found(self, ver, branch, url):
         # 去重
@@ -5587,7 +5587,7 @@ class BDSManager(QMainWindow):
             for old in backups[keep:]:
                 os.remove(os.path.join(_ctx.BACKUP_DIR, old))
                 log_info(f"已删除旧备份: {old}")
-        except Exception as e:
+        except (OSError, PermissionError) as e:
             log_warning(f"清理旧备份失败: {e}")
 
     def init_ui(self):
