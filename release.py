@@ -26,7 +26,7 @@ GH_EXE = shutil.which("gh") or r"C:\Program Files\GitHub CLI\gh.exe"
 
 # 打包排除
 INCLUDE_PATTERNS = [".py", ".txt", ".md", ".json", ".bat"]
-EXCLUDE_FILES = {"bds_manager_config.json", "bds_version_cache.json", "release.py", "run.bat", "README.md"}
+EXCLUDE_FILES = {"bds_manager_config.json", "bds_version_cache.json", "release.py", "run.bat", "README.md", "release_gui.py"}
 EXCLUDE_DIRS = {"logs", "backups", "Server", "Earlier version", "release",
                 ".git", "__pycache__", "web_ui", ".workbuddy"}
 
