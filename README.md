@@ -107,6 +107,11 @@ bds_manager/
 
 ---
 
+## 鸣谢
+感谢 deepseek 激情肝代码
+
+---
+
 ## 📄 许可证
 
 Apache License 2.0

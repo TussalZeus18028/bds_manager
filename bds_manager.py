@@ -1709,6 +1709,7 @@ class SettingsTab(QWidget):
         self.parent.save_config()
         self.parent.apply_theme(self.parent.config["theme"])
         self.parent.apply_monitor_interval(self.parent.config["monitor_interval"])
+        self.parent.update_global_paths()
         self.parent.init_watcher()
         self.parent.update_backup_timer()
         toast_success("设置已保存", "新设置已生效")
@@ -5160,7 +5161,7 @@ class BDSManager(QMainWindow):
         # 启动自检提示 + 自动更新检查
         QTimer.singleShot(500, self._show_startup_toasts) if self.config.get("show_startup_toasts", True) else None
         if self.config.get("auto_check_update", True):
-            QTimer.singleShot(3000, self._check_startup_update)
+            QTimer.singleShot(4000, self._check_startup_update)
 
     def _check_startup_update(self):
         """启动时后台检查更新"""
@@ -5343,9 +5344,6 @@ class BDSManager(QMainWindow):
             log_error(f"保存配置文件失败: {e}")
         # 版本数据单独存
         self._save_version_cache()
-        self.update_global_paths()
-        log_info(f"服务器目录已更新: {SERVER_DIR}")
-        self.init_watcher()
 
     def _save_version_cache(self):
         """保存版本缓存到独立文件"""
