@@ -124,7 +124,7 @@ from PyQt5.QtWidgets import (QGraphicsOpacityEffect,
     QTabWidget as QTabWidget2, QSystemTrayIcon, QAction, QStyle,
     QPlainTextEdit
 )
-from PyQt5.QtCore import Qt, QTimer, pyqtSignal, QThread, QFileSystemWatcher, QEvent, QObject, QPropertyAnimation, QParallelAnimationGroup, QEasingCurve, QRect, QPoint
+from PyQt5.QtCore import Qt, QTimer, pyqtSignal, QThread, QFileSystemWatcher, QEvent, QObject, QPropertyAnimation, QEasingCurve, QPoint
 from PyQt5.QtGui import QFont, QColor, QTextCursor, QIcon, QPainter, QPen
 
 # ---------- Toast 通知组件 ----------
