@@ -52,8 +52,8 @@ def _parse_json(text):
     if _HAS_JSON5:
         try:
             return json5.loads(text), True
-        except Exception:
-            log_debug("send_command 忽略异常")
+        except Exception as e:
+            log_debug(f"JSON/JSON5 解析失败，回退 json.loads: {e}")
     return json.loads(text), False
 import socket
 import psutil
@@ -99,14 +99,14 @@ from PyQt5.QtGui import QFont, QColor, QTextCursor, QIcon, QPainter, QPen
 
 # ---------- Toast 通知组件 ----------
 class ToastNotification(QWidget):
-    """现代化右上角弹窗通知"""
+    """现代化右上角弹窗通知（主窗口内嵌，自动裁剪）"""
     _instances = []
 
     def __init__(self, parent, title, message, level="info", duration=4000):
-        super().__init__(None)
+        super().__init__(parent)
         self._window = parent
+        self.raise_()  # 确保在最上层
 
-        # 使用纯色背景 + 圆角遮罩（避免 Windows UpdateLayeredWindow 错误）
         colors = {
             "error": ("#ff4444", "#2a181a"),
             "warning": ("#ffaa33", "#2a2218"),
@@ -118,8 +118,6 @@ class ToastNotification(QWidget):
         self._accent = QColor(accent_hex)
         self._radius = 12
 
-        self.setWindowFlags(Qt.FramelessWindowHint | Qt.ToolTip)
-        self.setAttribute(Qt.WA_ShowWithoutActivating)
         self.setFixedWidth(320)
 
         icon = {"error": "❌", "warning": "⚠️", "success": "✅", "info": "ℹ️"}.get(level, "ℹ️")
@@ -181,23 +179,21 @@ class ToastNotification(QWidget):
         p.drawRoundedRect(r, self._radius, self._radius)
 
     def _calc_position(self):
-        """计算在窗口右上角的绝对坐标"""
+        """计算在父窗口右上角的相对坐标"""
         w = self._window
         offset = 12
         for inst in ToastNotification._instances:
             offset += inst.height() + 8
-        # 相对于主窗口右上角
-        x = w.mapToGlobal(QPoint(w.width() - self.width() - 12, offset)).x()
-        y = w.mapToGlobal(QPoint(0, offset)).y()
+        x = w.width() - self.width() - 12
+        y = offset
         self.move(x, y)
 
     def _start_slide_in(self):
-        # 从窗口右边缘滑入
+        """从父窗口右边缘外侧滑入，超出部分由父窗口裁剪"""
         w = self._window
-        right_edge = w.mapToGlobal(QPoint(w.width(), 0)).x()
         self._anim_in = QPropertyAnimation(self, b"pos")
         self._anim_in.setDuration(300)
-        self._anim_in.setStartValue(QPoint(right_edge, self.y()))
+        self._anim_in.setStartValue(QPoint(w.width(), self.y()))
         self._anim_in.setEndValue(self.pos())
         self._anim_in.setEasingCurve(QEasingCurve.OutCubic)
         self._anim_in.start()
@@ -205,12 +201,10 @@ class ToastNotification(QWidget):
     def _dismiss(self):
         if self._clicked: return
         self._clicked = True
-        # 位置 + 透明度 同时动画
         self._anim_out = QPropertyAnimation(self, b"pos")
         self._anim_out.setDuration(250)
         self._anim_out.setStartValue(self.pos())
-        end_x = self._window.mapToGlobal(QPoint(self._window.width(), 0)).x()
-        self._anim_out.setEndValue(QPoint(end_x, self.y()))
+        self._anim_out.setEndValue(QPoint(self._window.width(), self.y()))
         self._anim_out.setEasingCurve(QEasingCurve.InCubic)
         self._anim_out.finished.connect(self._cleanup)
         self._anim_out.start()
@@ -3401,6 +3395,9 @@ class TunnelTab(QWidget):
         except Exception as e:
             log_error(f"读取隧道输出异常: {e}")
         finally:
+            if self.tunnel_process and self.tunnel_process.stdout:
+                try: self.tunnel_process.stdout.close()
+                except: pass
             self.tunnel_line_signal.emit("__STOPPED__", False)
 
     def _on_tunnel_stopped(self):
@@ -3861,6 +3858,7 @@ class UpgradeWorker(BaseWorker):
     def _run_multi(self):
         """多线程分段下载：4 线程并发，每段独立 HTTP Range 请求"""
         self._cancel = False
+        temp_files = []
         try:
             self.status_signal.emit("正在获取文件大小...")
             # 先发 HEAD 请求获取文件大小
@@ -3869,11 +3867,9 @@ class UpgradeWorker(BaseWorker):
             head.raise_for_status()
             total_size = int(head.headers.get("Content-Length", 0))
             if total_size <= 0:
-                # 服务器不支持 Content-Length，回退单线程
                 self._run_simple()
                 return
 
-            # 检查是否支持 Range 请求
             accept_ranges = head.headers.get("Accept-Ranges", "none")
             if accept_ranges.lower() != "bytes":
                 self._run_simple()
@@ -3881,11 +3877,9 @@ class UpgradeWorker(BaseWorker):
 
             segments = 4
             chunk_size = total_size // segments
-            temp_files = []
             downloaded_bytes = [0] * segments
             start_time = time.time()
 
-            # 按段拆分，每段一个线程
             ranges = []
             for i in range(segments):
                 start = i * chunk_size
@@ -3903,20 +3897,13 @@ class UpgradeWorker(BaseWorker):
                 for future in concurrent.futures.as_completed(futures):
                     if self._cancel:
                         pool.shutdown(wait=False, cancel_futures=True)
-                        for f in temp_files:
-                            try: os.remove(f)
-                            except: pass
                         self.finished.emit(False, "下载已取消")
                         return
                     idx, ok, dled = future.result()
                     if not ok:
-                        for f in temp_files:
-                            try: os.remove(f)
-                            except: pass
                         self.finished.emit(False, f"分段 {idx} 下载失败")
                         return
                     downloaded_bytes[idx] = dled
-                    # 合并进度
                     total_dl = sum(downloaded_bytes)
                     pct = int(total_dl * 100 / total_size)
                     self.progress.emit(pct)
@@ -3933,12 +3920,17 @@ class UpgradeWorker(BaseWorker):
                     with open(tmp, "rb") as part:
                         out.write(part.read())
                     os.remove(tmp)
+            temp_files.clear()
 
             self.finished.emit(True, "下载完成")
-        except requests.exceptions.HTTPError as e:
+        except requests.exceptions.HTTPError:
             self._run_simple()
         except Exception as e:
             self.finished.emit(False, f"下载失败: {str(e)}")
+        finally:
+            for f in temp_files:
+                try: os.remove(f)
+                except: pass
 
     def _dl_segment(self, idx, start, end, tmp_path):
         """下载单个分段（在独立线程中运行）"""
@@ -4674,10 +4666,16 @@ class UpgradeTab(QWidget):
                             rel_path = name.replace("\\\\", "/")
 
                         # 跳过会覆盖的关键目录/文件（备份由恢复步骤处理）
+                        # 同时保护 BDS 运行时动态生成的数据目录
                         skip_prefixes = [
                             "worlds/", "resource_packs/", "behavior_packs/",
+                            "development_behavior_packs/", "development_resource_packs/",
+                            "development_skin_packs/", "config/", "treatments/",
                             "server.properties", "allowlist.json", "permissions.json",
-                            "packetlimitconfig.json"
+                            "packetlimitconfig.json", "profanity_filter.wlist",
+                            # 运行时动态数据，不在官方压缩包中但防止意外覆盖
+                            "playerdata/", "stats/", "db/", "premium_cache/",
+                            "valid_known_packs/", "catalog/", "lost/", "dumps/",
                         ]
                         skip_prefixes_lower = [s.lower() for s in skip_prefixes]
                         if any(rel_path.lower().startswith(s) for s in skip_prefixes_lower):
