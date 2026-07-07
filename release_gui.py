@@ -10,7 +10,7 @@ from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QPushButton, QTextEdit, QLabel, QGroupBox, QProgressBar, QMessageBox
 )
-from PyQt5.QtCore import Qt, QProcess, pyqtSignal, QObject
+from PyQt5.QtCore import Qt, pyqtSignal, QObject
 from PyQt5.QtGui import QFont, QTextCursor, QColor
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -20,7 +20,7 @@ PYTHON = sys.executable
 
 
 class ReleaseWorker(QObject):
-    """后台执行 release.py 子命令"""
+    """后台执行 release.py 子命令（subprocess 直接读取输出）"""
     output = pyqtSignal(str)
     finished = pyqtSignal(int)
 
@@ -29,23 +29,20 @@ class ReleaseWorker(QObject):
         self.cmd = cmd
 
     def run(self):
-        proc = QProcess()
-        proc.setProcessChannelMode(QProcess.MergedChannels)
-        proc.setWorkingDirectory(str(SCRIPT_DIR))
-
-        def on_ready():
-            line = bytes(proc.readAll()).decode("utf-8", errors="replace")
+        import subprocess
+        proc = subprocess.Popen(
+            [PYTHON, str(RELEASE_PY), self.cmd],
+            cwd=str(SCRIPT_DIR),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=1,
+        )
+        for line in proc.stdout:
             if line:
                 self.output.emit(line)
-
-        proc.readyRead.connect(on_ready)
-        proc.finished.connect(lambda ec: self.finished.emit(ec))
-
-        proc.start(PYTHON, [str(RELEASE_PY), self.cmd])
-        loop = threading.Event()
-        proc.finished.connect(lambda: loop.set())
-        loop.wait()
-        self.finished.emit(proc.exitCode())
+        proc.wait()
+        self.finished.emit(proc.returncode)
 
 
 class ReleaseGUI(QMainWindow):
