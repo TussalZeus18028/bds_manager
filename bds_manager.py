@@ -4885,39 +4885,41 @@ class UpgradeTab(QWidget):
             self.scroll_area.verticalScrollBar().setValue(sp)
 
         class ToolVersionWorker(BaseWorker):
-            result_signal = pyqtSignal(bool, str, str, str)
+            result_signal = pyqtSignal(bool, str, str, str, str, str, str)  # ok, ver, date, changelog, dl_url, sha256, min_ver
 
             def run(self):
                 try:
-                    url = ("https://raw.githubusercontent.com/TussalZeus18028/"
-                           "bds_manager/main/version.json")
+                    url = constants.TOOL_UPDATE_URL if constants else (
+                        "https://raw.githubusercontent.com/TussalZeus18028/bds_manager/main/version.json")
                     req = urllib.request.Request(url, headers=_github_headers())
                     with urllib.request.urlopen(req, timeout=10) as resp:
                         data = json.loads(resp.read().decode("utf-8"))
                         remote_ver = data.get("version", "")
                         release_date = data.get("release_date", "")
                         changelog = data.get("changelog", "")
-                        download_url = data.get("download_url", "")
+                        dl_url = data.get("download_url", "")
+                        sha256 = data.get("sha256", "")
+                        min_ver = data.get("min_compatible_version", "")
                         self.result_signal.emit(
                             True, remote_ver, release_date,
-                            changelog or ""
+                            changelog or "", dl_url, sha256, min_ver
                         )
                 except urllib.error.HTTPError as e:
-                    self.result_signal.emit(False, "", "", f"HTTP {e.code}: {e.reason}")
+                    self.result_signal.emit(False, "", "", f"HTTP {e.code}: {e.reason}", "", "", "")
                 except urllib.error.URLError as e:
-                    self.result_signal.emit(False, "", "", f"网络错误: {e.reason}")
+                    self.result_signal.emit(False, "", "", f"网络错误: {e.reason}", "", "", "")
                 except json.JSONDecodeError as e:
-                    self.result_signal.emit(False, "", "", f"JSON 解析失败: {e}")
+                    self.result_signal.emit(False, "", "", f"JSON 解析失败: {e}", "", "", "")
                 except (urllib.error.URLError, urllib.error.HTTPError, socket.timeout) as e:
-                    self.result_signal.emit(False, "", "", f"网络错误: {e}")
+                    self.result_signal.emit(False, "", "", f"网络错误: {e}", "", "", "")
                 except Exception as e:
-                    self.result_signal.emit(False, "", "", f"未知错误: {e}")
+                    self.result_signal.emit(False, "", "", f"未知错误: {e}", "", "", "")
 
         self._tool_ver_worker = ToolVersionWorker(self)
         self._tool_ver_worker.result_signal.connect(self._on_tool_update_result)
         self._tool_ver_worker.start()
 
-    def _on_tool_update_result(self, ok, remote_ver, release_date, changelog):
+    def _on_tool_update_result(self, ok, remote_ver, release_date, changelog, dl_url="", sha256="", min_ver=""):
         # 保存滚动位置
         sp = self.scroll_area.verticalScrollBar().value()
         self.check_tool_btn.setEnabled(True)
@@ -4944,6 +4946,21 @@ class UpgradeTab(QWidget):
                 return 0
 
         if _cmp(remote_ver, __version__) > 0:
+            # 最低兼容版本检查
+            if min_ver and _cmp(__version__, min_ver) < 0:
+                self._scrolled_set_text(self.tool_update_status,
+                    f"⚠️ 当前版本过低，无法自动更新到 v{remote_ver}（最低要求 v{min_ver}）")
+                self.tool_update_status.setStyleSheet("color: #f44336; padding: 4px;")
+                toast_error("无法自动更新", f"请手动下载 v{remote_ver}")
+                self.scroll_area.verticalScrollBar().setValue(sp)
+                return
+
+            # 保存更新元数据供下载阶段使用
+            self._tool_update_meta = {
+                "version": remote_ver, "release_date": release_date,
+                "download_url": dl_url, "sha256": sha256
+            }
+
             info = f"📢 发现新版本 v{remote_ver}！（当前 v{__version__}）\n发布日期: {release_date}"
             if changelog:
                 info += f"\n\n更新内容:\n{changelog}"
@@ -4951,15 +4968,18 @@ class UpgradeTab(QWidget):
             self.tool_update_status.setStyleSheet("color: #ff9800; font-weight: bold; padding: 4px;")
             self._log(f"发现新版本 v{remote_ver}", "SUCCESS")
 
+            # 弹窗含 changelog
+            msg = f"BDS Manager 有新版本可用！\n\n" \
+                  f"当前版本: v{__version__}\n" \
+                  f"最新版本: v{remote_ver}\n" \
+                  f"发布日期: {release_date}"
+            if changelog:
+                msg += f"\n\n📋 更新内容:\n{changelog}"
+            msg += "\n\n是否立即下载并更新？"
+
             reply = QMessageBox.question(
-                self, "发现新版本",
-                f"BDS Manager 有新版本可用！\n\n"
-                f"当前版本: v{__version__}\n"
-                f"最新版本: v{remote_ver}\n"
-                f"发布日期: {release_date}\n\n"
-                f"是否立即下载并更新？",
-                QMessageBox.Yes | QMessageBox.No,
-                QMessageBox.Yes
+                self, "发现新版本", msg,
+                QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes
             )
             if reply == QMessageBox.Yes:
                 self._download_tool_update(remote_ver)

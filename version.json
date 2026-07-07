@@ -1,6 +1,9 @@
 {
     "version": "2.1.0.10",
     "release_date": "2026-07-07",
-    "download_url": "https://github.com/TussalZeus18028/bds_manager",
-    "changelog": "## v2.1.0.10 架构重构 & 质量收尾\n\n### 🏗️ 架构重构\n- 彻底消除全局路径变量，60处引用统一为 _ctx 单例\n- _BrowseWorker/UpgradeWorker 硬编码改为 constants 常量引用\n- 拆分 _start_head_worker 消除重复\n- ServerContext 集中路径管理\n\n### 🛡️ 健壮性\n- 0 个 bare except 残留，全改为 OSError/ValueError/json.JSONDecodeError\n- HEAD 扫描：3次重试+指数退避+4UA轮换\n- 多线程下载：.part 分片 finally 清理\n- Token XOR+Base64 加密存储\n- 强制备份：服务器运行时暂停→备份→恢复\n\n### 🧹 清理\n- requirements.txt 移除 fastapi/uvicorn/websockets\n- 死注释/未使用导入全部清除\n- Toast 位置随窗口自适应\n\n### 🐛 修复\n- _log_rules 类属性错位导致启动崩溃\n- save_config 重复 init_watcher 双倍日志\n- 隧道 stdout 管道 finally 关闭\n- 升级动态数据目录保护"
+    "download_url": "https://github.com/TussalZeus18028/bds_manager/releases/download/v2.1.0.10/bds_manager.zip",
+    "sha256": "",
+    "file_size": 0,
+    "min_compatible_version": "2.0.0.00",
+    "changelog": "## v2.1.0.10 架构重构 & 质量收尾\n\n### 🏗️ 架构重构\n- 彻底消除全局路径变量，60处引用统一为 _ctx 单例\n- _BrowseWorker/UpgradeWorker 硬编码改为 constants 常量引用\n- 拆分 _start_head_worker 消除重复\n- ServerContext 集中路径管理\n\n### 🛡️ 健壮性\n- 0 个 bare except 残留\n- HEAD 扫描：3次重试+指数退避+4UA轮换\n- Token XOR+Base64 加密存储\n- 强制备份：服务器运行时暂停→备份→恢复\n\n### 🧹 清理\n- requirements.txt 移除 fastapi/uvicorn/websockets\n- Toast 位置随窗口自适应"
 }

@@ -24,6 +24,8 @@ DASHBOARD_REFRESH_HISTORY = 60   # 资源历史数据点数量
 DEFAULT_REQUEST_TIMEOUT = 30     # HTTP 请求默认超时（秒）
 GITHUB_API_TIMEOUT = 15          # GitHub API 请求超时（秒）
 TOAST_QUEUE_DELAY_DEFAULT = 200  # Toast 队列间隔（毫秒）
+TOOL_UPDATE_URL = "https://raw.githubusercontent.com/TussalZeus18028/bds_manager/main/version.json"
+TOOL_DOWNLOAD_URL = "https://github.com/TussalZeus18028/bds_manager/releases/latest/download/bds_manager.zip"
 
 # --- UI ---
 DEFAULT_WINDOW_WIDTH = 1200
