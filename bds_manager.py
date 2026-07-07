@@ -3558,8 +3558,8 @@ class _BrowseWorker(QThread):
         self._cancel = cancel or (lambda: False)
         self._append_mode = append_mode
         # 从父控件获取扫描范围（如果可用）
-        self._patch_range = 40
-        self._build_range = 30
+        self._patch_range = (constants.DEFAULT_SCAN_PATCH_RANGE if constants else 40)
+        self._build_range = (constants.DEFAULT_SCAN_BUILD_RANGE if constants else 30)
         if parent:
             self._patch_range = parent.parent.config.get("scan_patch_range", 40)
             self._build_range = parent.parent.config.get("scan_build_range", 30)
@@ -4132,13 +4132,13 @@ class UpgradeTab(QWidget):
         refresh_row.addWidget(QLabel("Patch:"))
         self.scan_patch = QSpinBox()
         self.scan_patch.setRange(10, 200)
-        self.scan_patch.setValue(self.parent.config.get("scan_patch_range", 40))
+        self.scan_patch.setValue(self.parent.config.get("scan_patch_range", constants.DEFAULT_SCAN_PATCH_RANGE if constants else 40))
         self.scan_patch.setMaximumWidth(55)
         refresh_row.addWidget(self.scan_patch)
         refresh_row.addWidget(QLabel("Build:"))
         self.scan_build = QSpinBox()
         self.scan_build.setRange(5, 60)
-        self.scan_build.setValue(self.parent.config.get("scan_build_range", 30))
+        self.scan_build.setValue(self.parent.config.get("scan_build_range", constants.DEFAULT_SCAN_BUILD_RANGE if constants else 30))
         self.scan_build.setMaximumWidth(50)
         refresh_row.addWidget(self.scan_build)
         refresh_row.addStretch()
@@ -5465,8 +5465,8 @@ class BDSManager(QMainWindow):
             "monitor_interval": self.config.get("monitor_interval", 2000),
             "custom_colors": self.custom_colors,
             "frpc_path": self.config.get("frpc_path", ""),
-            "scan_patch_range": self.config.get("scan_patch_range", 40),
-            "scan_build_range": self.config.get("scan_build_range", 30),
+            "scan_patch_range": self.config.get("scan_patch_range", constants.DEFAULT_SCAN_PATCH_RANGE if constants else 40),
+            "scan_build_range": self.config.get("scan_build_range", constants.DEFAULT_SCAN_BUILD_RANGE if constants else 30),
             "window_width": self.config.get("window_width", 1200),
             "window_height": self.config.get("window_height", 800),
             "mem_warn_threshold": self.config.get("mem_warn_threshold", 80),
