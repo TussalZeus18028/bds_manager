@@ -41,6 +41,10 @@ import requests
 import time
 import re
 try:
+    import constants
+except ImportError:
+    constants = None
+try:
     import json5
     _HAS_JSON5 = True
 except ImportError:
@@ -336,6 +340,26 @@ VERSION_LIST_URL = "https://raw.githubusercontent.com/TussalZeus18028/bds_versio
 # ---------- GitHub 请求辅助 ----------
 _github_token_cache = None  # 缓存配置中的 token
 
+# --- Token 简单混淆（防止配置文件明文泄露）---
+_TOKEN_XOR_KEY = b"bds_manager_2026_token_obfuscation_key"
+
+def _obfuscate_token(token: str) -> str:
+    """对 token 做 base64 + XOR 混淆存储"""
+    import base64
+    data = token.encode("utf-8")
+    key = (_TOKEN_XOR_KEY * (len(data) // len(_TOKEN_XOR_KEY) + 1))[:len(data)]
+    return base64.urlsafe_b64encode(bytes(a ^ b for a, b in zip(data, key))).decode()
+
+def _deobfuscate_token(obfuscated: str) -> str:
+    """解密被混淆的 token"""
+    import base64
+    try:
+        data = base64.urlsafe_b64decode(obfuscated.encode())
+        key = (_TOKEN_XOR_KEY * (len(data) // len(_TOKEN_XOR_KEY) + 1))[:len(data)]
+        return bytes(a ^ b for a, b in zip(data, key)).decode("utf-8")
+    except Exception:
+        return ""
+
 def _github_headers():
     """返回 GitHub 请求头，如果配置了 token 则附加认证"""
     global _github_token_cache
@@ -346,7 +370,12 @@ def _github_headers():
                 with open(cfg, "r", encoding="utf-8") as f:
                     data = json.load(f)
                 if data.get("github_auth_enabled") and data.get("github_token"):
-                    _github_token_cache = data["github_token"]
+                    raw = data["github_token"]
+                    # 兼容旧明文 token（不以 base64 特征开头则视为明文）
+                    if raw.startswith("ghp_"):
+                        _github_token_cache = raw
+                    else:
+                        _github_token_cache = _deobfuscate_token(raw)
                 else:
                     _github_token_cache = ""
         except Exception:
@@ -1753,7 +1782,10 @@ class SettingsTab(QWidget):
         self.show_startup_toasts_cb.setChecked(self.parent.config.get("show_startup_toasts", True))
         self.github_auth_cb.setChecked(self.parent.config.get("github_auth_enabled", False))
         if self.parent.config.get("github_token"):
-            self.github_token_edit.setText(self.parent.config["github_token"])
+            raw = self.parent.config["github_token"]
+            # 解密后展示（兼容旧明文）
+            token = raw if raw.startswith("ghp_") else _deobfuscate_token(raw)
+            self.github_token_edit.setText(token)
             self.github_token_edit.setEnabled(self.parent.config.get("github_auth_enabled", False))
         self.custom_group.setVisible(self.theme_combo.currentText() == "custom")
         for key, btn in self.color_buttons.items():
@@ -1793,7 +1825,8 @@ class SettingsTab(QWidget):
         self.parent.config["multi_dl_enabled"] = self.multi_dl_cb.isChecked()
         self.parent.config["show_startup_toasts"] = self.show_startup_toasts_cb.isChecked()
         self.parent.config["github_auth_enabled"] = self.github_auth_cb.isChecked()
-        self.parent.config["github_token"] = self.github_token_edit.text().strip() if self.github_auth_cb.isChecked() else ""
+        token = self.github_token_edit.text().strip() if self.github_auth_cb.isChecked() else ""
+        self.parent.config["github_token"] = _obfuscate_token(token) if token else ""
         _refresh_github_token()
         self.parent.save_config()
         self.parent.apply_theme(self.parent.config["theme"])
