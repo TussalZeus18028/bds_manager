@@ -8,3 +8,7 @@ bds_manager_config.json
 bds_version_cache.json
 web_ui/
 Earlier version/
+Server/
+logs/
+backups/
+!release/
