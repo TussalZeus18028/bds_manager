@@ -144,12 +144,10 @@ def cmd_publish():
         log_err("推送失败"); sys.exit(1)
     log_ok("推送成功")
 
-    # 4. 认证
+    # 4. gh 认证（仅检查，不阻塞——Git 凭据已够用）
     rc, out, _ = _run([GH_EXE, "auth", "status"], capture=True)
     if rc != 0:
-        log_warn("未登录 GitHub CLI，启动登录...")
-        _run([GH_EXE, "auth", "login", "--web", "--hostname", "github.com"])
-        log_ok("登录完成")
+        log_warn("gh 未登录，将使用 git 凭据直接创建 Release（若失败请手动 gh auth login）")
 
     # 5. 创建 Release
     tag = f"v{ver}"
