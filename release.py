@@ -113,9 +113,11 @@ def _run(cmd, capture=False):
     log_info(f"$ {' '.join(cmd)}")
     result = subprocess.run(cmd, capture_output=capture, text=True, cwd=str(SCRIPT_DIR))
     rc = result.returncode
-    if capture and rc != 0 and result.stderr:
-        log_err(result.stderr.strip())
-    return rc, result.stdout.strip(), result.stderr.strip()
+    out = (result.stdout or "").strip()
+    err = (result.stderr or "").strip()
+    if capture and rc != 0 and err:
+        log_err(err)
+    return rc, out, err
 
 def cmd_publish():
     _banner("步骤: 发布到 GitHub")
@@ -144,10 +146,16 @@ def cmd_publish():
         log_err("推送失败"); sys.exit(1)
     log_ok("推送成功")
 
-    # 4. gh 认证（仅检查，不阻塞——Git 凭据已够用）
+    # 4. gh 认证（尝试用 git 凭据自动配置）
     rc, out, _ = _run([GH_EXE, "auth", "status"], capture=True)
     if rc != 0:
-        log_warn("gh 未登录，将使用 git 凭据直接创建 Release（若失败请手动 gh auth login）")
+        log_warn("gh 未登录，尝试通过 git 凭据自动登录...")
+        rc2, _, _ = _run([GH_EXE, "auth", "login", "--git-protocol", "https",
+                          "--hostname", "github.com", "--with-token"], capture=True)
+        if rc2 != 0:
+            log_warn("自动登录失败，请手动运行: gh auth login --web")
+            log_info("（跳过 Release 创建，仅完成推送）")
+            return  # git push 已成功，仅跳过 Release
 
     # 5. 创建 Release
     tag = f"v{ver}"
