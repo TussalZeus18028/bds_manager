@@ -95,12 +95,8 @@ python bds_manager.py
 ## 📦 发布流程（开发者用）
 
 ```bash
-# 一键: 打包 → SHA256 → push → Release
-python release.py all
-
-# 或分步:
-python release.py build    # 仅打包
-python release.py publish  # 仅发布
+# 图形界面（推荐）
+python release_gui.py
 ```
 
 发布脚本从 `version.json` 动态读取版本号，无需手动修改任何硬编码。
