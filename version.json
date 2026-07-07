@@ -1,6 +1,6 @@
 {
-    "version": "2.1.0.08",
-    "release_date": "2026-07-06",
+    "version": "2.1.0.09",
+    "release_date": "2026-07-07",
     "download_url": "https://github.com/TussalZeus18028/bds_manager",
-    "changelog": "## v2.1.0.08 GitHub 认证 & 稳定性\n\n### 🔑 GitHub Token 认证\n- 设置页新增 Token 输入（密码框 + 🔒锁定防误触）\n- 启用后每小时限额 60→5000，避免 Too Many Requests\n- _github_headers() 统一注入认证头\n- Token 保存后即时刷新缓存\n\n### 🔧 请求优化\n- 启动 GitHub 请求间隔从 1s 扩至 2s\n- 工具更新检查提前至 3s，版本列表延后至 5s\n\n### 🛡️ 代码质量\n- _save_version_cache 误调用修复\n- auto_backup 改用后台线程（不阻塞 UI）\n- 主线程 time.sleep 轮询改为 QTimer\n- 正则编译缓存（ConsoleTab 性能提升）\n- ServerProcess 信号断开防泄漏\n- PacksTab worker 竞态修复 + 超时恢复\n- load_config 默认配置补全\n- 日志文件句柄显式关闭\n\n### 🐛 修复\n- tunnel_line_signal 类型不匹配\n- update_global_paths 逻辑修复\n- 多项线程安全与异常处理完善"
+    "changelog": "## v2.1.0.09 Toast 增强 & 快捷重启\n\n### 💬 Toast 通知系统\n- 新增 Toast 排队：多条通知间隔弹出，不再一拥而上\n- 设置页可调间隔时间（0-3000ms，默认200ms）\n- 更名为「Toast 通知」\n- 补全 16 处遗漏的 Toast（所有成功/失败操作全覆盖）\n\n### ⌨️ 快捷键\n- Ctrl+Shift+R 一键重启工具（Toast 提示 → 1s 后新进程启动）\n\n### 🐛 修复\n- _log_rules 错放到 TunnelTab 导致控制台启动崩溃\n- save_config 重复 init_watcher 导致日志双倍输出\n- update_global_paths 调用位置修正\n- 多项语法检查通过"
 }

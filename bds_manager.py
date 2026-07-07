@@ -28,7 +28,7 @@ Minecraft Bedrock Dedicated Server 管理工具
   - 多线程优化：所有耗时操作移至后台线程，避免阻塞主界面
 """
 
-__version__ = "2.1.0.08"
+__version__ = "2.1.0.09"
 
 import sys
 import os
@@ -266,25 +266,45 @@ def log_debug(msg):
 
 # ---------- Toast 便捷函数 ----------
 _toast_parent = None
+_toast_queue = []
+_toast_timer_active = False
 
 def set_toast_parent(parent):
     global _toast_parent
     _toast_parent = parent
 
+def _flush_toast_queue():
+    global _toast_queue, _toast_timer_active
+    if _toast_queue and _toast_parent:
+        args = _toast_queue.pop(0)
+        ToastNotification(_toast_parent, *args)
+    if _toast_queue:
+        delay = _toast_parent.config.get("toast_queue_delay", 200) if hasattr(_toast_parent, 'config') else 200
+        QTimer.singleShot(max(delay, 0), _flush_toast_queue)
+    else:
+        _toast_timer_active = False
+
+def _enqueue_toast(title, msg, level, duration):
+    global _toast_queue, _toast_timer_active
+    _toast_queue.append((title, msg, level, duration))
+    if not _toast_timer_active:
+        _toast_timer_active = True
+        QTimer.singleShot(50, _flush_toast_queue)
+
 def toast_error(title, msg=""):
-    if _toast_parent: ToastNotification(_toast_parent, title, msg, "error",
+    if _toast_parent: _enqueue_toast(title, msg, "error",
         _toast_parent.config.get("toast_duration_error", 5000) if hasattr(_toast_parent, 'config') else 5000)
 
 def toast_warning(title, msg=""):
-    if _toast_parent: ToastNotification(_toast_parent, title, msg, "warning",
+    if _toast_parent: _enqueue_toast(title, msg, "warning",
         _toast_parent.config.get("toast_duration_warning", 4000) if hasattr(_toast_parent, 'config') else 4000)
 
 def toast_success(title, msg=""):
-    if _toast_parent: ToastNotification(_toast_parent, title, msg, "success",
+    if _toast_parent: _enqueue_toast(title, msg, "success",
         _toast_parent.config.get("toast_duration_success", 3500) if hasattr(_toast_parent, 'config') else 3500)
 
 def toast_info(title, msg=""):
-    if _toast_parent: ToastNotification(_toast_parent, title, msg, "info",
+    if _toast_parent: _enqueue_toast(title, msg, "info",
         _toast_parent.config.get("toast_duration_info", 3000) if hasattr(_toast_parent, 'config') else 3000)
 
 # ---------- 全局配置：支持脚本与服务器文件夹分离 ----------
@@ -513,6 +533,7 @@ class PortCheckerDialog(QDialog):
                 self.parent.load_server_properties()
         except Exception as e:
             log_error(f"应用端口失败: {e}")
+            toast_error("端口更新失败", str(e))
             QMessageBox.critical(self, "错误", f"保存端口配置失败: {e}")
 
     def manual_set_ports(self):
@@ -1551,7 +1572,7 @@ class SettingsTab(QWidget):
         layout.addWidget(dpi_group)
 
         # --- 消息提示时长 ---
-        toast_group = QGroupBox("💬 右上角提示显示时长")
+        toast_group = QGroupBox("💬 Toast 通知")
         toast_layout = QFormLayout()
         self.toast_dur_error = QSpinBox()
         self.toast_dur_error.setRange(1000, 30000)
@@ -1570,6 +1591,11 @@ class SettingsTab(QWidget):
         self.toast_dur_info.setRange(1000, 30000)
         self.toast_dur_info.setSuffix(" ms")
         toast_layout.addRow("🔵 信息:", self.toast_dur_info)
+        self.toast_queue_delay = QSpinBox()
+        self.toast_queue_delay.setRange(0, 3000)
+        self.toast_queue_delay.setSuffix(" ms")
+        self.toast_queue_delay.setToolTip("多条通知连续弹出时的间隔时间，0 为同时弹出")
+        toast_layout.addRow("⏸️ 间隔:", self.toast_queue_delay)
         toast_group.setLayout(toast_layout)
         layout.addWidget(toast_group)
 
@@ -1660,6 +1686,7 @@ class SettingsTab(QWidget):
         self.toast_dur_warning.setValue(self.parent.config.get("toast_duration_warning", 4000))
         self.toast_dur_success.setValue(self.parent.config.get("toast_duration_success", 3500))
         self.toast_dur_info.setValue(self.parent.config.get("toast_duration_info", 3000))
+        self.toast_queue_delay.setValue(self.parent.config.get("toast_queue_delay", 200))
         self.auto_check_update_cb.setChecked(self.parent.config.get("auto_check_update", True))
         self.multi_dl_cb.setChecked(self.parent.config.get("multi_dl_enabled", True))
         self.show_startup_toasts_cb.setChecked(self.parent.config.get("show_startup_toasts", True))
@@ -1700,6 +1727,7 @@ class SettingsTab(QWidget):
         self.parent.config["toast_duration_warning"] = self.toast_dur_warning.value()
         self.parent.config["toast_duration_success"] = self.toast_dur_success.value()
         self.parent.config["toast_duration_info"] = self.toast_dur_info.value()
+        self.parent.config["toast_queue_delay"] = self.toast_queue_delay.value()
         self.parent.config["auto_check_update"] = self.auto_check_update_cb.isChecked()
         self.parent.config["multi_dl_enabled"] = self.multi_dl_cb.isChecked()
         self.parent.config["show_startup_toasts"] = self.show_startup_toasts_cb.isChecked()
@@ -2665,8 +2693,10 @@ correct-player-movement=false
             with open(SERVER_PROPERTIES, "w", encoding="utf-8") as f:
                 f.write(default_content)
             log_success("已创建默认 server.properties")
+            toast_info("配置文件已创建", "已生成默认 server.properties")
         except Exception as e:
             log_error(f"创建默认 server.properties 失败: {e}")
+            toast_error("创建配置失败", str(e))
 
     def save_server_properties(self):
         lines = []
@@ -2719,6 +2749,7 @@ correct-player-movement=false
             toast_success("配置已保存", "重启服务器后生效")
         except Exception as e:
             log_error(f"保存 server.properties 失败: {e}")
+            toast_error("保存配置失败", str(e))
             QMessageBox.critical(self, "错误", f"保存失败: {e}")
 
     def edit_allowlist(self):
@@ -2737,6 +2768,7 @@ correct-player-movement=false
                     json.dump([], f, indent=4)
             except Exception as e:
                 log_error(f"创建 {title} 文件失败: {e}")
+                toast_error("创建文件失败", str(e))
                 QMessageBox.critical(self, "错误", f"创建文件失败: {e}")
                 return
         dialog = QDialog(self)
@@ -2749,6 +2781,7 @@ correct-player-movement=false
                 text_edit.setText(f.read())
         except Exception as e:
             log_error(f"读取 {title} 文件失败: {e}")
+            toast_error("读取文件失败", str(e))
             QMessageBox.critical(self, "错误", f"读取文件失败: {e}")
             return
         layout.addWidget(text_edit)
@@ -2959,6 +2992,7 @@ class WorldTab(QWidget):
             toast_success("还原成功", message)
             log_success(message)
         else:
+            toast_error("还原失败", message)
             QMessageBox.critical(self, "还原失败", message)
             log_error(message)
         self.refresh_backup_list()
@@ -2981,6 +3015,7 @@ class WorldTab(QWidget):
                 self.refresh_info()
             except Exception as e:
                 log_error(f"修改难度失败: {e}")
+                toast_error("修改难度失败", str(e))
                 QMessageBox.critical(self, "错误", f"修改失败: {e}")
         else:
             log_error("server.properties 不存在")
@@ -3161,6 +3196,7 @@ class TunnelTab(QWidget):
             toast_success("frpc.ini 已保存", "配置已保存")
         except Exception as e:
             log_error(f"保存 frpc.ini 失败: {e}")
+            toast_error("保存 frpc.ini 失败", str(e))
             QMessageBox.critical(self, "错误", f"保存失败: {e}")
 
     def load_ini_file(self):
@@ -3179,6 +3215,7 @@ class TunnelTab(QWidget):
             log_success(f"加载 frpc.ini: {ini_path}")
         except Exception as e:
             log_error(f"加载 frpc.ini 失败: {e}")
+            toast_error("加载 frpc.ini 失败", str(e))
             QMessageBox.critical(self, "错误", f"加载失败: {e}")
 
     def open_frpc_dir(self):
@@ -3193,6 +3230,7 @@ class TunnelTab(QWidget):
                 subprocess.Popen(["explorer", dir_path])
         except Exception as e:
             log_error(f"打开目录失败: {e}")
+            toast_error("打开目录失败", str(e))
             QMessageBox.critical(self, "错误", f"打开目录失败: {e}")
 
     def _load_template(self):
@@ -4445,6 +4483,7 @@ class UpgradeTab(QWidget):
         if self.download_worker and self.download_worker.isRunning():
             self.download_worker.cancel()
             self._log("用户取消下载", "WARN")
+            toast_info("已取消", "下载已取消")
             self._reset_download_ui()
 
     def _on_download_progress(self, pct):
@@ -4907,6 +4946,7 @@ class UpgradeTab(QWidget):
                 QApplication.quit()
             except Exception as e:
                 self._log(f"替换文件失败: {e}", "ERROR")
+                toast_error("更新失败", str(e))
                 QMessageBox.critical(self, "更新失败", f"替换文件时出错：{e}")
         else:
             self._scrolled_set_text(self.tool_update_status, "⚠️ 已取消更新。新版本已下载但未安装。")
@@ -5222,6 +5262,11 @@ class BDSManager(QMainWindow):
         log_info(f"工具更新 v{remote_ver} 已下载: {save_path}")
 
     def keyPressEvent(self, event):
+        # Ctrl+Shift+R: 重启工具
+        if event.modifiers() == (Qt.ControlModifier | Qt.ShiftModifier) and event.key() == Qt.Key_R:
+            toast_info("工具即将重启", "将在 1 秒后自动重启")
+            QTimer.singleShot(1000, self._restart_app)
+            return
         if event.modifiers() == Qt.ControlModifier and event.key() == Qt.Key_D:
             if self.is_server_running():
                 reply = QMessageBox.question(self, "确认退出", "服务器正在运行，退出前是否先停止服务器？",
@@ -5332,6 +5377,7 @@ class BDSManager(QMainWindow):
             "toast_duration_warning": self.config.get("toast_duration_warning", 4000),
             "toast_duration_success": self.config.get("toast_duration_success", 3500),
             "toast_duration_info": self.config.get("toast_duration_info", 3000),
+            "toast_queue_delay": self.config.get("toast_queue_delay", 200),
             "github_auth_enabled": self.config.get("github_auth_enabled", False),
             "github_token": self.config.get("github_token", ""),
         }
@@ -5650,6 +5696,13 @@ class BDSManager(QMainWindow):
         else:
             self.status_tunnel.setText("🚇 --")
             self.status_tunnel.setStyleSheet("font-size:11px; color:#888; padding:0 8px;")
+
+    def _restart_app(self):
+        """重启工具：保存配置 → 启动新进程 → 退出当前"""
+        self.save_config()
+        subprocess.Popen([sys.executable, os.path.join(SCRIPT_DIR, "bds_manager.py")],
+                         cwd=SCRIPT_DIR, creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0)
+        QApplication.quit()
 
     def quit_app(self):
         """退出应用：先停止服务器和隧道，再清理资源"""
