@@ -5403,19 +5403,19 @@ class BDSManager(QMainWindow):
             QTimer.singleShot(4000, self._check_startup_update)
 
     def _check_startup_update(self):
-        """启动时后台检查更新"""
+        """启动时后台检查更新（ZIP 包方式）"""
         class _SilentCheckWorker(QThread):
-            result = pyqtSignal(str, str, str)  # status, remote_ver, detail
+            result = pyqtSignal(str, str, str, str, str)  # status, ver, dl_url, sha256, detail
             def run(self):
                 try:
-                    req = urllib.request.Request(
-                        "https://raw.githubusercontent.com/TussalZeus18028/bds_manager/main/version.json",
-                        headers=_github_headers())
+                    url = constants.TOOL_UPDATE_URL if constants else (
+                        "https://raw.githubusercontent.com/TussalZeus18028/bds_manager/main/version.json")
+                    req = urllib.request.Request(url, headers=_github_headers())
                     with urllib.request.urlopen(req, timeout=10) as resp:
                         data = json.loads(resp.read().decode())
                     remote = data.get("version", "")
                     if not remote:
-                        self.result.emit("error", "", "version.json 无版本号")
+                        self.result.emit("error", "", "", "", "version.json 无版本号")
                         return
                     def _cmp(a, b):
                         try:
@@ -5427,39 +5427,56 @@ class BDSManager(QMainWindow):
                         except (ValueError, IndexError):
                             return 0
                     if _cmp(remote, __version__) > 0:
-                        self.result.emit("update", remote, "")
+                        dl = data.get("download_url", "")
+                        sha = data.get("sha256", "")
+                        self.result.emit("update", remote, dl, sha, "")
                     else:
-                        self.result.emit("latest", remote, "")
+                        self.result.emit("latest", remote, "", "", "")
                 except Exception as e:
-                    self.result.emit("error", "", str(e))
+                    self.result.emit("error", "", "", "", str(e))
 
         self._startup_worker = _SilentCheckWorker(self)
         self._startup_worker.result.connect(self._on_startup_update_found)
         self._startup_worker.start()
 
-    def _on_startup_update_found(self, status, remote_ver, detail):
+    def _on_startup_update_found(self, status, remote_ver, dl_url, sha256, detail):
         if status == "error":
             toast_error("版本检查失败", f"GitHub 连接失败: {detail}")
             return
         if status == "latest":
             toast_success("已是最新版本", f"v{__version__}（远程: v{remote_ver}）")
             return
-        # status == "update": 有新版，自动下载
-        url = "https://raw.githubusercontent.com/TussalZeus18028/bds_manager/main/bds_manager.py"
-        save_path = os.path.join(SCRIPT_DIR, f"bds_manager_v{remote_ver}.py.new")
+
+        # 有新版 → 下载 ZIP 包
+        if not dl_url:
+            dl_url = "https://raw.githubusercontent.com/TussalZeus18028/bds_manager/main/bds_manager.py"
+            sha256 = ""
+        save_path = os.path.join(SCRIPT_DIR, f"bds_manager_v{remote_ver}.zip")
         try:
-            r = requests.get(url, headers=_github_headers(), timeout=60)
+            toast_info("正在下载更新", f"v{remote_ver} ...")
+            r = requests.get(dl_url, headers=_github_headers(), stream=True, timeout=120)
             r.raise_for_status()
             with open(save_path, "wb") as f:
                 for chunk in r.iter_content(chunk_size=65536):
                     if chunk: f.write(chunk)
         except Exception as e:
-            toast_error("更新下载失败", str(e))
+            toast_error("更新下载失败", f"v{remote_ver}: {e}")
+            log_error(f"启动更新下载失败: {e}")
             return
-        if not os.path.exists(save_path) or os.path.getsize(save_path) < 10000:
+
+        if not os.path.exists(save_path) or os.path.getsize(save_path) < 1000:
+            toast_error("下载文件异常", "文件过小或为空")
             return
-        toast_success("工具更新就绪", f"v{remote_ver} 已下载，可前往升级页重启应用")
-        log_info(f"工具更新 v{remote_ver} 已下载: {save_path}")
+
+        # SHA256 校验
+        if sha256 and not UpgradeTab._verify_sha256(save_path, sha256)[0]:
+            toast_error("SHA256 校验失败", "更新包可能已损坏，已删除")
+            try: os.remove(save_path)
+            except OSError: pass
+            return
+
+        toast_success("工具更新就绪", f"v{remote_ver} 已下载校验通过，前往升级页安装重启")
+        log_info(f"工具更新 v{remote_ver} ZIP 已下载: {save_path}")
 
     def keyPressEvent(self, event):
         # Ctrl+Shift+R: 重启工具
