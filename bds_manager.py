@@ -448,20 +448,6 @@ class ServerContext:
 _ctx = ServerContext(get_server_dir())
 log_info(f"服务器目录: {_ctx.server_dir}")
 
-# 模块级全局别名（向后兼容），update_global_paths 会同步更新
-SERVER_DIR = get_server_dir()
-SERVER_PROPERTIES = os.path.join(SERVER_DIR, "server.properties")
-ALLOWLIST_FILE = os.path.join(SERVER_DIR, "allowlist.json")
-PERMISSIONS_FILE = os.path.join(SERVER_DIR, "permissions.json")
-PACKET_LIMIT_FILE = os.path.join(SERVER_DIR, "packetlimitconfig.json")
-WORLDS_DIR = os.path.join(SERVER_DIR, "worlds")
-RESOURCE_PACKS_DIR = os.path.join(SERVER_DIR, "resource_packs")
-BEHAVIOR_PACKS_DIR = os.path.join(SERVER_DIR, "behavior_packs")
-BACKUP_DIR = os.path.join(SERVER_DIR, "backups")
-
-for d in [WORLDS_DIR, RESOURCE_PACKS_DIR, BEHAVIOR_PACKS_DIR, BACKUP_DIR]:
-    os.makedirs(d, exist_ok=True)
-
 # ---------- 端口检测辅助函数 ----------
 def is_port_udp_in_use(port):
     try:
@@ -541,9 +527,9 @@ class PortCheckerDialog(QDialog):
     def load_current_ports(self):
         self.current_ipv4 = 19132
         self.current_ipv6 = 19133
-        if os.path.exists(SERVER_PROPERTIES):
+        if os.path.exists(_ctx.SERVER_PROPERTIES):
             try:
-                with open(SERVER_PROPERTIES, "r", encoding="utf-8") as f:
+                with open(_ctx.SERVER_PROPERTIES, "r", encoding="utf-8") as f:
                     for line in f:
                         line = line.strip()
                         if line.startswith("server-port="):
@@ -596,14 +582,14 @@ class PortCheckerDialog(QDialog):
         except ValueError:
             toast_error("格式无效", "推荐的端口格式无效，请重新检测或手动输入。")
             return
-        if not os.path.exists(SERVER_PROPERTIES):
+        if not os.path.exists(_ctx.SERVER_PROPERTIES):
             toast_error("文件不存在", "server.properties 文件不存在")
             return
         try:
-            with open(SERVER_PROPERTIES, "r", encoding="utf-8") as f:
+            with open(_ctx.SERVER_PROPERTIES, "r", encoding="utf-8") as f:
                 lines = f.readlines()
             updated = False
-            with open(SERVER_PROPERTIES, "w", encoding="utf-8") as f:
+            with open(_ctx.SERVER_PROPERTIES, "w", encoding="utf-8") as f:
                 for line in lines:
                     if line.startswith("server-port="):
                         f.write(f"server-port={new_ipv4}\n")
@@ -645,7 +631,7 @@ def format_file_size(size_bytes):
     return f"{size_bytes:.1f} GiB"
 
 def get_world_path(level_name):
-    return os.path.join(WORLDS_DIR, level_name)
+    return os.path.join(_ctx.WORLDS_DIR, level_name)
 
 def get_pack_manifest(pack_folder, retry=5, delay=0.4):
     manifest_path = os.path.join(pack_folder, "manifest.json")
@@ -2398,7 +2384,7 @@ class PacksTab(QWidget):
             toast_error("错误", "无法获取包信息")
             return
         folder_name, pack_type, uuid = data
-        base_dir = RESOURCE_PACKS_DIR if pack_type == "resource" else BEHAVIOR_PACKS_DIR
+        base_dir = _ctx.RESOURCE_PACKS_DIR if pack_type == "resource" else _ctx.BEHAVIOR_PACKS_DIR
         pack_folder = os.path.join(base_dir, folder_name)
         if not os.path.exists(pack_folder):
             toast_error("包不存在", f"文件夹不存在: {pack_folder}")
@@ -2432,7 +2418,7 @@ class PacksTab(QWidget):
         if not os.path.exists(world_path):
             toast_error("世界不存在", "请先启动一次服务器生成世界")
             return
-        base_dir = RESOURCE_PACKS_DIR if pack_type == "resource" else BEHAVIOR_PACKS_DIR
+        base_dir = _ctx.RESOURCE_PACKS_DIR if pack_type == "resource" else _ctx.BEHAVIOR_PACKS_DIR
         pack_folder = os.path.join(base_dir, folder_name)
         uuid, version = get_pack_manifest(pack_folder, retry=3)
         if not uuid:
@@ -2478,8 +2464,8 @@ class PacksTab(QWidget):
         level_name = self.parent.get_level_name()
         world_path = get_world_path(level_name)
         try:
-            for folder in os.listdir(RESOURCE_PACKS_DIR):
-                folder_path = os.path.join(RESOURCE_PACKS_DIR, folder)
+            for folder in os.listdir(_ctx.RESOURCE_PACKS_DIR):
+                folder_path = os.path.join(_ctx.RESOURCE_PACKS_DIR, folder)
                 if os.path.isdir(folder_path):
                     uuid, _ = get_pack_manifest(folder_path, retry=1)
                     status = ""
@@ -2497,8 +2483,8 @@ class PacksTab(QWidget):
                     item.setData(Qt.UserRole, (folder, "resource", uuid))
                     self.resource_list.addItem(item)
             QApplication.processEvents()
-            for folder in os.listdir(BEHAVIOR_PACKS_DIR):
-                folder_path = os.path.join(BEHAVIOR_PACKS_DIR, folder)
+            for folder in os.listdir(_ctx.BEHAVIOR_PACKS_DIR):
+                folder_path = os.path.join(_ctx.BEHAVIOR_PACKS_DIR, folder)
                 if os.path.isdir(folder_path):
                     uuid, _ = get_pack_manifest(folder_path, retry=1)
                     status = ""
@@ -2526,7 +2512,7 @@ class PacksTab(QWidget):
         if not path:
             return
         folder_name = os.path.basename(path)
-        dest_dir = RESOURCE_PACKS_DIR if pack_type == "resource" else BEHAVIOR_PACKS_DIR
+        dest_dir = _ctx.RESOURCE_PACKS_DIR if pack_type == "resource" else _ctx.BEHAVIOR_PACKS_DIR
         dest_path = os.path.join(dest_dir, folder_name)
         if os.path.exists(dest_path):
             toast_warning("已存在", f"{folder_name} 已存在")
@@ -2573,7 +2559,7 @@ class PacksTab(QWidget):
                 continue
             level_name = self.parent.get_level_name()
             world_path = get_world_path(level_name)
-            target_dir = RESOURCE_PACKS_DIR if pack_type == "resource" else BEHAVIOR_PACKS_DIR
+            target_dir = _ctx.RESOURCE_PACKS_DIR if pack_type == "resource" else _ctx.BEHAVIOR_PACKS_DIR
             pack_path = os.path.join(target_dir, folder_name)
             # 启动后台删除线程
             self.worker = RemovePackWorker(pack_path, pack_type, world_path if os.path.exists(world_path) else None, uuid, self)
@@ -2716,11 +2702,11 @@ class ConfigTab(QWidget):
         self.load_server_properties()
 
     def load_server_properties(self):
-        if not os.path.exists(SERVER_PROPERTIES):
+        if not os.path.exists(_ctx.SERVER_PROPERTIES):
             log_warning("server.properties 不存在，将创建默认配置")
             self.create_default_properties()
         try:
-            with open(SERVER_PROPERTIES, "r", encoding="utf-8") as f:
+            with open(_ctx.SERVER_PROPERTIES, "r", encoding="utf-8") as f:
                 for line in f:
                     line = line.strip()
                     if not line or line.startswith("#"):
@@ -2780,7 +2766,7 @@ emit-server-telemetry=true
 correct-player-movement=false
 """
         try:
-            with open(SERVER_PROPERTIES, "w", encoding="utf-8") as f:
+            with open(_ctx.SERVER_PROPERTIES, "w", encoding="utf-8") as f:
                 f.write(default_content)
             log_success("已创建默认 server.properties")
             toast_info("配置文件已创建", "已生成默认 server.properties")
@@ -2790,9 +2776,9 @@ correct-player-movement=false
 
     def save_server_properties(self):
         lines = []
-        if os.path.exists(SERVER_PROPERTIES):
+        if os.path.exists(_ctx.SERVER_PROPERTIES):
             try:
-                with open(SERVER_PROPERTIES, "r", encoding="utf-8") as f:
+                with open(_ctx.SERVER_PROPERTIES, "r", encoding="utf-8") as f:
                     lines = f.readlines()
             except Exception as e:
                 log_error(f"读取 server.properties 失败: {e}")
@@ -2833,7 +2819,7 @@ correct-player-movement=false
                     value = widget.currentText()
                 new_lines.append(f"{key}={value}\n")
         try:
-            with open(SERVER_PROPERTIES, "w", encoding="utf-8") as f:
+            with open(_ctx.SERVER_PROPERTIES, "w", encoding="utf-8") as f:
                 f.writelines(new_lines)
             log_success("server.properties 已保存")
             toast_success("配置已保存", "重启服务器后生效")
@@ -2843,13 +2829,13 @@ correct-player-movement=false
             QMessageBox.critical(self, "错误", f"保存失败: {e}")
 
     def edit_allowlist(self):
-        self.edit_json_file(ALLOWLIST_FILE, "白名单")
+        self.edit_json_file(_ctx.ALLOWLIST_FILE, "白名单")
 
     def edit_permissions(self):
-        self.edit_json_file(PERMISSIONS_FILE, "权限")
+        self.edit_json_file(_ctx.PERMISSIONS_FILE, "权限")
 
     def edit_packet_limit(self):
-        self.edit_json_file(PACKET_LIMIT_FILE, "包限制配置")
+        self.edit_json_file(_ctx.PACKET_LIMIT_FILE, "包限制配置")
 
     def edit_json_file(self, filepath, title):
         if not os.path.exists(filepath):
@@ -2950,9 +2936,9 @@ class WorldTab(QWidget):
         self.refresh_info()
 
     def refresh_info(self):
-        if os.path.exists(SERVER_PROPERTIES):
+        if os.path.exists(_ctx.SERVER_PROPERTIES):
             try:
-                with open(SERVER_PROPERTIES, "r", encoding="utf-8") as f:
+                with open(_ctx.SERVER_PROPERTIES, "r", encoding="utf-8") as f:
                     for line in f:
                         if line.startswith("level-name="):
                             self.level_name_label.setText(line.split("=", 1)[1].strip())
@@ -2986,7 +2972,7 @@ class WorldTab(QWidget):
     def refresh_backup_list(self):
         self.backup_list.clear()
         try:
-            backups = sorted([f for f in os.listdir(BACKUP_DIR) if f.endswith(".zip")], reverse=True)
+            backups = sorted([f for f in os.listdir(_ctx.BACKUP_DIR) if f.endswith(".zip")], reverse=True)
             for b in backups:
                 self.backup_list.addItem(b)
         except Exception as e:
@@ -2999,7 +2985,7 @@ class WorldTab(QWidget):
             toast_warning("未选择", "请先选择要删除的备份")
             return
         filename = item.text()
-        filepath = os.path.join(BACKUP_DIR, filename)
+        filepath = os.path.join(_ctx.BACKUP_DIR, filename)
         reply = QMessageBox.question(
             self, "确认删除",
             f"确定要删除备份文件吗？\n\n{filename}\n\n此操作不可恢复！",
@@ -3028,7 +3014,7 @@ class WorldTab(QWidget):
             return
         # 启动备份线程
         toast_info("开始备份", f"正在备份世界 {level_name}...")
-        self.worker = BackupWorker(level_name, world_path, BACKUP_DIR, self)
+        self.worker = BackupWorker(level_name, world_path, _ctx.BACKUP_DIR, self)
         self.worker.progress.connect(lambda msg: self.parent.status_label.setText(msg))
         self.worker.finished.connect(self.on_backup_finished)
         self.worker.start()
@@ -3055,7 +3041,7 @@ class WorldTab(QWidget):
             toast_warning("请选择备份", "请先选择一个备份文件")
             return
         backup_name = selected.text()
-        backup_path = os.path.join(BACKUP_DIR, backup_name)
+        backup_path = os.path.join(_ctx.BACKUP_DIR, backup_name)
         level_name = self.level_name_label.text()
         world_path = get_world_path(level_name)
         if not os.path.exists(world_path):
@@ -3090,11 +3076,11 @@ class WorldTab(QWidget):
 
     def set_difficulty(self):
         difficulty = self.new_difficulty.currentText()
-        if os.path.exists(SERVER_PROPERTIES):
+        if os.path.exists(_ctx.SERVER_PROPERTIES):
             try:
-                with open(SERVER_PROPERTIES, "r", encoding="utf-8") as f:
+                with open(_ctx.SERVER_PROPERTIES, "r", encoding="utf-8") as f:
                     lines = f.readlines()
-                with open(SERVER_PROPERTIES, "w", encoding="utf-8") as f:
+                with open(_ctx.SERVER_PROPERTIES, "w", encoding="utf-8") as f:
                     for line in lines:
                         if line.startswith("difficulty="):
                             f.write(f"difficulty={difficulty}\n")
@@ -5406,9 +5392,9 @@ class BDSManager(QMainWindow):
         return os.path.join(server_dir, exe_rel)
 
     def get_level_name(self):
-        if os.path.exists(SERVER_PROPERTIES):
+        if os.path.exists(_ctx.SERVER_PROPERTIES):
             try:
-                with open(SERVER_PROPERTIES, "r", encoding="utf-8") as f:
+                with open(_ctx.SERVER_PROPERTIES, "r", encoding="utf-8") as f:
                     for line in f:
                         if line.startswith("level-name="):
                             return line.split("=", 1)[1].strip()
@@ -5519,20 +5505,8 @@ class BDSManager(QMainWindow):
             log_error(f"保存版本缓存失败: {e}")
 
     def update_global_paths(self):
-        global SERVER_DIR, SERVER_PROPERTIES, ALLOWLIST_FILE, PERMISSIONS_FILE
-        global PACKET_LIMIT_FILE, WORLDS_DIR, RESOURCE_PACKS_DIR, BEHAVIOR_PACKS_DIR, BACKUP_DIR
-        SERVER_DIR = self.get_absolute_server_dir()
-        os.makedirs(SERVER_DIR, exist_ok=True)
-        SERVER_PROPERTIES = os.path.join(SERVER_DIR, "server.properties")
-        ALLOWLIST_FILE = os.path.join(SERVER_DIR, "allowlist.json")
-        PERMISSIONS_FILE = os.path.join(SERVER_DIR, "permissions.json")
-        PACKET_LIMIT_FILE = os.path.join(SERVER_DIR, "packetlimitconfig.json")
-        WORLDS_DIR = os.path.join(SERVER_DIR, "worlds")
-        RESOURCE_PACKS_DIR = os.path.join(SERVER_DIR, "resource_packs")
-        BEHAVIOR_PACKS_DIR = os.path.join(SERVER_DIR, "behavior_packs")
-        BACKUP_DIR = os.path.join(SERVER_DIR, "backups")
-        for d in [WORLDS_DIR, RESOURCE_PACKS_DIR, BEHAVIOR_PACKS_DIR, BACKUP_DIR]:
-            os.makedirs(d, exist_ok=True)
+        """更新全局路径上下文（兼容旧调用）"""
+        _ctx.update(self.get_absolute_server_dir())
 
     def update_backup_timer(self):
         interval = self.config.get("backup_interval", 60)
@@ -5581,7 +5555,7 @@ class BDSManager(QMainWindow):
 
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         backup_name = f"auto_{level_name}_{timestamp}.zip"
-        backup_path = os.path.join(BACKUP_DIR, backup_name)
+        backup_path = os.path.join(_ctx.BACKUP_DIR, backup_name)
         try:
             with zipfile.ZipFile(backup_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
                 for root, dirs, files in os.walk(world_path):
@@ -5603,15 +5577,15 @@ class BDSManager(QMainWindow):
     def _cleanup_old_backups(self, keep=20):
         """清理旧备份文件，仅保留最近 keep 个"""
         try:
-            if not os.path.exists(BACKUP_DIR):
+            if not os.path.exists(_ctx.BACKUP_DIR):
                 return
             backups = sorted(
-                [f for f in os.listdir(BACKUP_DIR) if f.endswith(".zip")],
-                key=lambda f: os.path.getmtime(os.path.join(BACKUP_DIR, f)),
+                [f for f in os.listdir(_ctx.BACKUP_DIR) if f.endswith(".zip")],
+                key=lambda f: os.path.getmtime(os.path.join(_ctx.BACKUP_DIR, f)),
                 reverse=True
             )
             for old in backups[keep:]:
-                os.remove(os.path.join(BACKUP_DIR, old))
+                os.remove(os.path.join(_ctx.BACKUP_DIR, old))
                 log_info(f"已删除旧备份: {old}")
         except Exception as e:
             log_warning(f"清理旧备份失败: {e}")
@@ -5731,9 +5705,9 @@ class BDSManager(QMainWindow):
         mem = psutil.virtual_memory().percent
         toast_info("系统资源", f"CPU {cpu:.0f}% | 内存 {mem:.0f}%")
         # 备份状态
-        if os.path.exists(BACKUP_DIR):
-            pkgs = sorted([f for f in os.listdir(BACKUP_DIR) if f.endswith(".zip")],
-                          key=lambda f: os.path.getmtime(os.path.join(BACKUP_DIR, f)), reverse=True)
+        if os.path.exists(_ctx.BACKUP_DIR):
+            pkgs = sorted([f for f in os.listdir(_ctx.BACKUP_DIR) if f.endswith(".zip")],
+                          key=lambda f: os.path.getmtime(os.path.join(_ctx.BACKUP_DIR, f)), reverse=True)
             if pkgs:
                 toast_info("备份状态", f"最近: {pkgs[0][:40]}")
             else:
@@ -5857,16 +5831,16 @@ class BDSManager(QMainWindow):
 
     def init_watcher(self):
         paths_to_watch = []
-        if os.path.exists(RESOURCE_PACKS_DIR):
-            paths_to_watch.append(RESOURCE_PACKS_DIR)
-        if os.path.exists(BEHAVIOR_PACKS_DIR):
-            paths_to_watch.append(BEHAVIOR_PACKS_DIR)
-        if os.path.exists(SERVER_PROPERTIES):
-            paths_to_watch.append(SERVER_PROPERTIES)
-        if os.path.exists(ALLOWLIST_FILE):
-            paths_to_watch.append(ALLOWLIST_FILE)
-        if os.path.exists(PERMISSIONS_FILE):
-            paths_to_watch.append(PERMISSIONS_FILE)
+        if os.path.exists(_ctx.RESOURCE_PACKS_DIR):
+            paths_to_watch.append(_ctx.RESOURCE_PACKS_DIR)
+        if os.path.exists(_ctx.BEHAVIOR_PACKS_DIR):
+            paths_to_watch.append(_ctx.BEHAVIOR_PACKS_DIR)
+        if os.path.exists(_ctx.SERVER_PROPERTIES):
+            paths_to_watch.append(_ctx.SERVER_PROPERTIES)
+        if os.path.exists(_ctx.ALLOWLIST_FILE):
+            paths_to_watch.append(_ctx.ALLOWLIST_FILE)
+        if os.path.exists(_ctx.PERMISSIONS_FILE):
+            paths_to_watch.append(_ctx.PERMISSIONS_FILE)
         # 监控世界包注册文件（激活/注销包时修改）
         level_name = self.get_level_name()
         if level_name:
@@ -5876,8 +5850,8 @@ class BDSManager(QMainWindow):
                 if os.path.exists(fp):
                     paths_to_watch.append(fp)
         # 监控世界目录（新增/删除世界时刷新）
-        if os.path.exists(WORLDS_DIR):
-            paths_to_watch.append(WORLDS_DIR)
+        if os.path.exists(_ctx.WORLDS_DIR):
+            paths_to_watch.append(_ctx.WORLDS_DIR)
         existing = self.watcher.directories() + self.watcher.files()
         for p in existing:
             if p not in paths_to_watch:
