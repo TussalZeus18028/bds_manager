@@ -5448,36 +5448,49 @@ class BDSManager(QMainWindow):
             toast_success("已是最新版本", f"v{__version__}（远程: v{remote_ver}）")
             return
 
-        # 有新版 → 下载 ZIP 包
+        # 有新版 → 后台线程下载，不阻塞 GUI
         if not dl_url:
             dl_url = "https://raw.githubusercontent.com/TussalZeus18028/bds_manager/main/bds_manager.py"
             sha256 = ""
-        save_path = os.path.join(SCRIPT_DIR, f"bds_manager_v{remote_ver}.zip")
-        try:
-            toast_info("正在下载更新", f"v{remote_ver} ...")
-            r = requests.get(dl_url, headers=_github_headers(), stream=True, timeout=120)
-            r.raise_for_status()
-            with open(save_path, "wb") as f:
-                for chunk in r.iter_content(chunk_size=65536):
-                    if chunk: f.write(chunk)
-        except Exception as e:
-            toast_error("更新下载失败", f"v{remote_ver}: {e}")
-            log_error(f"启动更新下载失败: {e}")
-            return
 
-        if not os.path.exists(save_path) or os.path.getsize(save_path) < 1000:
-            toast_error("下载文件异常", "文件过小或为空")
-            return
+        class StartupDownloadWorker(BaseWorker):
+            def run(self):
+                save_path = os.path.join(SCRIPT_DIR, f"bds_manager_v{remote_ver}.zip")
+                self._save_path = save_path
+                self._sha256 = sha256
+                try:
+                    r = requests.get(dl_url, headers=_github_headers(), stream=True, timeout=30)
+                    r.raise_for_status()
+                    with open(save_path, "wb") as f:
+                        for chunk in r.iter_content(chunk_size=65536):
+                            if chunk:
+                                f.write(chunk)
+                except Exception as e:
+                    self.finished.emit(False, f"下载失败: {e}")
+                    return
+                if not os.path.exists(save_path) or os.path.getsize(save_path) < 1000:
+                    self.finished.emit(False, "下载文件异常")
+                    return
+                self.finished.emit(True, "下载完成")
 
-        # SHA256 校验
-        if sha256 and not UpgradeTab._verify_sha256(save_path, sha256)[0]:
-            toast_error("SHA256 校验失败", "更新包可能已损坏，已删除")
-            try: os.remove(save_path)
-            except OSError: pass
-            return
+        def on_download_done(success, msg):
+            if not success:
+                toast_error("更新下载失败", msg)
+                return
+            w = self.sender()
+            save_path = getattr(w, "_save_path", "")
+            sha = getattr(w, "_sha256", "")
+            if sha and not UpgradeTab._verify_sha256(save_path, sha)[0]:
+                toast_error("SHA256 校验失败", "更新包可能已损坏，已删除")
+                try: os.remove(save_path)
+                except OSError: pass
+                return
+            toast_success("工具更新就绪", f"v{remote_ver} 已下载，前往升级页安装重启")
+            log_info(f"工具更新 v{remote_ver} ZIP 已下载: {save_path}")
 
-        toast_success("工具更新就绪", f"v{remote_ver} 已下载校验通过，前往升级页安装重启")
-        log_info(f"工具更新 v{remote_ver} ZIP 已下载: {save_path}")
+        self._startup_dl_worker = StartupDownloadWorker(self)
+        self._startup_dl_worker.finished.connect(on_download_done)
+        self._startup_dl_worker.start()
 
     def keyPressEvent(self, event):
         # Ctrl+Shift+R: 重启工具
