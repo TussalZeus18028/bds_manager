@@ -4266,6 +4266,14 @@ class UpgradeTab(QWidget):
         self.check_tool_btn = QPushButton("🔍 检查工具更新")
         self.check_tool_btn.clicked.connect(self._check_tool_update)
         tool_top.addWidget(self.check_tool_btn)
+        self.install_tool_btn = QPushButton("⬆️ 安装更新并重启")
+        self.install_tool_btn.clicked.connect(self._apply_tool_update)
+        self.install_tool_btn.setStyleSheet(
+            "QPushButton { background:#4caf50; color:#fff; border:none; "
+            "border-radius:4px; padding:6px 14px; font-weight:bold; }"
+            "QPushButton:hover { background:#43a047; }")
+        self.install_tool_btn.setVisible(False)
+        tool_top.addWidget(self.install_tool_btn)
         tool_layout.addLayout(tool_top)
         self.tool_update_status = QLabel("")
 
@@ -4891,7 +4899,6 @@ class UpgradeTab(QWidget):
                 try:
                     url = constants.TOOL_UPDATE_URL if constants else (
                         "https://raw.githubusercontent.com/TussalZeus18028/bds_manager/main/version.json")
-                    url = url + (f"?t={int(__import__('time').time())}")
                     req = urllib.request.Request(url, headers=_github_headers())
                     with urllib.request.urlopen(req, timeout=10) as resp:
                         data = json.loads(resp.read().decode("utf-8"))
@@ -5023,7 +5030,7 @@ class UpgradeTab(QWidget):
                                 dl_bytes += len(chunk)
                                 if total > 0:
                                     pct = int(dl_bytes * 100 / total)
-                                    self.progress.emit(f"下载中... {dl_bytes/1024:.0f}/{total/1024:.0f} KB ({pct}%)")
+                                    self.status_signal.emit(f"下载中... {dl_bytes/1024:.0f}/{total/1024:.0f} KB ({pct}%)")
                     self.finished.emit(True, f"下载完成（{dl_bytes/1024:.1f} KB）")
                 except requests.exceptions.RequestException as e:
                     self.finished.emit(False, f"网络错误: {e}")
@@ -5104,20 +5111,13 @@ class UpgradeTab(QWidget):
         self._log(f"下载完成: {message} | {msg}", "SUCCESS")
         self._update_zip_path = zip_path
 
-        reply = QMessageBox.question(
-            self, "下载完成",
-            f"新版本已下载并通过校验！\n\n{message}\n{msg}\n\n"
-            "是否立即安装并重启？\n⚠️ 安装后程序将自动重启。",
-            QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.Yes
-        )
-
-        if reply == QMessageBox.Yes:
-            self._apply_tool_update()
-        else:
-            self._scrolled_set_text(self.tool_update_status, "⚠️ 已取消更新。新版本已下载但未安装。")
-            self.tool_update_status.setStyleSheet("color: #ff9800; padding: 4px;")
-            self._log("用户取消安装更新", "WARN")
+        # 显示安装按钮，用户主动点击安装
+        self._scrolled_set_text(self.tool_update_status,
+            f"✅ 更新包已就绪（{message}, {msg}）")
+        self.tool_update_status.setStyleSheet("color: #4caf50; font-weight: bold; padding: 4px;")
+        self.install_tool_btn.setVisible(True)
+        self.check_tool_btn.setText("🔍 重新检查")
+    # ----- _on_tool_download_finished 结束
 
     def _backup_script_dir(self):
         """备份脚本目录核心文件到 backups/upgrade_backup_时间戳/"""
@@ -5431,8 +5431,6 @@ class BDSManager(QMainWindow):
                 try:
                     url = constants.TOOL_UPDATE_URL if constants else (
                         "https://raw.githubusercontent.com/TussalZeus18028/bds_manager/main/version.json")
-                    # 绕过 raw CDN 缓存
-                    url = url + (f"?t={int(__import__('time').time())}")
                     req = urllib.request.Request(url, headers=_github_headers())
                     with urllib.request.urlopen(req, timeout=10) as resp:
                         data = json.loads(resp.read().decode())
