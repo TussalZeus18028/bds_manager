@@ -4883,13 +4883,17 @@ class UpgradeTab(QWidget):
     def _check_local_update_zip(self):
         """检测本地是否已有下载好的更新包，有则直接启用安装按钮"""
         import glob as _glob
-        zips = _glob.glob(os.path.join(SCRIPT_DIR, "_update_v*.zip"))
+        zips = (
+            _glob.glob(os.path.join(SCRIPT_DIR, "_update_v*.zip"))
+            + _glob.glob(os.path.join(SCRIPT_DIR, "bds_manager_v*.zip"))
+            + _glob.glob(os.path.join(SCRIPT_DIR, "release", "bds_manager_v*.zip"))
+        )
         if zips:
             latest = max(zips, key=os.path.getmtime)
             if self._is_valid_zip(latest):
                 self._update_zip_path = latest
                 self.install_tool_btn.setEnabled(True)
-                ver = os.path.basename(latest).replace("_update_v", "").replace(".zip", "")
+                ver = os.path.basename(latest).replace("bds_manager_v", "").replace("_update_v", "").replace(".zip", "")
                 self.tool_update_status.setText(f"✅ 已有更新包 v{ver}，可直接安装")
                 self.tool_update_status.setStyleSheet("color: #4caf50; font-weight: bold; padding: 4px;")
 
