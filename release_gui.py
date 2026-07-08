@@ -93,7 +93,8 @@ class PublishWorker(QObject):
 
     def _run(self, cmd):
         self._log("info", f"$ {' '.join(cmd)}")
-        r = subprocess.run(cmd, capture_output=True, text=True, cwd=str(SCRIPT_DIR))
+        r = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace",
+                           cwd=str(SCRIPT_DIR))
         out = (r.stdout or "").strip()
         err = (r.stderr or "").strip()
         if err:
