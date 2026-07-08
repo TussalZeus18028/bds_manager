@@ -1,9 +1,9 @@
 {
-    "version": "2.1.0.10",
+    "version": "2.1.1.00",
     "release_date": "2026-07-07",
-    "download_url": "https://github.com/TussalZeus18028/bds_manager/releases/download/v2.1.0.10/bds_manager_v2.1.0.10.zip",
-    "sha256": "74d875ee7aa54dd72a5733f4515233c225a7f00808ce60914eabd8cce24f4393",
-    "file_size": 64119,
+    "download_url": "https://github.com/TussalZeus18028/bds_manager/releases/download/v2.1.1.00/bds_manager_v2.1.1.00.zip",
+    "sha256": "b2eb32a368844c0bb99ec4f7467aa6fc9991ecbfc9a4c3fa8ad1f496e6cf411a",
+    "file_size": 64352,
     "min_compatible_version": "2.0.0.00",
     "changelog": "## v2.1.0.10 架构重构 & 质量收尾\n\n### 🏗️ 架构重构\n- 彻底消除全局路径变量，60处引用统一为 _ctx 单例\n- _BrowseWorker/UpgradeWorker 硬编码改为 constants 常量引用\n- 拆分 _start_head_worker 消除重复\n- ServerContext 集中路径管理\n\n### 🛡️ 健壮性\n- 0 个 bare except 残留\n- HEAD 扫描：3次重试+指数退避+4UA轮换\n- Token XOR+Base64 加密存储\n- 强制备份：服务器运行时暂停→备份→恢复\n\n### 🧹 清理\n- requirements.txt 移除 fastapi/uvicorn/websockets\n- Toast 位置随窗口自适应"
 }

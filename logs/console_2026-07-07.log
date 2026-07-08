@@ -195,3 +195,201 @@
 [2026-07-07 14:30:23] [2026-07-07 14:30:23:258 INFO] Server started.
 [2026-07-07 14:30:48] >>> 正在停止服务器... <<<
 [2026-07-07 14:30:49] >>> 服务器已停止 <<<
+
+--- 会话开始: 2026-07-07 15:47:50 ---
+[2026-07-07 15:48:16] >>> 服务器启动中... <<<
+[2026-07-07 15:48:16] NO LOG FILE! - setting up server logging...
+[2026-07-07 15:48:16] [2026-07-07 15:48:16:274 INFO] Starting Server
+[2026-07-07 15:48:16] [2026-07-07 15:48:16:274 INFO] Version: 1.26.32.2
+[2026-07-07 15:48:16] [2026-07-07 15:48:16:274 INFO] Session ID: 85887732-2fb3-454d-ac18-cbf759865e60
+[2026-07-07 15:48:16] [2026-07-07 15:48:16:275 INFO] Build ID: 46948664
+[2026-07-07 15:48:16] [2026-07-07 15:48:16:275 INFO] Branch: r/26_u3
+[2026-07-07 15:48:16] [2026-07-07 15:48:16:275 INFO] Commit ID: 8dfd7355e9ce6a57bcb09bd2cea696b7b76b6cff
+[2026-07-07 15:48:16] [2026-07-07 15:48:16:275 INFO] Configuration: Publish
+[2026-07-07 15:48:16] [2026-07-07 15:48:16:275 INFO] Level Name: onelife
+[2026-07-07 15:48:16] [2026-07-07 15:48:16:277 INFO] No CDN config file found at: cdn_config.json for dedicated server
+[2026-07-07 15:48:16] [2026-07-07 15:48:16:277 INFO] Game mode: 0 Survival
+[2026-07-07 15:48:16] [2026-07-07 15:48:16:277 INFO] Difficulty: 3 HARD
+[2026-07-07 15:48:16] [2026-07-07 15:48:16:277 WARN] Content logging to console is disabled.  Enable it with content-log-console-output-enabled=true in server.properties
+[2026-07-07 15:48:16] [2026-07-07 15:48:16:279 INFO]
+[2026-07-07 15:48:16] 
+[2026-07-07 15:48:16] #####################################################
+[2026-07-07 15:48:16] #                                                   #
+[2026-07-07 15:48:16] #               LOADING VANILLA WORLD               #
+[2026-07-07 15:48:16] #                                                   #
+[2026-07-07 15:48:16] #####################################################
+[2026-07-07 15:48:16] [2026-07-07 15:48:16:865 INFO] Content logging to disk is enabled. Writing log to: ContentLog2026-07-07_15-48-16
+[2026-07-07 15:48:16] [2026-07-07 15:48:16:867 INFO] Opening level 'worlds/onelife/db'
+[2026-07-07 15:48:17] [2026-07-07 15:48:17:379 INFO] Pack Stack - None
+[2026-07-07 15:48:18] [2026-07-07 15:48:18:567 INFO] IPv4 supported, port: 19132: Used for gameplay and LAN discovery
+[2026-07-07 15:48:18] [2026-07-07 15:48:18:567 INFO] IPv6 supported, port: 19133: Used for gameplay
+[2026-07-07 15:48:18] [2026-07-07 15:48:18:691 INFO] Waiting for Minecraft services...
+[2026-07-07 15:48:20] [2026-07-07 15:48:20:586 INFO] Server started.
+[2026-07-07 15:48:27] > stop
+[2026-07-07 15:48:27] [2026-07-07 15:48:27:775 INFO] Server stop requested.
+[2026-07-07 15:48:28] [2026-07-07 15:48:28:888 INFO] Stopping server...
+[2026-07-07 15:48:29] Quit correctly
+[2026-07-07 15:48:29] >>> 服务器已停止 <<<
+
+--- 会话开始: 2026-07-07 16:27:33 ---
+[2026-07-07 16:28:13] >>> 服务器启动中... <<<
+[2026-07-07 16:28:13] NO LOG FILE! - setting up server logging...
+[2026-07-07 16:28:13] [2026-07-07 16:28:13:967 INFO] Starting Server
+[2026-07-07 16:28:13] [2026-07-07 16:28:13:967 INFO] Version: 1.26.32.2
+[2026-07-07 16:28:13] [2026-07-07 16:28:13:967 INFO] Session ID: e11dda98-fa8b-4520-a238-8c87be0e2625
+[2026-07-07 16:28:13] [2026-07-07 16:28:13:967 INFO] Build ID: 46948664
+[2026-07-07 16:28:13] [2026-07-07 16:28:13:967 INFO] Branch: r/26_u3
+[2026-07-07 16:28:13] [2026-07-07 16:28:13:967 INFO] Commit ID: 8dfd7355e9ce6a57bcb09bd2cea696b7b76b6cff
+[2026-07-07 16:28:13] [2026-07-07 16:28:13:967 INFO] Configuration: Publish
+[2026-07-07 16:28:13] [2026-07-07 16:28:13:968 INFO] Level Name: onelife
+[2026-07-07 16:28:13] [2026-07-07 16:28:13:970 INFO] No CDN config file found at: cdn_config.json for dedicated server
+[2026-07-07 16:28:13] [2026-07-07 16:28:13:970 INFO] Game mode: 0 Survival
+[2026-07-07 16:28:13] [2026-07-07 16:28:13:970 INFO] Difficulty: 3 HARD
+[2026-07-07 16:28:13] [2026-07-07 16:28:13:970 WARN] Content logging to console is disabled.  Enable it with content-log-console-output-enabled=true in server.properties
+[2026-07-07 16:28:13] [2026-07-07 16:28:13:972 INFO]
+[2026-07-07 16:28:13] 
+[2026-07-07 16:28:13] #####################################################
+[2026-07-07 16:28:13] #                                                   #
+[2026-07-07 16:28:13] #               LOADING VANILLA WORLD               #
+[2026-07-07 16:28:14] #                                                   #
+[2026-07-07 16:28:14] #####################################################
+[2026-07-07 16:28:14] [2026-07-07 16:28:14:551 INFO] Content logging to disk is enabled. Writing log to: ContentLog2026-07-07_16-28-14
+[2026-07-07 16:28:14] [2026-07-07 16:28:14:553 INFO] Opening level 'worlds/onelife/db'
+[2026-07-07 16:28:15] [2026-07-07 16:28:15:070 INFO] Pack Stack - None
+[2026-07-07 16:28:16] [2026-07-07 16:28:16:304 INFO] IPv4 supported, port: 19132: Used for gameplay and LAN discovery
+[2026-07-07 16:28:16] [2026-07-07 16:28:16:304 INFO] IPv6 supported, port: 19133: Used for gameplay
+[2026-07-07 16:28:16] [2026-07-07 16:28:16:420 INFO] Waiting for Minecraft services...
+[2026-07-07 16:28:16] [2026-07-07 16:28:16:512 INFO] Server started.
+[2026-07-07 16:29:08] [2026-07-07 16:29:08:403 INFO] Player connected: bvvd6458, xuid: 2535415507636880
+[2026-07-07 16:29:34] [2026-07-07 16:29:34:448 INFO] Player PartyIdUpdate:  pfid: 37066EF3A897A85, partyid: , isLeader: false
+[2026-07-07 16:29:41] [2026-07-07 16:29:41:894 INFO] Player Spawned: bvvd6458 xuid: 2535415507636880, pfid: 37066EF3A897A85
+[2026-07-07 16:29:52] [2026-07-07 16:29:52:355 INFO] Player disconnected: bvvd6458, xuid: 2535415507636880, pfid: 37066EF3A897A85
+[2026-07-07 16:29:57] >>> 正在停止服务器... <<<
+[2026-07-07 16:30:02] >>> 服务器已停止 <<<
+[2026-07-07 16:31:44] >>> 服务器启动中... <<<
+[2026-07-07 16:31:44] NO LOG FILE! - setting up server logging...
+[2026-07-07 16:31:44] [2026-07-07 16:31:44:393 INFO] Starting Server
+[2026-07-07 16:31:44] [2026-07-07 16:31:44:393 INFO] Version: 1.26.32.2
+[2026-07-07 16:31:44] [2026-07-07 16:31:44:393 INFO] Session ID: 558d4628-0874-4c64-93b8-5a77825b95e1
+[2026-07-07 16:31:44] [2026-07-07 16:31:44:393 INFO] Build ID: 46948664
+[2026-07-07 16:31:44] [2026-07-07 16:31:44:393 INFO] Branch: r/26_u3
+[2026-07-07 16:31:44] [2026-07-07 16:31:44:393 INFO] Commit ID: 8dfd7355e9ce6a57bcb09bd2cea696b7b76b6cff
+[2026-07-07 16:31:44] [2026-07-07 16:31:44:393 INFO] Configuration: Publish
+[2026-07-07 16:31:44] [2026-07-07 16:31:44:394 INFO] Level Name: onelife
+[2026-07-07 16:31:44] [2026-07-07 16:31:44:396 INFO] No CDN config file found at: cdn_config.json for dedicated server
+[2026-07-07 16:31:44] [2026-07-07 16:31:44:396 INFO] Game mode: 0 Survival
+[2026-07-07 16:31:44] [2026-07-07 16:31:44:396 INFO] Difficulty: 3 HARD
+[2026-07-07 16:31:44] [2026-07-07 16:31:44:396 WARN] Content logging to console is disabled.  Enable it with content-log-console-output-enabled=true in server.properties
+[2026-07-07 16:31:44] [2026-07-07 16:31:44:398 INFO]
+[2026-07-07 16:31:44] 
+[2026-07-07 16:31:44] #####################################################
+[2026-07-07 16:31:44] #                                                   #
+[2026-07-07 16:31:44] #               LOADING VANILLA WORLD               #
+[2026-07-07 16:31:44] #                                                   #
+[2026-07-07 16:31:44] #####################################################
+[2026-07-07 16:31:45] [2026-07-07 16:31:44:991 INFO] Content logging to disk is enabled. Writing log to: ContentLog2026-07-07_16-31-44
+[2026-07-07 16:31:45] [2026-07-07 16:31:44:992 INFO] Opening level 'worlds/onelife/db'
+[2026-07-07 16:31:45] [2026-07-07 16:31:45:408 INFO] Pack Stack - None
+[2026-07-07 16:31:46] [2026-07-07 16:31:46:658 INFO] IPv4 supported, port: 19132: Used for gameplay and LAN discovery
+[2026-07-07 16:31:46] [2026-07-07 16:31:46:658 INFO] IPv6 supported, port: 19133: Used for gameplay
+[2026-07-07 16:31:46] [2026-07-07 16:31:46:792 INFO] Waiting for Minecraft services...
+[2026-07-07 16:31:47] [2026-07-07 16:31:47:099 INFO] Server started.
+[2026-07-07 16:32:36] [2026-07-07 16:32:36:199 INFO] Player connected: TussalZeus18028, xuid: 2535468543420667
+[2026-07-07 16:32:36] [2026-07-07 16:32:36:735 INFO] Player PartyIdUpdate:  pfid: CDCF761C759BFA9C, partyid: , isLeader: false
+[2026-07-07 16:32:47] [2026-07-07 16:32:47:314 INFO] Player Spawned: TussalZeus18028 xuid: 2535468543420667, pfid: CDCF761C759BFA9C
+[2026-07-07 16:32:57] [2026-07-07 16:32:57:348 INFO] Player connected: bvvd6458, xuid: 2535415507636880
+[2026-07-07 16:33:25] [2026-07-07 16:33:25:276 INFO] Player PartyIdUpdate:  pfid: 37066EF3A897A85, partyid: , isLeader: false
+[2026-07-07 16:33:25] [2026-07-07 16:33:25:969 INFO] Player Spawned: bvvd6458 xuid: 2535415507636880, pfid: 37066EF3A897A85
+[2026-07-07 16:37:21] > TP bvvd6458 TussalZeus18028
+[2026-07-07 16:37:22] [2026-07-07 16:37:22:467 INFO] Teleported bvvd6458 to TussalZeus18028
+[2026-07-07 16:38:54] > /tp TussalZeus18028 bvvd6458
+[2026-07-07 16:38:54] [2026-07-07 16:38:54:017 ERROR] Unknown command: /. Please check that the command exists and that you have permission to use it.
+[2026-07-07 16:39:52] > kill bvvd6458
+[2026-07-07 16:39:53] [2026-07-07 16:39:53:013 INFO] Killed bvvd6458
+[2026-07-07 16:43:32] > gamemode 0 TussalZeus18028
+[2026-07-07 16:43:32] [2026-07-07 16:43:32:475 INFO] Set TussalZeus18028's game mode to Survival
+[2026-07-07 16:43:53] > gamemode 1 TussalZeus18028
+[2026-07-07 16:43:53] [2026-07-07 16:43:53:683 INFO] Set TussalZeus18028's game mode to Creative
+[2026-07-07 16:47:25] > say Unknown command: /. Please check that the command exists and that you have permission to use it.
+[2026-07-07 16:48:43] > kick bvvd6458
+[2026-07-07 16:48:43] [2026-07-07 16:48:43:508 INFO] Kicked bvvd6458 from the game: ''
+[2026-07-07 16:48:43] [2026-07-07 16:48:43:533 INFO] Player disconnected: bvvd6458, xuid: 2535415507636880, pfid: 37066EF3A897A85
+[2026-07-07 16:56:04] > gamemode 0 TussalZeus18028
+[2026-07-07 16:56:04] [2026-07-07 16:56:04:547 INFO] Set TussalZeus18028's game mode to Survival
+[2026-07-07 16:57:24] > gamemode 1 TussalZeus18028
+[2026-07-07 16:57:24] [2026-07-07 16:57:24:115 INFO] Set TussalZeus18028's game mode to Creative
+[2026-07-07 17:10:28] > gamemode 0 TussalZeus18028
+[2026-07-07 17:10:28] [2026-07-07 17:10:28:129 INFO] Set TussalZeus18028's game mode to Survival
+[2026-07-07 17:10:36] [2026-07-07 17:10:36:870 INFO] Player disconnected: TussalZeus18028, xuid: 2535468543420667, pfid: CDCF761C759BFA9C
+[2026-07-07 17:10:55] > stop
+[2026-07-07 17:10:55] [2026-07-07 17:10:55:605 INFO] Server stop requested.
+[2026-07-07 17:10:55] [2026-07-07 17:10:55:675 INFO] Stopping server...
+[2026-07-07 17:10:56] Quit correctly
+[2026-07-07 17:10:56] >>> 服务器已停止 <<<
+
+--- 会话开始: 2026-07-07 18:02:18 ---
+[2026-07-07 18:02:44] >>> 服务器启动中... <<<
+[2026-07-07 18:02:44] NO LOG FILE! - setting up server logging...
+[2026-07-07 18:02:44] [2026-07-07 18:02:44:066 INFO] Starting Server
+[2026-07-07 18:02:44] [2026-07-07 18:02:44:066 INFO] Version: 1.26.32.2
+[2026-07-07 18:02:44] [2026-07-07 18:02:44:066 INFO] Session ID: 2dbb88bf-cfc1-481c-add5-7986c5f98696
+[2026-07-07 18:02:44] [2026-07-07 18:02:44:066 INFO] Build ID: 46948664
+[2026-07-07 18:02:44] [2026-07-07 18:02:44:066 INFO] Branch: r/26_u3
+[2026-07-07 18:02:44] [2026-07-07 18:02:44:066 INFO] Commit ID: 8dfd7355e9ce6a57bcb09bd2cea696b7b76b6cff
+[2026-07-07 18:02:44] [2026-07-07 18:02:44:066 INFO] Configuration: Publish
+[2026-07-07 18:02:44] [2026-07-07 18:02:44:067 INFO] Level Name: onelife
+[2026-07-07 18:02:44] [2026-07-07 18:02:44:069 INFO] No CDN config file found at: cdn_config.json for dedicated server
+[2026-07-07 18:02:44] [2026-07-07 18:02:44:069 INFO] Game mode: 0 Survival
+[2026-07-07 18:02:44] [2026-07-07 18:02:44:069 INFO] Difficulty: 3 HARD
+[2026-07-07 18:02:44] [2026-07-07 18:02:44:070 WARN] Content logging to console is disabled.  Enable it with content-log-console-output-enabled=true in server.properties
+[2026-07-07 18:02:44] [2026-07-07 18:02:44:072 INFO]
+[2026-07-07 18:02:44] 
+[2026-07-07 18:02:44] #####################################################
+[2026-07-07 18:02:44] #                                                   #
+[2026-07-07 18:02:44] #               LOADING VANILLA WORLD               #
+[2026-07-07 18:02:44] #                                                   #
+[2026-07-07 18:02:44] #####################################################
+[2026-07-07 18:02:44] [2026-07-07 18:02:44:667 INFO] Content logging to disk is enabled. Writing log to: ContentLog2026-07-07_18-02-44
+[2026-07-07 18:02:44] [2026-07-07 18:02:44:669 INFO] Opening level 'worlds/onelife/db'
+[2026-07-07 18:02:45] [2026-07-07 18:02:45:116 INFO] Pack Stack - None
+[2026-07-07 18:02:46] [2026-07-07 18:02:46:339 INFO] IPv4 supported, port: 19132: Used for gameplay and LAN discovery
+[2026-07-07 18:02:46] [2026-07-07 18:02:46:339 INFO] IPv6 supported, port: 19133: Used for gameplay
+[2026-07-07 18:02:46] [2026-07-07 18:02:46:447 INFO] Waiting for Minecraft services...
+[2026-07-07 18:02:46] [2026-07-07 18:02:46:622 INFO] Server started.
+[2026-07-07 18:02:53] > STOP
+[2026-07-07 18:02:53] [2026-07-07 18:02:53:964 INFO] Server stop requested.
+[2026-07-07 18:02:54] [2026-07-07 18:02:54:238 INFO] Stopping server...
+[2026-07-07 18:02:54] Quit correctly
+[2026-07-07 18:02:54] >>> 服务器已停止 <<<
+
+--- 会话开始: 2026-07-07 23:23:51 ---
+[2026-07-07 23:24:02] >>> 服务器启动中... <<<
+[2026-07-07 23:24:07] NO LOG FILE! - setting up server logging...
+[2026-07-07 23:24:07] [2026-07-07 23:24:07:501 INFO] Starting Server
+[2026-07-07 23:24:07] [2026-07-07 23:24:07:501 INFO] Version: 1.26.32.2
+[2026-07-07 23:24:07] [2026-07-07 23:24:07:501 INFO] Session ID: 2b36e3bb-06f0-48c2-b7c7-46dd43e7a23e
+[2026-07-07 23:24:07] [2026-07-07 23:24:07:501 INFO] Build ID: 46948664
+[2026-07-07 23:24:07] [2026-07-07 23:24:07:501 INFO] Branch: r/26_u3
+[2026-07-07 23:24:07] [2026-07-07 23:24:07:501 INFO] Commit ID: 8dfd7355e9ce6a57bcb09bd2cea696b7b76b6cff
+[2026-07-07 23:24:07] [2026-07-07 23:24:07:501 INFO] Configuration: Publish
+[2026-07-07 23:24:07] [2026-07-07 23:24:07:502 INFO] Level Name: onelife
+[2026-07-07 23:24:07] [2026-07-07 23:24:07:504 INFO] No CDN config file found at: cdn_config.json for dedicated server
+[2026-07-07 23:24:07] [2026-07-07 23:24:07:504 INFO] Game mode: 0 Survival
+[2026-07-07 23:24:07] [2026-07-07 23:24:07:504 INFO] Difficulty: 3 HARD
+[2026-07-07 23:24:07] [2026-07-07 23:24:07:505 WARN] Content logging to console is disabled.  Enable it with content-log-console-output-enabled=true in server.properties
+[2026-07-07 23:24:07] [2026-07-07 23:24:07:549 INFO]
+[2026-07-07 23:24:07] 
+[2026-07-07 23:24:07] #####################################################
+[2026-07-07 23:24:07] #                                                   #
+[2026-07-07 23:24:07] #               LOADING VANILLA WORLD               #
+[2026-07-07 23:24:07] #                                                   #
+[2026-07-07 23:24:07] #####################################################
+[2026-07-07 23:24:10] [2026-07-07 23:24:10:371 INFO] Content logging to disk is enabled. Writing log to: ContentLog2026-07-07_23-24-10
+[2026-07-07 23:24:10] [2026-07-07 23:24:10:373 INFO] Opening level 'worlds/onelife/db'
+[2026-07-07 23:24:10] [2026-07-07 23:24:10:921 INFO] Pack Stack - None
+[2026-07-07 23:24:13] [2026-07-07 23:24:13:143 INFO] IPv4 supported, port: 19132: Used for gameplay and LAN discovery
+[2026-07-07 23:24:13] [2026-07-07 23:24:13:143 INFO] IPv6 supported, port: 19133: Used for gameplay
+[2026-07-07 23:24:13] [2026-07-07 23:24:13:288 INFO] Waiting for Minecraft services...
+[2026-07-07 23:24:13] [2026-07-07 23:24:13:830 INFO] Server started.
+[2026-07-07 23:24:19] >>> 正在停止服务器... <<<
+[2026-07-07 23:24:21] >>> 服务器已停止 <<<
