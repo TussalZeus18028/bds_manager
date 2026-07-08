@@ -40,6 +40,7 @@ import threading
 import requests
 import time
 import re
+import base64
 try:
     import constants
 except ImportError:
