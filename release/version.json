@@ -2,8 +2,8 @@
     "version": "2.1.1.00",
     "release_date": "2026-07-07",
     "download_url": "https://github.com/TussalZeus18028/bds_manager/releases/download/v2.1.1.00/bds_manager_v2.1.1.00.zip",
-    "sha256": "76b76027b09211b82867ae860adb64c4e481c73dc06821381f8366c970cc3103",
-    "file_size": 64434,
+    "sha256": "a189bc574ab2e7d094fa182e4f42e75bc49ee0e5aa3c48c3ca2f45d0281a9272",
+    "file_size": 64499,
     "min_compatible_version": "2.0.0.00",
     "changelog": "## v2.1.1.00 自更新机制 & 发布工具\n\n### 📦 ZIP 全量更新\n- 自更新改为 ZIP 包下载，覆盖附属文件\n- 下载后 SHA256 校验 + ZIP 头检测防伪\n- 启动更新异步化，不阻塞 GUI\n- version.json 缓存穿透（时间戳参数）\n\n### 🔘 安装按钮\n- 升级页新增「安装更新并重启」按钮\n- 进入页面自动扫描本地更新包，一键启用\n- 备份 → 解压 → 重启 全自动\n\n### 🛠 发布工具\n- release_gui.py 图形界面（内建打包+发布）\n- build_release.py / publish.py / release.py 已合并删除\n- 自动生成 release_notes.md\n- publish.bat 已替换为 Python 脚本\n\n### 🐛 修复\n- DownloadUpdateWorker 信号参数对齐\n- 下载进度 status_signal → progress\n- subprocess GBK 编码错误"
 }

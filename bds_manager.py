@@ -394,6 +394,14 @@ def _github_headers():
         h["Authorization"] = f"token {_github_token_cache}"
     return h
 
+def _fetch_remote_version_json():
+    """通过 GitHub API 获取 version.json，绕开 raw CDN 缓存"""
+    url = "https://api.github.com/repos/TussalZeus18028/bds_manager/contents/version.json?ref=main"
+    req = urllib.request.Request(url, headers=_github_headers())
+    with urllib.request.urlopen(req, timeout=10) as resp:
+        api_data = json.loads(resp.read().decode("utf-8"))
+        return json.loads(base64.b64decode(api_data["content"]).decode("utf-8"))
+
 def _refresh_github_token():
     """配置变更后刷新缓存的 token"""
     global _github_token_cache
@@ -4916,21 +4924,17 @@ class UpgradeTab(QWidget):
 
             def run(self):
                 try:
-                    url = constants.TOOL_UPDATE_URL if constants else (
-                        "https://raw.githubusercontent.com/TussalZeus18028/bds_manager/main/version.json")
-                    req = urllib.request.Request(url, headers=_github_headers())
-                    with urllib.request.urlopen(req, timeout=10) as resp:
-                        data = json.loads(resp.read().decode("utf-8"))
-                        remote_ver = data.get("version", "")
-                        release_date = data.get("release_date", "")
-                        changelog = data.get("changelog", "")
-                        dl_url = data.get("download_url", "")
-                        sha256 = data.get("sha256", "")
-                        min_ver = data.get("min_compatible_version", "")
-                        self.result_signal.emit(
-                            True, remote_ver, release_date,
-                            changelog or "", dl_url, sha256, min_ver
-                        )
+                    data = _fetch_remote_version_json()
+                    remote_ver = data.get("version", "")
+                    release_date = data.get("release_date", "")
+                    changelog = data.get("changelog", "")
+                    dl_url = data.get("download_url", "")
+                    sha256 = data.get("sha256", "")
+                    min_ver = data.get("min_compatible_version", "")
+                    self.result_signal.emit(
+                        True, remote_ver, release_date,
+                        changelog or "", dl_url, sha256, min_ver
+                    )
                 except urllib.error.HTTPError as e:
                     self.result_signal.emit(False, "", "", f"HTTP {e.code}: {e.reason}", "", "", "")
                 except urllib.error.URLError as e:
@@ -5448,11 +5452,7 @@ class BDSManager(QMainWindow):
             result = pyqtSignal(str, str, str, str, str)  # status, ver, dl_url, sha256, detail
             def run(self):
                 try:
-                    url = constants.TOOL_UPDATE_URL if constants else (
-                        "https://raw.githubusercontent.com/TussalZeus18028/bds_manager/main/version.json")
-                    req = urllib.request.Request(url, headers=_github_headers())
-                    with urllib.request.urlopen(req, timeout=10) as resp:
-                        data = json.loads(resp.read().decode())
+                    data = _fetch_remote_version_json()
                     remote = data.get("version", "")
                     if not remote:
                         self.result.emit("error", "", "", "", "version.json 无版本号")
