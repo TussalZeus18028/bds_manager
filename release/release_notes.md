@@ -1,19 +1,25 @@
 ## v2.1.1.00
 
-## v2.1.0.10 架构重构 & 质量收尾
+## v2.1.1.00 自更新机制 & 发布工具
 
-### 🏗️ 架构重构
-- 彻底消除全局路径变量，60处引用统一为 _ctx 单例
-- _BrowseWorker/UpgradeWorker 硬编码改为 constants 常量引用
-- 拆分 _start_head_worker 消除重复
-- ServerContext 集中路径管理
+### 📦 ZIP 全量更新
+- 自更新改为 ZIP 包下载，覆盖附属文件
+- 下载后 SHA256 校验 + ZIP 头检测防伪
+- 启动更新异步化，不阻塞 GUI
+- version.json 缓存穿透（时间戳参数）
 
-### 🛡️ 健壮性
-- 0 个 bare except 残留
-- HEAD 扫描：3次重试+指数退避+4UA轮换
-- Token XOR+Base64 加密存储
-- 强制备份：服务器运行时暂停→备份→恢复
+### 🔘 安装按钮
+- 升级页新增「安装更新并重启」按钮
+- 进入页面自动扫描本地更新包，一键启用
+- 备份 → 解压 → 重启 全自动
 
-### 🧹 清理
-- requirements.txt 移除 fastapi/uvicorn/websockets
-- Toast 位置随窗口自适应
+### 🛠 发布工具
+- release_gui.py 图形界面（内建打包+发布）
+- build_release.py / publish.py / release.py 已合并删除
+- 自动生成 release_notes.md
+- publish.bat 已替换为 Python 脚本
+
+### 🐛 修复
+- DownloadUpdateWorker 信号参数对齐
+- 下载进度 status_signal → progress
+- subprocess GBK 编码错误
