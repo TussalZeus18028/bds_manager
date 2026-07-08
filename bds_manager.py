@@ -5023,7 +5023,7 @@ class UpgradeTab(QWidget):
                                 dl_bytes += len(chunk)
                                 if total > 0:
                                     pct = int(dl_bytes * 100 / total)
-                                    self.status_signal.emit(f"下载中... {dl_bytes/1024:.0f}/{total/1024:.0f} KB ({pct}%)")
+                                    self.progress.emit(f"下载中... {dl_bytes/1024:.0f}/{total/1024:.0f} KB ({pct}%)")
                     self.finished.emit(True, f"下载完成（{dl_bytes/1024:.1f} KB）")
                 except requests.exceptions.RequestException as e:
                     self.finished.emit(False, f"网络错误: {e}")
