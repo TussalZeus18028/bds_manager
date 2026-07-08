@@ -28,7 +28,7 @@ Minecraft Bedrock Dedicated Server 管理工具
   - 多线程优化：所有耗时操作移至后台线程，避免阻塞主界面
 """
 
-__version__ = "2.1.1.03"
+__version__ = "2.1.1.04"
 
 import sys
 import os
@@ -5054,11 +5054,17 @@ class UpgradeTab(QWidget):
         meta = getattr(self, "_tool_update_meta", {})
         dl_url = meta.get("download_url", "")
         expected_sha = meta.get("sha256", "")
+        save_path = os.path.join(SCRIPT_DIR, f"_update_v{remote_ver}.zip")
 
         # 若元数据无 download_url，回退旧式单文件下载
         if not dl_url:
             dl_url = "https://raw.githubusercontent.com/TussalZeus18028/bds_manager/main/bds_manager.py"
             expected_sha = ""
+            save_path = os.path.join(SCRIPT_DIR, f"bds_manager_v{remote_ver}.py.new")
+            is_zip_pkg = False
+        else:
+            save_path = os.path.join(SCRIPT_DIR, f"_update_v{remote_ver}.zip")
+            is_zip_pkg = True
 
         self.check_tool_btn.setEnabled(False)
         self.check_tool_btn.setText("下载中...")
@@ -5066,9 +5072,11 @@ class UpgradeTab(QWidget):
         self._log(f"开始下载 BDS Manager v{remote_ver}...", "INFO")
 
         class DownloadUpdateWorker(BaseWorker):
-            def run(self):
-                zip_path = os.path.join(SCRIPT_DIR, f"_update_v{remote_ver}.zip")
-                self._zip_path = zip_path
+            def run(self_inner):
+                zip_path = save_path
+                self_inner._zip_path = zip_path
+                self_inner._is_zip = is_zip_pkg
+                r = None
                 try:
                     hdr = _github_headers()
                     r = requests.get(dl_url, headers=hdr, stream=True, timeout=30)
@@ -5082,13 +5090,22 @@ class UpgradeTab(QWidget):
                                 dl_bytes += len(chunk)
                                 if total > 0:
                                     pct = int(dl_bytes * 100 / total)
-                                    self.status_signal.emit(f"下载中... {dl_bytes/1024:.0f}/{total/1024:.0f} KB ({pct}%)")
-                    self.finished.emit(True, f"下载完成（{dl_bytes/1024:.1f} KB）")
+                                    self_inner.progress.emit(f"下载中... {dl_bytes/1024:.0f}/{total/1024:.0f} KB ({pct}%)")
+                    self_inner.finished.emit(True, f"下载完成（{dl_bytes/1024:.1f} KB）")
                 except requests.exceptions.RequestException as e:
-                    self.finished.emit(False, f"网络错误: {e}")
+                    self_inner.finished.emit(False, f"网络错误: {e}")
                 except Exception as e:
-                    self.finished.emit(False, f"下载失败: {e}")
+                    self_inner.finished.emit(False, f"下载失败: {e}")
+                finally:
+                    if r is not None:
+                        try: r.close()
+                        except Exception: pass
 
+        # 取消上一次仍在运行的下载
+        old = getattr(self, "_dl_self_worker", None)
+        if old and old.isRunning():
+            old.quit()
+            old.wait(2000)
         self._dl_self_worker = DownloadUpdateWorker(self)
         self._dl_self_worker.finished.connect(self._on_tool_download_finished)
         self._dl_self_worker.start()
@@ -5199,7 +5216,15 @@ class UpgradeTab(QWidget):
                 top = name.split("/")[0]
                 if basename in skip_files or top in skip_dirs:
                     continue
+                # Zip Slip 防护：拒绝 ../ 越权
+                if basename in ("", ".", "..") or "/" in basename or "\\" in basename:
+                    self._log(f"跳过可疑路径: {name}", "WARN")
+                    continue
                 target = os.path.join(SCRIPT_DIR, basename)
+                real = os.path.realpath(target)
+                if not real.startswith(os.path.realpath(SCRIPT_DIR)):
+                    self._log(f"拒绝越权写入: {name}", "WARN")
+                    continue
                 os.makedirs(os.path.dirname(target) or SCRIPT_DIR, exist_ok=True)
                 with zf.open(name) as src, open(target, "wb") as dst:
                     dst.write(src.read())
@@ -5214,7 +5239,10 @@ class UpgradeTab(QWidget):
         try:
             self._backup_script_dir()
             self._extract_update_zip(zip_path)
-            os.remove(zip_path)
+            try:
+                os.remove(zip_path)
+            except OSError:
+                pass
             self._log("更新安装成功，即将重启", "SUCCESS")
             QMessageBox.information(self, "更新完成",
                 "BDS Manager 已更新！\n\n旧文件已备份到 backups/upgrade_backup_*/\n程序即将自动重启。")
@@ -5224,7 +5252,7 @@ class UpgradeTab(QWidget):
             self._log(f"安装更新失败: {e}", "ERROR")
             toast_error("安装失败", str(e))
             QMessageBox.critical(self, "更新失败",
-                f"安装更新时出错：{e}\n\n备份文件已保留，可手动恢复。")
+                f"安装更新时出错：{e}\n\nZIP 与备份文件均已保留，可手动恢复。")
 
 # ---------- 仪表盘标签页 ----------
 class DashboardTab(QWidget):
@@ -5518,8 +5546,8 @@ class BDSManager(QMainWindow):
 
         # 有新版 → 后台线程下载，不阻塞 GUI
         if not dl_url:
-            dl_url = "https://raw.githubusercontent.com/TussalZeus18028/bds_manager/main/bds_manager.py"
-            sha256 = ""
+            toast_warning("更新源缺失", "version.json 未提供下载链接，请手动前往 GitHub 下载")
+            return
 
         class StartupDownloadWorker(BaseWorker):
             def run(self):
