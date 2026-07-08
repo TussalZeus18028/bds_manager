@@ -28,7 +28,7 @@ Minecraft Bedrock Dedicated Server 管理工具
   - 多线程优化：所有耗时操作移至后台线程，避免阻塞主界面
 """
 
-__version__ = "2.1.1.01"
+__version__ = "2.1.1.02"
 
 import sys
 import os
@@ -328,18 +328,22 @@ def _enqueue_toast(title, msg, level, duration):
 def toast_error(title, msg=""):
     if _toast_parent: _enqueue_toast(title, msg, "error",
         _toast_parent.config.get("toast_duration_error", 5000) if hasattr(_toast_parent, 'config') else 5000)
+    print(f"[TOAST][ERR ] {title}: {msg}", flush=True)
 
 def toast_warning(title, msg=""):
     if _toast_parent: _enqueue_toast(title, msg, "warning",
         _toast_parent.config.get("toast_duration_warning", 4000) if hasattr(_toast_parent, 'config') else 4000)
+    print(f"[TOAST][WARN] {title}: {msg}", flush=True)
 
 def toast_success(title, msg=""):
     if _toast_parent: _enqueue_toast(title, msg, "success",
         _toast_parent.config.get("toast_duration_success", 3500) if hasattr(_toast_parent, 'config') else 3500)
+    print(f"[TOAST][ OK ] {title}: {msg}", flush=True)
 
 def toast_info(title, msg=""):
     if _toast_parent: _enqueue_toast(title, msg, "info",
         _toast_parent.config.get("toast_duration_info", 3000) if hasattr(_toast_parent, 'config') else 3000)
+    print(f"[TOAST][INFO] {title}: {msg}", flush=True)
 
 # ---------- 全局配置：支持脚本与服务器文件夹分离 ----------
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))

@@ -1,9 +1,9 @@
 {
-    "version": "2.1.1.01",
+    "version": "2.1.1.02",
     "release_date": "2026-07-08",
-    "download_url": "https://github.com/TussalZeus18028/bds_manager/releases/download/v2.1.1.01/bds_manager_v2.1.1.01.zip",
-    "sha256": "d4a3e101cca106c3bf037ead0f85fbc4de2c33c68b6e18a1d5c30298d2c81ea7",
-    "file_size": 64502,
+    "download_url": "https://github.com/TussalZeus18028/bds_manager/releases/download/v2.1.1.02/bds_manager_v2.1.1.02.zip",
+    "sha256": "38e218f5a82e9147e05475b221fa5d949f9a6f390b36fe5c36357b768e0662f7",
+    "file_size": 64321,
     "min_compatible_version": "2.0.0.00",
-    "changelog": "## v2.1.1.01\n\n### 🔄 版本检查升级\n- version.json 从 GitHub API 获取，绕开 raw CDN 缓存\n- 新增 _fetch_remote_version_json() 辅助函数\n\n### 🔘 安装体验优化\n- 进入升级页自动扫描本地更新包\n- 安装按钮始终可见（禁用/启用态）\n\n### 🐛 修复\n- base64 导入缺失\n- subprocess GBK 编码错误\n- 版本号不同步问题"
+    "changelog": "## v2.1.1.02\n\n- 所有 Toast 提示同步打印到终端/控制台\n- 便于检查代码和排错\n"
 }
