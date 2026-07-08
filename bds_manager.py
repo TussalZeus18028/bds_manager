@@ -4891,6 +4891,7 @@ class UpgradeTab(QWidget):
                 try:
                     url = constants.TOOL_UPDATE_URL if constants else (
                         "https://raw.githubusercontent.com/TussalZeus18028/bds_manager/main/version.json")
+                    url = url + (f"?t={int(__import__('time').time())}")
                     req = urllib.request.Request(url, headers=_github_headers())
                     with urllib.request.urlopen(req, timeout=10) as resp:
                         data = json.loads(resp.read().decode("utf-8"))
@@ -5430,6 +5431,8 @@ class BDSManager(QMainWindow):
                 try:
                     url = constants.TOOL_UPDATE_URL if constants else (
                         "https://raw.githubusercontent.com/TussalZeus18028/bds_manager/main/version.json")
+                    # 绕过 raw CDN 缓存
+                    url = url + (f"?t={int(__import__('time').time())}")
                     req = urllib.request.Request(url, headers=_github_headers())
                     with urllib.request.urlopen(req, timeout=10) as resp:
                         data = json.loads(resp.read().decode())
