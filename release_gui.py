@@ -75,7 +75,11 @@ class BuildWorker(QObject):
         meta["download_url"] = f"https://github.com/{GITHUB_REPO}/releases/download/v{ver}/{zip_name}"
         for tgt in [VERSION_JSON, RELEASE_DIR / "version.json"]:
             tgt.write_text(json.dumps(meta, indent=4, ensure_ascii=False) + "\n", encoding="utf-8")
-        self._log("ok", "version.json 已更新")
+        # 生成 Markdown 发布说明，避免直接把 JSON 当 release notes
+        notes_md = RELEASE_DIR / "release_notes.md"
+        changelog = meta.get("changelog", "")
+        notes_md.write_text(f"## v{ver}\n\n{changelog}\n", encoding="utf-8")
+        self._log("ok", f"{notes_md.name} 已生成")
         self.done.emit(True, "打包完成")
 
 
@@ -140,7 +144,7 @@ class PublishWorker(QObject):
 
         # 创建 Release
         tag = f"v{ver}"
-        notes = RELEASE_DIR / "version.json"
+        notes = RELEASE_DIR / "release_notes.md"
         cmd = [GH_EXE, "release", "create", tag, str(zip_path), "--title", tag]
         if notes.exists():
             cmd += ["--notes-file", str(notes)]
