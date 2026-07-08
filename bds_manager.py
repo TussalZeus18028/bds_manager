@@ -4271,8 +4271,9 @@ class UpgradeTab(QWidget):
         self.install_tool_btn.setStyleSheet(
             "QPushButton { background:#4caf50; color:#fff; border:none; "
             "border-radius:4px; padding:6px 14px; font-weight:bold; }"
-            "QPushButton:hover { background:#43a047; }")
-        self.install_tool_btn.setVisible(False)
+            "QPushButton:hover { background:#43a047; }"
+            "QPushButton:disabled { background:#555; color:#999; }")
+        self.install_tool_btn.setEnabled(False)
         tool_top.addWidget(self.install_tool_btn)
         tool_layout.addLayout(tool_top)
         self.tool_update_status = QLabel("")
@@ -5115,7 +5116,7 @@ class UpgradeTab(QWidget):
         self._scrolled_set_text(self.tool_update_status,
             f"✅ 更新包已就绪（{message}, {msg}）")
         self.tool_update_status.setStyleSheet("color: #4caf50; font-weight: bold; padding: 4px;")
-        self.install_tool_btn.setVisible(True)
+        self.install_tool_btn.setEnabled(True)
         self.check_tool_btn.setText("🔍 重新检查")
     # ----- _on_tool_download_finished 结束
 
