@@ -28,7 +28,7 @@ Minecraft Bedrock Dedicated Server 管理工具
   - 多线程优化：所有耗时操作移至后台线程，避免阻塞主界面
 """
 
-__version__ = "2.1.0.10"
+__version__ = "2.0.0.10"
 
 import sys
 import os
@@ -5011,7 +5011,7 @@ class UpgradeTab(QWidget):
                 self._zip_path = zip_path
                 try:
                     hdr = _github_headers()
-                    r = requests.get(dl_url, headers=hdr, stream=True, timeout=120)
+                    r = requests.get(dl_url, headers=hdr, stream=True, timeout=30)
                     r.raise_for_status()
                     total = int(r.headers.get("Content-Length", 0))
                     dl_bytes = 0
@@ -5023,11 +5023,11 @@ class UpgradeTab(QWidget):
                                 if total > 0:
                                     pct = int(dl_bytes * 100 / total)
                                     self.status_signal.emit(f"下载中... {dl_bytes/1024:.0f}/{total/1024:.0f} KB ({pct}%)")
-                    self.finished.emit(True, f"下载完成（{dl_bytes/1024:.1f} KB）", zip_path)
+                    self.finished.emit(True, f"下载完成（{dl_bytes/1024:.1f} KB）")
                 except requests.exceptions.RequestException as e:
-                    self.finished.emit(False, f"网络错误: {e}", "")
+                    self.finished.emit(False, f"网络错误: {e}")
                 except Exception as e:
-                    self.finished.emit(False, f"下载失败: {e}", "")
+                    self.finished.emit(False, f"下载失败: {e}")
 
         self._dl_self_worker = DownloadUpdateWorker(self)
         self._dl_self_worker.finished.connect(self._on_tool_download_finished)
@@ -5051,7 +5051,7 @@ class UpgradeTab(QWidget):
         except OSError as e:
             return False, f"读取文件失败: {e}"
 
-    def _on_tool_download_finished(self, success, message, zip_path=""):
+    def _on_tool_download_finished(self, success, message):
         self.check_tool_btn.setEnabled(True)
         self.check_tool_btn.setText("🔍 检查工具更新")
 
@@ -5062,6 +5062,7 @@ class UpgradeTab(QWidget):
             self._log(f"下载失败: {message}", "ERROR")
             return
 
+        zip_path = getattr(self._dl_self_worker, "_zip_path", "")
         if not zip_path or not os.path.exists(zip_path):
             self._scrolled_set_text(self.tool_update_status, "❌ 下载文件丢失")
             return
