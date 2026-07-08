@@ -28,7 +28,7 @@ Minecraft Bedrock Dedicated Server 管理工具
   - 多线程优化：所有耗时操作移至后台线程，避免阻塞主界面
 """
 
-__version__ = "2.0.0.10"
+__version__ = "2.1.0.09"
 
 import sys
 import os
@@ -4284,6 +4284,7 @@ class UpgradeTab(QWidget):
         layout.addWidget(self.tool_update_group)
 
         layout.addStretch()
+        self._check_local_update_zip()  # 载入时检测已有下载包
 
         scroll_area.setWidget(content)
         outer_layout.addWidget(scroll_area)
@@ -4878,6 +4879,19 @@ class UpgradeTab(QWidget):
         pos = sb.value()
         self._log(*args, **kwargs)
         sb.setValue(pos)
+
+    def _check_local_update_zip(self):
+        """检测本地是否已有下载好的更新包，有则直接启用安装按钮"""
+        import glob as _glob
+        zips = _glob.glob(os.path.join(SCRIPT_DIR, "_update_v*.zip"))
+        if zips:
+            latest = max(zips, key=os.path.getmtime)
+            if self._is_valid_zip(latest):
+                self._update_zip_path = latest
+                self.install_tool_btn.setEnabled(True)
+                ver = os.path.basename(latest).replace("_update_v", "").replace(".zip", "")
+                self.tool_update_status.setText(f"✅ 已有更新包 v{ver}，可直接安装")
+                self.tool_update_status.setStyleSheet("color: #4caf50; font-weight: bold; padding: 4px;")
 
     def _check_tool_update(self):
         """检查 BDS Manager 自身是否有新版本"""
