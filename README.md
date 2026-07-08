@@ -5,7 +5,7 @@
 ![Python](https://img.shields.io/badge/Python-3.8%2B-blue)
 ![PyQt5](https://img.shields.io/badge/PyQt5-5.15-green)
 ![License](https://img.shields.io/badge/License-Apache_2.0-orange)
-![Version](https://img.shields.io/badge/Version-2.1.0-brightgreen)
+![Version](https://img.shields.io/badge/Version-2.1.1.04-brightgreen)
 
 ---
 
@@ -61,9 +61,19 @@ BDS Manager 是一个使用 PyQt5 构建的图形化管理工具，专为 **Mine
 - 一键升级：自动备份 → 解压 → 恢复关键数据
 - 探测结果缓存 1 小时
 
-### 🔧 工具自更新
-- 版本升级标签页内检查 `bds_manager.py` 自身更新
-- 自动下载新版、替换、重启（旧版备份 .bak）
+### 🔧 工具自更新（v2.1.1+）
+- ZIP 包全量更新（含附属文件），覆盖更彻底
+- GitHub API 获取 version.json，绕开 raw CDN 缓存
+- SHA256 + ZIP 头双重校验，杜绝下载到 404 / 损坏文件
+- 「安装更新并重启」按钮自动检测本地包版本号
+  - 本地包 > 当前版本 → 绿色按钮可点
+  - 否则置灰，防止回退
+- 解压 Zip Slip 防护（拒绝 `../` 越权写入）
+- 重复下载自动取消旧 QThread
+
+### 🐛 调试
+- 所有 Toast 提示（error / warn / ok / info）同步输出到终端
+- `python bds_manager.py` 运行即可看到完整 `[TOAST][...]` 日志
 
 ### ⚙️ 设置
 - 主题切换（深色/浅色/自定义颜色）
@@ -95,11 +105,17 @@ python bds_manager.py
 ## 📦 发布流程（开发者用）
 
 ```bash
-# 图形界面（推荐）
+# 图形界面（推荐，含 build + publish + 确认弹窗）
 python release_gui.py
 ```
 
-发布脚本从 `version.json` 动态读取版本号，无需手动修改任何硬编码。
+工具会从 `version.json` 动态读取版本号，无需手动修改任何硬编码。
+
+### 命令行等价步骤
+1. 修改 `bds_manager.py` 顶部的 `__version__` 和 `version.json` 中的 `version` 字段（保持一致）
+2. 填写 `changelog` 描述本次更新
+3. 运行 `python release_gui.py`，按需点击「打包」→「发布」
+4. Release 资产 + notes 自动同步到 GitHub
 
 ---
 
