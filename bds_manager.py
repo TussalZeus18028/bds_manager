@@ -5051,6 +5051,15 @@ class UpgradeTab(QWidget):
         except OSError as e:
             return False, f"读取文件失败: {e}"
 
+    @staticmethod
+    def _is_valid_zip(path):
+        """检查文件是否为有效 ZIP（防止下载到 HTML 404 页面）"""
+        try:
+            with open(path, "rb") as f:
+                return f.read(2) == b"PK"
+        except OSError:
+            return False
+
     def _on_tool_download_finished(self, success, message):
         self.check_tool_btn.setEnabled(True)
         self.check_tool_btn.setText("🔍 检查工具更新")
@@ -5065,6 +5074,16 @@ class UpgradeTab(QWidget):
         zip_path = getattr(self._dl_self_worker, "_zip_path", "")
         if not zip_path or not os.path.exists(zip_path):
             self._scrolled_set_text(self.tool_update_status, "❌ 下载文件丢失")
+            return
+
+        # 校验文件有效性（防止下载到 HTML 404 页面）
+        if not self._is_valid_zip(zip_path):
+            self._scrolled_set_text(self.tool_update_status, "❌ 下载文件无效")
+            self.tool_update_status.setStyleSheet("color: #f44336; padding: 4px;")
+            toast_error("下载无效", "Release 资产未上传？请用 release_gui.py 发布")
+            self._log("下载文件不是有效 ZIP，Release 资产可能未上传", "ERROR")
+            try: os.remove(zip_path)
+            except OSError: pass
             return
 
         # 校验 SHA256
@@ -5480,6 +5499,11 @@ class BDSManager(QMainWindow):
             w = self.sender()
             save_path = getattr(w, "_save_path", "")
             sha = getattr(w, "_sha256", "")
+            if not UpgradeTab._is_valid_zip(save_path):
+                toast_error("下载文件无效", "Release 资产未上传？请运行 release_gui.py 发布")
+                try: os.remove(save_path)
+                except OSError: pass
+                return
             if sha and not UpgradeTab._verify_sha256(save_path, sha)[0]:
                 toast_error("SHA256 校验失败", "更新包可能已损坏，已删除")
                 try: os.remove(save_path)
