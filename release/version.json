@@ -1,9 +1,9 @@
 {
-    "version": "2.1.1.02",
+    "version": "2.1.1.03",
     "release_date": "2026-07-08",
-    "download_url": "https://github.com/TussalZeus18028/bds_manager/releases/download/v2.1.1.02/bds_manager_v2.1.1.02.zip",
-    "sha256": "38e218f5a82e9147e05475b221fa5d949f9a6f390b36fe5c36357b768e0662f7",
-    "file_size": 64321,
+    "download_url": "https://github.com/TussalZeus18028/bds_manager/releases/download/v2.1.1.03/bds_manager_v2.1.1.03.zip",
+    "sha256": "23c44049589d545a768a945a8e56ec42b4515956d734eaf6a0c492f75e5bd28e",
+    "file_size": 64286,
     "min_compatible_version": "2.0.0.00",
-    "changelog": "## v2.1.1.02\n\n- 所有 Toast 提示同步打印到终端/控制台\n- 便于检查代码和排错\n"
+    "changelog": "## v2.1.1.03\n\n- 安装按钮仅在本地包版本 > 当前版本时启用\n- 否则按钮置灰，防止回退\n"
 }

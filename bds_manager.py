@@ -28,7 +28,7 @@ Minecraft Bedrock Dedicated Server 管理工具
   - 多线程优化：所有耗时操作移至后台线程，避免阻塞主界面
 """
 
-__version__ = "2.1.1.02"
+__version__ = "2.1.1.03"
 
 import sys
 import os
@@ -4901,14 +4901,38 @@ class UpgradeTab(QWidget):
             + _glob.glob(os.path.join(SCRIPT_DIR, "bds_manager_v*.zip"))
             + _glob.glob(os.path.join(SCRIPT_DIR, "release", "bds_manager_v*.zip"))
         )
-        if zips:
-            latest = max(zips, key=os.path.getmtime)
-            if self._is_valid_zip(latest):
-                self._update_zip_path = latest
-                self.install_tool_btn.setEnabled(True)
-                ver = os.path.basename(latest).replace("bds_manager_v", "").replace("_update_v", "").replace(".zip", "")
-                self.tool_update_status.setText(f"✅ 已有更新包 v{ver}，可直接安装")
-                self.tool_update_status.setStyleSheet("color: #4caf50; font-weight: bold; padding: 4px;")
+        if not zips:
+            return
+        latest = max(zips, key=os.path.getmtime)
+        if not self._is_valid_zip(latest):
+            return
+        # 从文件名提取版本号
+        ver = (os.path.basename(latest)
+               .replace("bds_manager_v", "")
+               .replace("_update_v", "")
+               .replace(".zip", ""))
+        # 与本地 __version__ 比较
+        def _vnum(s):
+            try: return [int(n) for n in s.split(".")]
+            except (ValueError, IndexError): return []
+        local_n = _vnum(__version__)
+        remote_n = _vnum(ver)
+        if not remote_n:
+            return
+        while len(local_n) < 4: local_n.append(0)
+        while len(remote_n) < 4: remote_n.append(0)
+        if remote_n > local_n:
+            self._update_zip_path = latest
+            self.install_tool_btn.setEnabled(True)
+            self.install_tool_btn.setText(f"⬆️ 安装 v{ver} 并重启")
+            self.tool_update_status.setText(f"✅ 已有更新包 v{ver}（本地: v{__version__}），可直接安装")
+            self.tool_update_status.setStyleSheet("color: #4caf50; font-weight: bold; padding: 4px;")
+        else:
+            self.install_tool_btn.setEnabled(False)
+            self.install_tool_btn.setText("⬆️ 无可用更新")
+            self.tool_update_status.setText(
+                f"ℹ️ 本地包 v{ver} 不高于当前版本 v{__version__}")
+            self.tool_update_status.setStyleSheet("color: #888; padding: 4px;")
 
     def _check_tool_update(self):
         """检查 BDS Manager 自身是否有新版本"""
