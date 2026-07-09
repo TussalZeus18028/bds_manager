@@ -5,7 +5,7 @@
 ![Python](https://img.shields.io/badge/Python-3.8%2B-blue)
 ![PyQt5](https://img.shields.io/badge/PyQt5-5.15-green)
 ![License](https://img.shields.io/badge/License-Apache_2.0-orange)
-![Version](https://img.shields.io/badge/Version-2.1.1.04-brightgreen)
+![Version](https://img.shields.io/badge/Version-2.1.1.12-brightgreen)
 
 ---
 
@@ -118,6 +118,24 @@ python release_gui.py
 4. Release 资产 + notes 自动同步到 GitHub
 
 ---
+
+---
+
+## 📝 更新日志
+
+### v2.1.1.12 (2026-07-09)
+- 资源包「调整设置」子包当前选择高亮修复（按 pack_id 匹配）
+- 列表型配置项回写不再静默破坏 JSON
+- 新增 v3 manifest 自定义设置（开关/滑块/下拉）持久化到 server_overrides.json（服务器端记录）
+- 自更新解压保留子目录结构、自动去多余顶层目录
+- 自动备份后台化，保留「已打包 N 个文件」进度，不再卡界面
+- 服务器输出按系统代码页解码，中文不再乱码
+- 网络错误新增中文 + 英文 Toast（超时/DNS/拒绝/SSL/HTTP）
+- 流畅度：控制台批量刷新 + HTML 转义 + 5000 行上限；仪表盘去主线程阻塞；玩家列表变更检测；备份扫描门控
+- 修复：玩家右键菜单重复弹出、标签页标题「升级&&安装」误显示；进度条平滑填充、窗口最小尺寸、版本号对比度、切换动画打磨
+
+### v2.1.1.11
+- 修复 PackInfoDialog 缺 `_log` 方法导致 subpack 保存报错
 
 ---
 
