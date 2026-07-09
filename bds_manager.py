@@ -697,8 +697,17 @@ def get_full_pack_info(pack_folder):
         with open(manifest_path, "r", encoding="utf-8-sig") as f:
             content = f.read()
         data = _parse_json(content)
-        if not data:
-            return {}
+    except Exception as e:
+        log_error(f"读取 manifest 失败 {pack_folder}: {e}")
+        return None
+    if not data:
+        return {}
+    if isinstance(data, tuple):
+        data = data[0] if data else {}
+    if not isinstance(data, dict):
+        log_warning(f"manifest.json 解析结果不是字典: {type(data).__name__}")
+        return {}
+    try:
         header = data.get("header", {})
         modules = data.get("modules", [])
         dependencies = data.get("dependencies", [])
