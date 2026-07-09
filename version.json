@@ -1,9 +1,9 @@
 {
-    "version": "2.1.1.05",
+    "version": "2.1.1.06",
     "release_date": "2026-07-08",
-    "download_url": "https://github.com/TussalZeus18028/bds_manager/releases/download/v2.1.1.05/bds_manager_v2.1.1.05.zip",
-    "sha256": "d890a550cc27e063dd68e5f9fc4b7b47c4900c607b0d20f1611902b3a1921542",
-    "file_size": 65245,
+    "download_url": "https://github.com/TussalZeus18028/bds_manager/releases/download/v2.1.1.06/bds_manager_v2.1.1.06.zip",
+    "sha256": "e64eb83254fcd8f72c23881df75963a166d4a854e907c097d1b0a7bdf1a72797",
+    "file_size": 66529,
     "min_compatible_version": "2.0.0.00",
-    "changelog": "## v2.1.1.05\n\n### 🐛 资源包解析修复\n- get_full_pack_info 兼容 _parse_json 返回元组的情况\n- 添加 is dict 类型检查，遇到错误 manifest 跳过而非崩溃\n- 资源包信息读取不再抛 AttributeError"
+    "changelog": "## v2.1.1.06\n\n### ✨ 资源包调整设置\n- 包详情对话框新增「⚙️ 调整设置」Tab\n- 自动扫描包内 config.json / settings.json / tweaks.json 等\n- bool → 复选框\n- 整数/浮点 → 滑块 + 微调框\n- 字符串 → 输入框\n- 列表 → JSON 文本框\n- 嵌套字典 → 递归展开\n- 「💾 保存设置」一键写回原文件"
 }

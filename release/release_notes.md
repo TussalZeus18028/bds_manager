@@ -1,8 +1,13 @@
-## v2.1.1.05
+## v2.1.1.06
 
-## v2.1.1.05
+## v2.1.1.06
 
-### 🐛 资源包解析修复
-- get_full_pack_info 兼容 _parse_json 返回元组的情况
-- 添加 is dict 类型检查，遇到错误 manifest 跳过而非崩溃
-- 资源包信息读取不再抛 AttributeError
+### ✨ 资源包调整设置
+- 包详情对话框新增「⚙️ 调整设置」Tab
+- 自动扫描包内 config.json / settings.json / tweaks.json 等
+- bool → 复选框
+- 整数/浮点 → 滑块 + 微调框
+- 字符串 → 输入框
+- 列表 → JSON 文本框
+- 嵌套字典 → 递归展开
+- 「💾 保存设置」一键写回原文件

@@ -28,7 +28,7 @@ Minecraft Bedrock Dedicated Server 管理工具
   - 多线程优化：所有耗时操作移至后台线程，避免阻塞主界面
 """
 
-__version__ = "2.1.1.05"
+__version__ = "2.1.1.06"
 
 import sys
 import os
@@ -121,7 +121,7 @@ from PyQt5.QtWidgets import (QGraphicsOpacityEffect,
     QFileDialog, QTableWidget, QTableWidgetItem, QHeaderView, QDialog,
     QFormLayout, QGroupBox, QSpinBox, QCheckBox, QComboBox, QColorDialog,
     QSplitter, QProgressBar, QListWidget, QListWidgetItem, QAbstractItemView,
-    QInputDialog, QScrollArea, QMenu, QDialogButtonBox,
+    QInputDialog, QScrollArea, QMenu, QDialogButtonBox, QSlider, QDoubleSpinBox,
     QTabWidget as QTabWidget2, QSystemTrayIcon, QAction, QStyle,
     QPlainTextEdit
 )
@@ -835,14 +835,63 @@ class PackInfoDialog(QDialog):
         self.deps_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.deps_layout.addWidget(self.deps_table)
 
+        # 调整设置 Tab
+        self.settings_widget = QWidget()
+        self.settings_layout = QVBoxLayout(self.settings_widget)
+        self.settings_scroll = QScrollArea()
+        self.settings_scroll.setWidgetResizable(True)
+        self.settings_container = QWidget()
+        self.settings_form = QFormLayout(self.settings_container)
+        self.settings_form.setSpacing(8)
+        self.settings_scroll.setWidget(self.settings_container)
+        self.settings_layout.addWidget(self.settings_scroll)
+
         self.tab_widget.addTab(self.basic_widget, "基本信息")
         self.tab_widget.addTab(self.modules_widget, "模块")
         self.tab_widget.addTab(self.deps_widget, "依赖")
+        self.tab_widget.addTab(self.settings_widget, "⚙️ 调整设置")
         layout.addWidget(self.tab_widget)
 
-        button_box = QDialogButtonBox(QDialogButtonBox.Ok)
+        button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Save)
         button_box.accepted.connect(self.accept)
+        # Save 按钮
+        for btn in button_box.buttons():
+            if button_box.buttonRole(btn) == QDialogButtonBox.AcceptRole and \
+               button_box.standardButton(btn) == QDialogButtonBox.Save:
+                btn.setText("💾 保存设置")
+                btn.clicked.connect(self._save_settings)
+                break
+        # 找 Save 按钮重新设置文字
+        save_btn = button_box.button(QDialogButtonBox.Save)
+        if save_btn:
+            save_btn.setText("💾 保存设置")
+            try:
+                save_btn.clicked.disconnect()
+            except Exception:
+                pass
+            save_btn.clicked.connect(self._save_settings)
+        # Ok 按钮文字改为关闭
+        ok_btn = button_box.button(QDialogButtonBox.Ok)
+        if ok_btn:
+            ok_btn.setText("关闭")
         layout.addWidget(button_box)
+
+    def _save_settings(self):
+        """保存包调整设置到对应 JSON 配置文件"""
+        if not getattr(self, "_settings_files", None):
+            QMessageBox.information(self, "无设置", "此包未提供可调设置。")
+            return
+        try:
+            for path, data in self._settings_files.items():
+                # data 是 dict，控件值已写入
+                with open(path, "w", encoding="utf-8") as f:
+                    json.dump(data, f, indent=4, ensure_ascii=False)
+            QMessageBox.information(self, "保存成功",
+                f"已保存 {len(self._settings_files)} 个配置文件。\n重启服务器后生效。")
+            self._log(f"已保存包设置: {self.pack_folder}", "SUCCESS")
+        except Exception as e:
+            QMessageBox.critical(self, "保存失败", str(e))
+            self._log(f"保存包设置失败: {e}", "ERROR")
 
     def load_info(self):
         self.modules_table.setRowCount(0)
@@ -930,6 +979,138 @@ class PackInfoDialog(QDialog):
             item.setTextAlignment(Qt.AlignCenter)
             self.deps_table.setItem(0, 0, item)
             self.deps_table.setSpan(0, 0, 1, 2)
+
+        # 加载调整设置
+        self._settings_files = {}
+        self._load_pack_settings()
+
+    def _load_pack_settings(self):
+        """扫描包内常见配置文件，生成设置控件"""
+        # 清理旧控件
+        while self.settings_form.count():
+            item = self.settings_form.takeAt(0)
+            w = item.widget()
+            if w: w.deleteLater()
+
+        # 候选配置文件：包根、config/、scripts/、world_adjustments/、调整设置.json
+        candidates = [
+            "config.json", "settings.json", "pack_settings.json",
+            "config/config.json", "config/settings.json",
+            "world_adjustments.json", "tweaks.json",
+            "scripts/config.json", "data/config.json",
+        ]
+        # 也支持 world_resource_packs / world_behavior_packs 内的 config
+        found = []
+        for rel in candidates:
+            full = os.path.join(self.pack_folder, rel)
+            if os.path.isfile(full):
+                found.append(full)
+
+        if not found:
+            empty = QLabel("此包未提供可调设置\n\n（包内未发现 config.json / settings.json / tweaks.json 等）")
+            empty.setStyleSheet("color: #888; padding: 30px;")
+            empty.setAlignment(Qt.AlignCenter)
+            self.settings_form.addRow(empty)
+            return
+
+        info_label = QLabel(f"📦 发现 {len(found)} 个配置文件，重启服务器后生效")
+        info_label.setStyleSheet("color: #4fc3f7; font-weight: bold;")
+        self.settings_form.addRow(info_label)
+
+        for path in found:
+            rel_label = QLabel(f"📄 {os.path.relpath(path, self.pack_folder)}")
+            rel_label.setStyleSheet("color: #aaa; font-family: Consolas;")
+            self.settings_form.addRow(rel_label)
+
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+            except Exception as e:
+                err = QLabel(f"  解析失败: {e}")
+                err.setStyleSheet("color: #f44336;")
+                self.settings_form.addRow(err)
+                continue
+
+            if not isinstance(data, dict):
+                self.settings_form.addRow(QLabel("  （非字典格式，跳过）"))
+                continue
+
+            self._settings_files[path] = data
+            self._render_settings_group(data, indent=0, file_label=path)
+
+    def _render_settings_group(self, data, indent=0, file_label=None):
+        """递归渲染设置项到表单"""
+        prefix = "  " * indent
+        for key, value in data.items():
+            label_text = f"{prefix}{key}"
+            if isinstance(value, bool):
+                chk = QCheckBox()
+                chk.setChecked(value)
+                chk.stateChanged.connect(lambda st, k=key, d=data, c=chk: d.__setitem__(k, c.isChecked()))
+                self.settings_form.addRow(QLabel(label_text + ":"), chk)
+            elif isinstance(value, (int, float)) and not isinstance(value, bool):
+                # 数值类型给滑块（0~max(value*2, 100)）
+                cur = float(value)
+                max_val = max(abs(cur) * 2, 100.0)
+                if cur < 0: max_val = abs(cur) * 2
+                # 整数
+                if isinstance(value, int):
+                    sld = QSlider(Qt.Horizontal)
+                    sld.setMinimum(int(min(0, cur)))
+                    sld.setMaximum(int(max(max_val, cur * 2 + 1)))
+                    sld.setValue(int(cur))
+                    spin = QSpinBox()
+                    spin.setRange(sld.minimum(), sld.maximum())
+                    spin.setValue(int(cur))
+                    sld.valueChanged.connect(spin.setValue)
+                    spin.valueChanged.connect(sld.setValue)
+                    # 写入回调
+                    def _set_int(v, k=key, d=data):
+                        d[k] = int(v)
+                    sld.valueChanged.connect(_set_int)
+                    container = QWidget()
+                    cl = QHBoxLayout(container)
+                    cl.setContentsMargins(0, 0, 0, 0)
+                    cl.addWidget(sld, 1)
+                    cl.addWidget(spin, 0)
+                    self.settings_form.addRow(QLabel(label_text + ":"), container)
+                else:
+                    sld = QSlider(Qt.Horizontal)
+                    sld.setMinimum(0)
+                    sld.setMaximum(1000)
+                    sld.setValue(int(max(0, min(1000, cur / max_val * 1000))))
+                    spin = QDoubleSpinBox()
+                    spin.setRange(-1e6, 1e6)
+                    spin.setDecimals(2)
+                    spin.setValue(cur)
+                    def _set_float(v, k=key, d=data, mv=max_val):
+                        d[k] = round(v, 2)
+                    spin.valueChanged.connect(_set_float)
+                    container = QWidget()
+                    cl = QHBoxLayout(container)
+                    cl.setContentsMargins(0, 0, 0, 0)
+                    cl.addWidget(QLabel(f"0~{max_val:g}"), 0)
+                    cl.addWidget(sld, 1)
+                    cl.addWidget(spin, 0)
+                    self.settings_form.addRow(QLabel(label_text + ":"), container)
+            elif isinstance(value, str):
+                # 字符串
+                edit = QLineEdit(value)
+                edit.textChanged.connect(lambda t, k=key, d=data: d.__setitem__(k, t))
+                self.settings_form.addRow(QLabel(label_text + ":"), edit)
+            elif isinstance(value, list):
+                # 列表 - 用文本编辑 JSON
+                edit = QLineEdit(json.dumps(value, ensure_ascii=False))
+                edit.textChanged.connect(lambda t, k=key, d=data: d.__setitem__(k, t))
+                self.settings_form.addRow(QLabel(label_text + " (JSON):"), edit)
+            elif isinstance(value, dict):
+                # 嵌套字典 - 标题 + 递归
+                grp_title = QLabel(f"📁 {prefix}{key}")
+                grp_title.setStyleSheet("color: #ff9800; font-weight: bold; padding-top: 8px;")
+                self.settings_form.addRow(grp_title)
+                self._render_settings_group(value, indent + 1, file_label)
+            else:
+                self.settings_form.addRow(QLabel(label_text + f": {value}"))
 
 # ---------- 服务器进程线程 ----------
 class ServerProcess(QThread):
