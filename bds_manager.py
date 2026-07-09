@@ -40,6 +40,7 @@ import threading
 import requests
 import time
 import re
+import html
 import base64
 try:
     import constants
@@ -1711,6 +1712,11 @@ class SystemMonitor(QGroupBox):
         self.mem_history = deque(maxlen=history_length)
         self.last_net_io = None
         self.last_update_time = time.time()
+        # 供仪表盘复用的非阻塞采样结果（避免重复阻塞主线程）
+        self.last_cpu = 0.0
+        self.last_mem = 0.0
+        self.last_net_sent_kb = 0.0
+        self.last_net_recv_kb = 0.0
         self.init_ui()
         self.setup_monitoring(interval)
 
@@ -1808,6 +1814,7 @@ class SystemMonitor(QGroupBox):
             self.cpu_value.setText(f"{cpu_percent:.1f}%")
             self.cpu_progress.setValue(int(cpu_percent))
             self.cpu_history.append(cpu_percent)
+            self.last_cpu = cpu_percent
 
             memory = psutil.virtual_memory()
             memory_used_gb = memory.used / (1024**3)
@@ -1816,6 +1823,7 @@ class SystemMonitor(QGroupBox):
             self.memory_value.setText(f"{memory_used_gb:.1f}/{memory_total_gb:.1f} GB ({memory_percent:.1f}%)")
             self.memory_progress.setValue(int(memory_percent))
             self.mem_history.append(memory_percent)
+            self.last_mem = memory_percent
 
             current_time = time.time()
             net_io = psutil.net_io_counters()
@@ -1824,6 +1832,8 @@ class SystemMonitor(QGroupBox):
                 if time_diff > 0:
                     upload_speed = (net_io.bytes_sent - self.last_net_io.bytes_sent) / time_diff / 1024
                     download_speed = (net_io.bytes_recv - self.last_net_io.bytes_recv) / time_diff / 1024
+                    self.last_net_sent_kb = upload_speed
+                    self.last_net_recv_kb = download_speed
                     self.network_value.setText(f"↑ {upload_speed:.1f} KB/s ↓ {download_speed:.1f} KB/s")
             self.last_net_io = net_io
             self.last_update_time = current_time
@@ -1979,8 +1989,8 @@ class ThemeManager:
                 font-weight: bold;
             }
             QProgressBar::chunk {
-                background-color: #4CAF50;
-                width: 20px;
+                background-color: {accent};
+                border-radius: 3px;
             }
         """
 
@@ -2106,8 +2116,8 @@ class ThemeManager:
                 background-color: #ffffff;
             }
             QProgressBar::chunk {
-                background-color: #4CAF50;
-                width: 20px;
+                background-color: {accent};
+                border-radius: 3px;
             }
         """
 
@@ -2750,6 +2760,12 @@ class ConsoleTab(QWidget):
         self._players = {}     # {name: {"xuid": xuid, "joined": timestamp}}
         self._server_start_time = None
         self._bds_version = ""
+        # 输出缓冲：批量刷新，避免高负载时每行一次重绘导致卡顿
+        self._output_buffer = []
+        self._output_flush_timer = QTimer(self)
+        self._output_flush_timer.setInterval(80)
+        self._output_flush_timer.timeout.connect(self._flush_output)
+        self._MAX_LINES = 5000
         self.init_ui()
 
     def init_ui(self):
@@ -2826,54 +2842,75 @@ class ConsoleTab(QWidget):
         ]
 
     def append_output(self, text):
+        """接收一行服务器输出：先入缓冲，由定时器批量刷新（流畅度优化）"""
+        self._output_buffer.append(text)
+        if not self._output_flush_timer.isActive():
+            self._output_flush_timer.start()
+
+    def _match_color(self, text):
+        """根据高亮规则返回该行应使用的颜色"""
         if ConsoleTab._log_rules is None:
             ConsoleTab._log_rules = ConsoleTab._get_highlight_rules()
-
-        # 2. 依次匹配规则
-        matched = False
         for pattern, color, full_match in ConsoleTab._log_rules:
             if full_match:
                 if pattern.search(text):
-                    self.output_area.append(f'<span style="color:{color};">{text}</span>')
-                    matched = True
-                    break
+                    return color
             else:
                 if pattern.match(text):  # 行首匹配
-                    self.output_area.append(f'<span style="color:{color};">{text}</span>')
-                    matched = True
-                    break
+                    return color
+        if re.search(r'\[\d{1,2}:\d{2}:\d{2}\]', text):
+            return '#aaaaaa'  # 带时间戳的稍亮灰
+        return '#888888'  # 普通灰
 
-        # 3. 无匹配时，保留默认灰色，但可区分是否为错误输出的 stderr
-        if not matched:
-            # 可选：如果文本包含数字或方括号时间戳，给点淡紫色，增加可读性
-            if re.search(r'\[\d{1,2}:\d{2}:\d{2}\]', text):
-                self.output_area.append(f'<span style="color:#aaaaaa;">{text}</span>')  # 稍亮灰
-            else:
-                self.output_area.append(f'<span style="color:#888888;">{text}</span>')  # 普通灰
+    def _enforce_max_lines(self):
+        """超出最大行数时删除顶部行，避免文档无限增长拖慢渲染"""
+        doc = self.output_area.document()
+        while doc.blockCount() > self._MAX_LINES:
+            cursor = QTextCursor(doc)
+            cursor.movePosition(QTextCursor.Start)
+            cursor.select(QTextCursor.BlockUnderCursor)
+            cursor.removeSelectedText()
+            cursor.deleteChar()  # 删除紧随的换行符
 
-        # 自动滚动到底部
-        scrollbar = self.output_area.verticalScrollBar()
-        scrollbar.setValue(scrollbar.maximum())
+    def _flush_output(self):
+        """定时器触发：批量处理缓冲中的输出行（仅一次重绘）"""
+        if not self._output_buffer:
+            self._output_flush_timer.stop()
+            return
+        batch = self._output_buffer
+        self._output_buffer = []
 
-        # 写入日志文件
-        if self._log_file:
-            try:
-                ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                self._log_file.write(f"[{ts}] {text}\n")
-                self._log_file.flush()
-            except Exception:
-                pass
+        # 记录用户是否已在底部；不在底部则不打扰其阅读历史
+        sb = self.output_area.verticalScrollBar()
+        at_bottom = sb.value() >= sb.maximum() - 4
 
-        # 同步输出到 cmd 窗口
-        ts = datetime.now().strftime("%H:%M:%S")
-        print(f"[{ts}] [BDS] {text}", flush=True)
+        for text in batch:
+            # 写入日志文件
+            if self._log_file:
+                try:
+                    ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    self._log_file.write(f"[{ts}] {text}\n")
+                    self._log_file.flush()
+                except Exception:
+                    pass
+            # 同步输出到 cmd 窗口
+            ts = datetime.now().strftime("%H:%M:%S")
+            print(f"[{ts}] [BDS] {text}", flush=True)
+            # 解析玩家加入/离开事件 + BDS 版本
+            self._parse_player_event(text)
+            m = re.search(r'Version:\s+(\d+\.\d+\.\d+\.\d+)', text)
+            if m and not self._bds_version:
+                self._bds_version = m.group(1)
+            # HTML 转义，防止日志中的 < > & 破坏渲染/造成注入
+            color = self._match_color(text)
+            self.output_area.append(f'<span style="color:{color};">{html.escape(text)}</span>')
 
-        # 解析玩家加入/离开事件
-        self._parse_player_event(text)
-        # 解析 BDS 版本
-        m = re.search(r'Version:\s+(\d+\.\d+\.\d+\.\d+)', text)
-        if m and not self._bds_version:
-            self._bds_version = m.group(1)
+        # 限制最大行数
+        self._enforce_max_lines()
+
+        # 仅当用户原本就在底部时才自动滚动
+        if at_bottom:
+            sb.setValue(sb.maximum())
 
     def _parse_player_event(self, text):
         """解析 BDS 玩家连接/生成/断开事件"""
@@ -6016,6 +6053,7 @@ class DashboardTab(QWidget):
         self._tps_samples = []
         self._last_tick_count = 0
         self._last_tick_time = time.time()
+        self._last_backup_scan = 0  # 备份目录扫描时间门控
         self.init_ui()
 
     def init_ui(self):
@@ -6051,9 +6089,6 @@ class DashboardTab(QWidget):
         players_group.setLayout(players_layout)
         row2.addWidget(players_group, 1)
 
-        # 玩家右键菜单
-        self.players_list.setContextMenuPolicy(Qt.CustomContextMenu)
-        self.players_list.customContextMenuRequested.connect(self._player_context_menu)
         layout.addLayout(row2)
 
         # === 第三行：性能 + TPS ===
@@ -6147,43 +6182,50 @@ class DashboardTab(QWidget):
         self.card_bds_ver.setText(ver or "--")
         self.card_bds_ver.setStyleSheet(f"font-size: 14px; font-weight: bold; color: {'#88ddff' if ver else '#888'};")
 
-        # 玩家列表
-        self.players_list.clear()
-        for p in stats["players"]:
-            self.players_list.addItem(p)
+        # 玩家列表（仅在集合变化时重建，避免每 2 秒闪烁/丢失选中）
+        players = stats["players"]
+        current = [self.players_list.item(i).text() for i in range(self.players_list.count())]
+        if current != players:
+            self.players_list.clear()
+            self.players_list.addItems(players)
 
-        # 备份信息
-        backup_dir = self.parent.get_absolute_server_dir() + "/backups"
-        if os.path.exists(backup_dir):
-            backups = sorted(
-                [f for f in os.listdir(backup_dir) if f.endswith(".zip")],
-                key=lambda f: os.path.getmtime(os.path.join(backup_dir, f)),
-                reverse=True
-            )
-            if backups:
-                last_bk = backups[0]
-                bk_time = datetime.fromtimestamp(
-                    os.path.getmtime(os.path.join(backup_dir, last_bk))
-                ).strftime("%m-%d %H:%M")
-                self.card_backup.setText(f"最近: {bk_time}")
-                self.card_backup.setStyleSheet("font-size: 14px; color: #4CAF50;")
-            else:
-                self.card_backup.setText("无备份")
-                self.card_backup.setStyleSheet("font-size: 14px; color: #888;")
+        # 备份信息（最多每 15 秒扫描一次磁盘，避免每 2 秒 I/O）
+        now = time.time()
+        if now - self._last_backup_scan > 15:
+            self._last_backup_scan = now
+            backup_dir = self.parent.get_absolute_server_dir() + "/backups"
+            if os.path.exists(backup_dir):
+                try:
+                    backups = sorted(
+                        [f for f in os.listdir(backup_dir) if f.endswith(".zip")],
+                        key=lambda f: os.path.getmtime(os.path.join(backup_dir, f)),
+                        reverse=True
+                    )
+                    if backups:
+                        last_bk = backups[0]
+                        bk_time = datetime.fromtimestamp(
+                            os.path.getmtime(os.path.join(backup_dir, last_bk))
+                        ).strftime("%m-%d %H:%M")
+                        self.card_backup.setText(f"最近: {bk_time}")
+                        self.card_backup.setStyleSheet("font-size: 14px; color: #4CAF50;")
+                    else:
+                        self.card_backup.setText("无备份")
+                        self.card_backup.setStyleSheet("font-size: 14px; color: #888;")
+                except Exception:
+                    pass
 
-        # CPU/内存
+        # CPU/内存/网络：复用 SystemMonitor 的非阻塞采样结果，避免主线程阻塞
         try:
-            import psutil
-            cpu = psutil.cpu_percent(interval=0.1)
-            mem = psutil.virtual_memory().percent
-            net = psutil.net_io_counters()
+            sm = self.parent.system_monitor
+            cpu = getattr(sm, "last_cpu", 0.0)
+            mem = getattr(sm, "last_mem", 0.0)
+            sent_mb = getattr(sm, "last_net_sent_kb", 0.0) / 1024
+            recv_mb = getattr(sm, "last_net_recv_kb", 0.0) / 1024
             self.cpu_pbar.setValue(int(cpu))
             self.mem_pbar.setValue(int(mem))
             self.cpu_label.setText(f"CPU: {cpu:.1f}%")
             self.mem_label.setText(f"内存: {mem:.1f}%")
-            sent_kb = net.bytes_sent / 1024
-            recv_kb = net.bytes_recv / 1024
-            self.net_label.setText(f"上传: {sent_kb/1024:.1f}MB / 下载: {recv_kb/1024:.1f}MB")
+            self.net_label.setText(f"上传: {sent_mb:.1f}MB / 下载: {recv_mb:.1f}MB")
         except Exception:
             pass
 
@@ -6603,6 +6645,8 @@ class BDSManager(QMainWindow):
 
     def init_ui(self):
         self.setWindowTitle("Minecraft Bedrock Server 管理工具 ")
+        # 最小尺寸，避免缩太小挤崩布局
+        self.setMinimumSize(960, 620)
         # 恢复上次窗口大小
         w = self.config.get("window_width", 1200)
         h = self.config.get("window_height", 800)
@@ -6640,18 +6684,18 @@ class BDSManager(QMainWindow):
         self.tab_widget.addTab(self.world_tab, "🌍 世界管理")
         self.tab_widget.addTab(monitor_tab, "📊 系统资源")
         self.tab_widget.addTab(self.tunnel_tab, "🚇 隧道")
-        self.tab_widget.addTab(self.upgrade_tab, "🔧 升级&&安装")
+        self.tab_widget.addTab(self.upgrade_tab, "🔧 升级 / 安装")
         self.tab_widget.addTab(self.settings_tab, "⚙️ 设置")
         # --- 关于标签页 ---
         about = self._create_about_tab()
         self.tab_widget.addTab(about, "ℹ️ 关于")
-        # 标签页切换动画
+        # 标签页切换动画（仅淡入新页面内容，避免整块容器闪烁）
         self._tab_fx = QGraphicsOpacityEffect(self.tab_widget)
         self._tab_fx.setOpacity(1.0)
-        self.tab_widget.setGraphicsEffect(self._tab_fx)
         self._tab_anim = QPropertyAnimation(self._tab_fx, b"opacity")
         self._tab_anim.setDuration(150)
         self.tab_widget.currentChanged.connect(self._animate_tab_switch)
+        self.tab_widget.widget(0).setGraphicsEffect(self._tab_fx)
 
         layout.addWidget(self.tab_widget)
 
@@ -6665,7 +6709,7 @@ class BDSManager(QMainWindow):
         self.status_mem = QLabel("💾 --")
         self.status_mem.setStyleSheet("font-size:11px; color:#888; padding:0 8px;")
         self.status_ver = QLabel(f"v{__version__}")
-        self.status_ver.setStyleSheet("font-size:10px; color:#555; padding:0 8px;")
+        self.status_ver.setStyleSheet("font-size:10px; color:#888; padding:0 8px;")
         self.status_tunnel = QLabel("🚇 --")
         self.status_tunnel.setStyleSheet("font-size:11px; color:#888; padding:0 8px;")
         status_layout.addWidget(self.status_server)
@@ -6737,9 +6781,14 @@ class BDSManager(QMainWindow):
             self.show_normal()
 
     def _animate_tab_switch(self, index):
-        """标签页切换 150ms 淡入动画"""
+        """标签页切换淡入动画：仅作用于新页面，避免整窗重绘闪烁"""
+        w = self.tab_widget.widget(index)
+        if w is None:
+            return
+        self._tab_fx.setOpacity(1.0)
+        w.setGraphicsEffect(self._tab_fx)
         self._tab_anim.stop()
-        self._tab_anim.setStartValue(0.7)
+        self._tab_anim.setStartValue(0.75)
         self._tab_anim.setEndValue(1.0)
         self._tab_anim.setEasingCurve(QEasingCurve.OutCubic)
         self._tab_anim.start()
