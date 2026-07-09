@@ -394,26 +394,9 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_FILE = os.path.join(SCRIPT_DIR, "bds_manager_config.json")
 VERSION_CACHE_FILE = os.path.join(SCRIPT_DIR, "bds_version_cache.json")
 VERSION_LIST_URL = "https://raw.githubusercontent.com/TussalZeus18028/bds_version_list/main/bds_versions.json"
-
-# 仓库信息：跨设备/Fork 时改这里（也可用 bds_manager_config.json 的 github_repo 覆盖）
 GITHUB_REPO_OWNER = "TussalZeus18028"
 GITHUB_REPO_NAME = "bds_manager"
 GITHUB_REPO_BRANCH = "main"
-
-def _get_github_repo_info():
-    """从配置文件读取仓库信息；无配置时回退到默认"""
-    try:
-        cfg_path = os.path.join(SCRIPT_DIR, "bds_manager_config.json")
-        if os.path.isfile(cfg_path):
-            with open(cfg_path, "r", encoding="utf-8-sig") as f:
-                cfg = json.load(f)
-            if isinstance(cfg, dict) and cfg.get("github_repo"):
-                parts = str(cfg["github_repo"]).strip("/").split("/")
-                if len(parts) == 2:
-                    return parts[0], parts[1], cfg.get("github_branch", GITHUB_REPO_BRANCH)
-    except Exception:
-        pass
-    return GITHUB_REPO_OWNER, GITHUB_REPO_NAME, GITHUB_REPO_BRANCH
 
 # ---------- GitHub 请求辅助 ----------
 _github_token_cache = None  # 缓存配置中的 token
@@ -465,8 +448,7 @@ def _github_headers():
 
 def _fetch_remote_version_json():
     """通过 GitHub API 获取 version.json，绕开 raw CDN 缓存"""
-    owner, name, branch = _get_github_repo_info()
-    url = f"https://api.github.com/repos/{owner}/{name}/contents/version.json?ref={branch}"
+    url = f"https://api.github.com/repos/{GITHUB_REPO_OWNER}/{GITHUB_REPO_NAME}/contents/version.json?ref={GITHUB_REPO_BRANCH}"
     req = urllib.request.Request(url, headers=_github_headers())
     with urllib.request.urlopen(req, timeout=10) as resp:
         api_data = json.loads(resp.read().decode("utf-8"))
@@ -5618,8 +5600,7 @@ class UpgradeTab(QWidget):
 
         # 若元数据无 download_url，回退旧式单文件下载
         if not dl_url:
-            owner, name, branch = _get_github_repo_info()
-            dl_url = f"https://raw.githubusercontent.com/{owner}/{name}/{branch}/bds_manager.py"
+            dl_url = f"https://raw.githubusercontent.com/{GITHUB_REPO_OWNER}/{GITHUB_REPO_NAME}/{GITHUB_REPO_BRANCH}/bds_manager.py"
             expected_sha = ""
             save_path = os.path.join(SCRIPT_DIR, f"bds_manager_v{remote_ver}.py.new")
             is_zip_pkg = False
