@@ -28,7 +28,7 @@ Minecraft Bedrock Dedicated Server 管理工具
   - 多线程优化：所有耗时操作移至后台线程，避免阻塞主界面
 """
 
-__version__ = "2.1.1.09"
+__version__ = "2.1.1.10"
 
 import sys
 import os
@@ -883,14 +883,14 @@ class PackInfoDialog(QDialog):
         # 1. subpack 选择：写入 world_*_packs.json
         radios = getattr(self, "_subpack_radios", None)
         if radios:
-            chosen = None
+            chosen = ""
             for radio, val in radios:
                 if radio.isChecked():
                     chosen = val
                     break
             try:
-                if self._save_subpack_to_world(chosen):
-                    saved.append(f"世界子包: {chosen or '(无)'}")
+                self._save_subpack_to_world(chosen)
+                saved.append(f"世界子包: {chosen or '(使用根包)'}")
             except Exception as e:
                 QMessageBox.critical(self, "保存失败", f"写入 world_*_packs.json 失败: {e}")
                 self._log(f"保存子包失败: {e}", "ERROR")
@@ -1261,7 +1261,7 @@ class PackInfoDialog(QDialog):
             current_default = world_meta.get("subpack", "")
 
         radio_group = QButtonGroup(self)
-        self._subpack_radios = []
+        # 注意：此属性已废弃（manifest settings 不再使用 radio）
 
         for i, st in enumerate(settings):
             stype = st.get("type", "")

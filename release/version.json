@@ -1,9 +1,9 @@
 {
-    "version": "2.1.1.09",
+    "version": "2.1.1.10",
     "release_date": "2026-07-08",
-    "download_url": "https://github.com/TussalZeus18028/bds_manager/releases/download/v2.1.1.09/bds_manager_v2.1.1.09.zip",
-    "sha256": "91ac273c012f544461883beb0c71046b743763fd46c94d0d0c85ecde36ff43ca",
-    "file_size": 69770,
+    "download_url": "https://github.com/TussalZeus18028/bds_manager/releases/download/v2.1.1.10/bds_manager_v2.1.1.10.zip",
+    "sha256": "4fc7f59e82a410b6de91f41706b819a4a986626d6f2a8a902d091b7079cb846e",
+    "file_size": 69803,
     "min_compatible_version": "2.0.0.00",
-    "changelog": "## v2.1.1.09\n\n### ✨ 服务器端 subpack 强制选择\n- subpack 选择器从只读改为可写\n- 选择后保存到世界目录 world_resource_packs.json\n- 服务器统一生效，玩家游戏内无法覆盖\n- 默认显示当前世界已选 subpack\n- 含「不使用子包」选项\n- 自动匹配包 UUID，定位注册项"
+    "changelog": "## v2.1.1.10\n\n### 🐛 保存设置修复\n- 修复 _render_manifest_settings 重置 _subpack_radios 导致保存逻辑误判为空\n- 解决「此包未提供可调设置」误提示"
 }
