@@ -1,9 +1,9 @@
 {
-    "version": "2.1.1.07",
+    "version": "2.1.1.08",
     "release_date": "2026-07-08",
-    "download_url": "https://github.com/TussalZeus18028/bds_manager/releases/download/v2.1.1.07/bds_manager_v2.1.1.07.zip",
-    "sha256": "f8ec6eff89f28fe69deb121dfc94f5009b034c7a94f99860a84e010fb04cfd32",
-    "file_size": 68549,
+    "download_url": "https://github.com/TussalZeus18028/bds_manager/releases/download/v2.1.1.08/bds_manager_v2.1.1.08.zip",
+    "sha256": "e30fd67e92bfab717dca361ef88e59f9eb1f371d3be39bc84600b9538dc6daca",
+    "file_size": 68670,
     "min_compatible_version": "2.0.0.00",
-    "changelog": "## v2.1.1.07\n\n### ✨ 包设置支持 subpacks 与 v3 settings\n- 优先读取 manifest.json 中的 subpacks 字段\n  - 列出所有功能模式（Classic / Functional / JavaOriginal / Redstone / Borderless_glass）\n  - 显示文件数和内存档\n  - 一键打开 subpacks 目录\n- 读取 v3 manifest 的 settings 字段\n  - label / toggle / slider / dropdown\n  - 显示当前在 world_*_packs.json 的子包索引\n- 兼容旧版 config.json / tweaks.json"
+    "changelog": "## v2.1.1.08\n\n### 🐛 资源包设置解析修复\n- manifest.json 改用 _parse_json（json5 优先）\n- 支持带 // 注释的 manifest（如「护眼大补丸」）\n- 5 个 subpacks 现在可正常列出\n  - Borderless_glass / Classic / Functional / JavaOriginal / Redstone\n- 附加配置文件解析同样兼容 json5"
 }

@@ -28,7 +28,7 @@ Minecraft Bedrock Dedicated Server 管理工具
   - 多线程优化：所有耗时操作移至后台线程，避免阻塞主界面
 """
 
-__version__ = "2.1.1.07"
+__version__ = "2.1.1.08"
 
 import sys
 import os
@@ -998,7 +998,9 @@ class PackInfoDialog(QDialog):
         if os.path.isfile(manifest_path):
             try:
                 with open(manifest_path, "r", encoding="utf-8-sig") as f:
-                    manifest = json.load(f)
+                    manifest_text = f.read()
+                # 优先 json5（支持 // 注释），回退到 json
+                manifest, _ok = _parse_json(manifest_text)
             except Exception as e:
                 manifest = None
                 self.settings_form.addRow(QLabel(f"⚠️ manifest.json 解析失败: {e}"))
@@ -1039,8 +1041,9 @@ class PackInfoDialog(QDialog):
                 rel_label.setStyleSheet("color: #aaa; font-family: Consolas;")
                 self.settings_form.addRow(rel_label)
                 try:
-                    with open(path, "r", encoding="utf-8") as f:
-                        data = json.load(f)
+                    with open(path, "r", encoding="utf-8-sig") as f:
+                        data_text = f.read()
+                    data, _ = _parse_json(data_text)
                 except Exception as e:
                     err = QLabel(f"  解析失败: {e}")
                     err.setStyleSheet("color: #f44336;")
