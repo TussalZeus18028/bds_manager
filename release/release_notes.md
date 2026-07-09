@@ -1,13 +1,13 @@
-## v2.1.1.06
+## v2.1.1.07
 
-## v2.1.1.06
+## v2.1.1.07
 
-### ✨ 资源包调整设置
-- 包详情对话框新增「⚙️ 调整设置」Tab
-- 自动扫描包内 config.json / settings.json / tweaks.json 等
-- bool → 复选框
-- 整数/浮点 → 滑块 + 微调框
-- 字符串 → 输入框
-- 列表 → JSON 文本框
-- 嵌套字典 → 递归展开
-- 「💾 保存设置」一键写回原文件
+### ✨ 包设置支持 subpacks 与 v3 settings
+- 优先读取 manifest.json 中的 subpacks 字段
+  - 列出所有功能模式（Classic / Functional / JavaOriginal / Redstone / Borderless_glass）
+  - 显示文件数和内存档
+  - 一键打开 subpacks 目录
+- 读取 v3 manifest 的 settings 字段
+  - label / toggle / slider / dropdown
+  - 显示当前在 world_*_packs.json 的子包索引
+- 兼容旧版 config.json / tweaks.json

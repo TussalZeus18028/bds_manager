@@ -28,7 +28,7 @@ Minecraft Bedrock Dedicated Server 管理工具
   - 多线程优化：所有耗时操作移至后台线程，避免阻塞主界面
 """
 
-__version__ = "2.1.1.06"
+__version__ = "2.1.1.07"
 
 import sys
 import os
@@ -122,7 +122,7 @@ from PyQt5.QtWidgets import (QGraphicsOpacityEffect,
     QFormLayout, QGroupBox, QSpinBox, QCheckBox, QComboBox, QColorDialog,
     QSplitter, QProgressBar, QListWidget, QListWidgetItem, QAbstractItemView,
     QInputDialog, QScrollArea, QMenu, QDialogButtonBox, QSlider, QDoubleSpinBox,
-    QTabWidget as QTabWidget2, QSystemTrayIcon, QAction, QStyle,
+    QTabWidget as QTabWidget2, QSystemTrayIcon, QAction, QStyle, QButtonGroup,
     QPlainTextEdit
 )
 from PyQt5.QtCore import Qt, QTimer, pyqtSignal, QThread, QFileSystemWatcher, QEvent, QObject, QPropertyAnimation, QEasingCurve, QPoint
@@ -985,58 +985,236 @@ class PackInfoDialog(QDialog):
         self._load_pack_settings()
 
     def _load_pack_settings(self):
-        """扫描包内常见配置文件，生成设置控件"""
+        """扫描包内常见配置文件 / manifest settings / subpacks，生成设置控件"""
         # 清理旧控件
         while self.settings_form.count():
             item = self.settings_form.takeAt(0)
             w = item.widget()
             if w: w.deleteLater()
 
-        # 候选配置文件：包根、config/、scripts/、world_adjustments/、调整设置.json
+        # 1. 优先读 manifest.json 里的 settings（v3 manifest 自定义设置）和 subpacks
+        manifest_path = os.path.join(self.pack_folder, "manifest.json")
+        manifest_loaded = False
+        if os.path.isfile(manifest_path):
+            try:
+                with open(manifest_path, "r", encoding="utf-8-sig") as f:
+                    manifest = json.load(f)
+            except Exception as e:
+                manifest = None
+                self.settings_form.addRow(QLabel(f"⚠️ manifest.json 解析失败: {e}"))
+
+            if isinstance(manifest, dict):
+                # subpacks（功能模式选择器）
+                subpacks = manifest.get("subpacks", [])
+                if subpacks and isinstance(subpacks, list):
+                    self._render_subpack_selector(manifest_path, subpacks)
+                    manifest_loaded = True
+
+                # settings（v3 自定义设置：toggle/slider/dropdown/label）
+                settings = manifest.get("settings", [])
+                if settings and isinstance(settings, list):
+                    self._render_manifest_settings(manifest_path, settings)
+                    manifest_loaded = True
+
+        # 2. 再扫描包内其他 JSON 配置文件（config.json / tweaks.json 等）
         candidates = [
             "config.json", "settings.json", "pack_settings.json",
             "config/config.json", "config/settings.json",
             "world_adjustments.json", "tweaks.json",
             "scripts/config.json", "data/config.json",
         ]
-        # 也支持 world_resource_packs / world_behavior_packs 内的 config
         found = []
         for rel in candidates:
             full = os.path.join(self.pack_folder, rel)
             if os.path.isfile(full):
                 found.append(full)
 
-        if not found:
-            empty = QLabel("此包未提供可调设置\n\n（包内未发现 config.json / settings.json / tweaks.json 等）")
+        if found:
+            sep = QLabel("📂 附加配置文件（修改后重启服务器生效）")
+            sep.setStyleSheet("color: #ff9800; font-weight: bold; padding-top: 12px;")
+            self.settings_form.addRow(sep)
+
+            for path in found:
+                rel_label = QLabel(f"📄 {os.path.relpath(path, self.pack_folder)}")
+                rel_label.setStyleSheet("color: #aaa; font-family: Consolas;")
+                self.settings_form.addRow(rel_label)
+                try:
+                    with open(path, "r", encoding="utf-8") as f:
+                        data = json.load(f)
+                except Exception as e:
+                    err = QLabel(f"  解析失败: {e}")
+                    err.setStyleSheet("color: #f44336;")
+                    self.settings_form.addRow(err)
+                    continue
+                if not isinstance(data, dict):
+                    self.settings_form.addRow(QLabel("  （非字典格式，跳过）"))
+                    continue
+                self._settings_files[path] = data
+                self._render_settings_group(data, indent=0, file_label=path)
+            manifest_loaded = True
+
+        if not manifest_loaded:
+            empty = QLabel(
+                "此包未提供可调设置\n\n"
+                "（包内未发现：\n"
+                "  • manifest.json 里的 subpacks / settings\n"
+                "  • config.json / settings.json / tweaks.json）")
             empty.setStyleSheet("color: #888; padding: 30px;")
             empty.setAlignment(Qt.AlignCenter)
             self.settings_form.addRow(empty)
-            return
 
-        info_label = QLabel(f"📦 发现 {len(found)} 个配置文件，重启服务器后生效")
-        info_label.setStyleSheet("color: #4fc3f7; font-weight: bold;")
-        self.settings_form.addRow(info_label)
+    def _render_subpack_selector(self, manifest_path, subpacks):
+        """渲染 subpacks 选择器（互斥单选）"""
+        title = QLabel("🎮 功能模式选择（原版游戏里的设置项）")
+        title.setStyleSheet("color: #4fc3f7; font-weight: bold; padding-top: 6px;")
+        self.settings_form.addRow(title)
 
-        for path in found:
-            rel_label = QLabel(f"📄 {os.path.relpath(path, self.pack_folder)}")
-            rel_label.setStyleSheet("color: #aaa; font-family: Consolas;")
-            self.settings_form.addRow(rel_label)
+        hint = QLabel("提示：subpack 选择需写入 world 目录（启动时由玩家选择）\n"
+                      "下方仅展示 / 修改 manifest 的子包列表与说明。")
+        hint.setStyleSheet("color: #888; font-size: 11px;")
+        self.settings_form.addRow(hint)
 
-            try:
-                with open(path, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-            except Exception as e:
-                err = QLabel(f"  解析失败: {e}")
-                err.setStyleSheet("color: #f44336;")
-                self.settings_form.addRow(err)
+        for i, sp in enumerate(subpacks):
+            if not isinstance(sp, dict):
                 continue
+            name = sp.get("folder_name", sp.get("name", f"subpack_{i}"))
+            display = sp.get("name", name)
+            # 去掉 §6 §7 等颜色码
+            display_clean = re.sub(r"§.", "", display).strip()
+            tier = sp.get("memory_tier", "")
+            tier_text = f"  [内存档 {tier}]" if tier else ""
+            row = QWidget()
+            rl = QHBoxLayout(row)
+            rl.setContentsMargins(0, 0, 0, 0)
+            lbl = QLabel(f"📦 {name}{tier_text}\n  {display_clean}")
+            lbl.setStyleSheet("color: #e0e0e0;")
+            lbl.setWordWrap(True)
+            rl.addWidget(lbl, 1)
+            self.settings_form.addRow(row)
 
-            if not isinstance(data, dict):
-                self.settings_form.addRow(QLabel("  （非字典格式，跳过）"))
-                continue
+        # 提供一个"打开 subpacks 目录"按钮
+        btn_row = QWidget()
+        bl = QHBoxLayout(btn_row)
+        bl.setContentsMargins(0, 0, 0, 0)
+        sub_dir = os.path.join(self.pack_folder, "subpacks")
+        if os.path.isdir(sub_dir):
+            open_btn = QPushButton("📂 打开 subpacks 目录")
+            open_btn.clicked.connect(lambda: self._open_in_explorer(sub_dir))
+            bl.addWidget(open_btn)
+            bl.addStretch()
+            self.settings_form.addRow(btn_row)
+            # 列出 subpacks 目录
+            for sp in os.listdir(sub_dir):
+                sp_path = os.path.join(sub_dir, sp)
+                if os.path.isdir(sp_path):
+                    cnt = sum(len(fs) for _, _, fs in os.walk(sp_path))
+                    self.settings_form.addRow(
+                        QLabel(f"  └ {sp}/  ({cnt} 个文件)") )
+        else:
+            warn = QLabel("⚠️ manifest 列出了 subpacks 但 subpacks/ 目录不存在")
+            warn.setStyleSheet("color: #f44336;")
+            self.settings_form.addRow(warn)
 
-            self._settings_files[path] = data
-            self._render_settings_group(data, indent=0, file_label=path)
+    def _render_manifest_settings(self, manifest_path, settings):
+        """渲染 manifest v3 的 settings（toggle / slider / dropdown / label）"""
+        title = QLabel("⚙️ 自定义设置（v3 manifest）")
+        title.setStyleSheet("color: #4fc3f7; font-weight: bold; padding-top: 6px;")
+        self.settings_form.addRow(title)
+
+        # settings 的修改需要写到 world_resource_packs.json 的子包索引里
+        # 这里仅做展示 + 默认值编辑
+        world_meta = self._find_world_pack_entry()
+        current_default = ""
+        if world_meta:
+            current_default = world_meta.get("subpack", "")
+
+        radio_group = QButtonGroup(self)
+        self._subpack_radios = []
+
+        for i, st in enumerate(settings):
+            stype = st.get("type", "")
+            text = st.get("text", "")
+            text_clean = re.sub(r"§.", "", text)
+            if stype == "label":
+                self.settings_form.addRow(QLabel(f"ℹ️ {text_clean}"))
+            elif stype == "toggle":
+                chk = QCheckBox(text_clean)
+                chk.setChecked(bool(st.get("default", False)))
+                self.settings_form.addRow(chk)
+            elif stype == "slider":
+                mn = int(st.get("min", 0))
+                mx = int(st.get("max", 100))
+                step = int(st.get("step", 1))
+                default = int(st.get("default", mn))
+                sld = QSlider(Qt.Horizontal)
+                sld.setMinimum(mn)
+                sld.setMaximum(mx)
+                sld.setSingleStep(step)
+                sld.setPageStep(step)
+                sld.setValue(default)
+                spin = QSpinBox()
+                spin.setRange(mn, mx)
+                spin.setSingleStep(step)
+                spin.setValue(default)
+                sld.valueChanged.connect(spin.setValue)
+                spin.valueChanged.connect(sld.setValue)
+                container = QWidget()
+                cl = QHBoxLayout(container)
+                cl.setContentsMargins(0, 0, 0, 0)
+                cl.addWidget(QLabel(f"{text_clean} ({mn}~{mx})"))
+                cl.addWidget(sld, 1)
+                cl.addWidget(spin, 0)
+                self.settings_form.addRow(container)
+            elif stype == "dropdown":
+                options = st.get("options", [])
+                if options and isinstance(options, list):
+                    items = [o.get("text", o.get("name", "")) for o in options if isinstance(o, dict)]
+                    cmb = QComboBox()
+                    cmb.addItems(items)
+                    default = st.get("default", "")
+                    for j, o in enumerate(options):
+                        if isinstance(o, dict) and o.get("name") == default:
+                            cmb.setCurrentIndex(j)
+                            break
+                    self.settings_form.addRow(QLabel(f"{text_clean}:"), cmb)
+            else:
+                self.settings_form.addRow(QLabel(f"❓ 未知类型: {stype}"))
+
+        hint = QLabel("⚠️ 原版游戏中通过 资源包 → 齿轮图标 修改。\n"
+                      "此界面为只读展示，修改后请在世界设置中重新选择。")
+        hint.setStyleSheet("color: #888; font-size: 11px;")
+        self.settings_form.addRow(hint)
+
+    def _find_world_pack_entry(self):
+        """查找该包在 world_*_packs.json 里的注册项"""
+        for fname in ("world_resource_packs.json", "world_behavior_packs.json"):
+            wp = os.path.join(os.path.dirname(self.pack_folder), "..", fname)
+            wp = os.path.normpath(wp)
+            if not os.path.isfile(wp):
+                wp = os.path.join(os.path.dirname(self.pack_folder), fname)
+                wp = os.path.normpath(wp)
+            if os.path.isfile(wp):
+                try:
+                    with open(wp, "r", encoding="utf-8") as f:
+                        entries = json.load(f)
+                    for e in entries:
+                        if isinstance(e, dict) and os.path.normpath(e.get("folder_name", "")) == os.path.basename(self.pack_folder):
+                            return e
+                except Exception:
+                    pass
+        return None
+
+    def _open_in_explorer(self, path):
+        """在资源管理器中打开路径"""
+        try:
+            if sys.platform == "win32":
+                os.startfile(path)
+            elif sys.platform == "darwin":
+                subprocess.Popen(["open", path])
+            else:
+                subprocess.Popen(["xdg-open", path])
+        except Exception as e:
+            QMessageBox.warning(self, "打开失败", str(e))
 
     def _render_settings_group(self, data, indent=0, file_label=None):
         """递归渲染设置项到表单"""
