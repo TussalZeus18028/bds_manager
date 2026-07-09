@@ -1,7 +1,7 @@
-## v2.1.1.10
+## v2.1.1.11
 
-## v2.1.1.10
+## v2.1.1.11
 
-### 🐛 保存设置修复
-- 修复 _render_manifest_settings 重置 _subpack_radios 导致保存逻辑误判为空
-- 解决「此包未提供可调设置」误提示
+### 🐛 修复 PackInfoDialog 缺 _log 方法
+- 改为全局 log_info / log_error 函数
+- 解决 subpack 保存时 AttributeError

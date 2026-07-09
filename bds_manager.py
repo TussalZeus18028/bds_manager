@@ -28,7 +28,7 @@ Minecraft Bedrock Dedicated Server 管理工具
   - 多线程优化：所有耗时操作移至后台线程，避免阻塞主界面
 """
 
-__version__ = "2.1.1.10"
+__version__ = "2.1.1.11"
 
 import sys
 import os
@@ -893,7 +893,7 @@ class PackInfoDialog(QDialog):
                 saved.append(f"世界子包: {chosen or '(使用根包)'}")
             except Exception as e:
                 QMessageBox.critical(self, "保存失败", f"写入 world_*_packs.json 失败: {e}")
-                self._log(f"保存子包失败: {e}", "ERROR")
+                log_error(f"保存子包失败: {e}")
                 return
 
         # 2. 其他 JSON 配置文件
@@ -904,7 +904,7 @@ class PackInfoDialog(QDialog):
                 saved.append(os.path.relpath(path, self.pack_folder))
             except Exception as e:
                 QMessageBox.critical(self, "保存失败", f"{path}: {e}")
-                self._log(f"保存 {path} 失败: {e}", "ERROR")
+                log_error(f"保存 {path} 失败: {e}")
                 return
 
         if not saved:
@@ -914,7 +914,7 @@ class PackInfoDialog(QDialog):
         QMessageBox.information(self, "保存成功",
             "已保存：\n  • " + "\n  • ".join(saved) +
             "\n\n重启服务器后生效。")
-        self._log(f"已保存包设置: {', '.join(saved)}", "SUCCESS")
+        log_info(f"已保存包设置: {', '.join(saved)}")
 
     def _save_subpack_to_world(self, subpack_name):
         """将选中的 subpack 写入当前世界的 world_resource_packs.json
@@ -997,7 +997,7 @@ class PackInfoDialog(QDialog):
 
         with open(reg_file, "w", encoding="utf-8") as f:
             json.dump(entries, f, indent=2, ensure_ascii=False)
-        self._log(f"已写入 {os.path.basename(reg_file)}: {found}", "INFO")
+        log_info(f"已写入 {os.path.basename(reg_file)}: {found}")
         return True
 
     def load_info(self):
