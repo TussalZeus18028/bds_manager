@@ -87,6 +87,8 @@ def safe_write_json(path, data, indent=4):
         return False
 
 import socket
+import ssl
+import locale
 import psutil
 if sys.platform == "win32":
     import ctypes  # 懒加载：仅 Windows 需要
@@ -458,6 +460,103 @@ def _refresh_github_token():
     """配置变更后刷新缓存的 token"""
     global _github_token_cache
     _github_token_cache = None
+
+# ---------- 服务器输出解码（R3 修复）----------
+def _decode_server_line(raw):
+    """将服务器输出字节按系统代码页优先解码，避免中文乱码（R3）。
+
+    Windows 上 BDS 以系统代码页（如中文 GBK/cp936）输出日志，
+    之前强制 utf-8 解码会让中文变成乱码，这里改为：
+    系统首选编码 → utf-8 → gbk/cp936 → latin-1 兜底。
+    """
+    if isinstance(raw, str):
+        return raw
+    encodings = []
+    try:
+        enc = locale.getpreferredencoding(False)
+        if enc:
+            encodings.append(enc)
+    except Exception:
+        pass
+    encodings.extend(["utf-8", "gbk", "cp936", "latin-1"])
+    for enc in encodings:
+        if not enc:
+            continue
+        try:
+            return raw.decode(enc)
+        except (UnicodeDecodeError, LookupError):
+            continue
+    return raw.decode("utf-8", errors="replace")
+
+# ---------- 网络错误友好提示（中文 + 英文）----------
+def network_error_text(exc):
+    """将常见网络异常转换为 中文 + 英文 的友好提示。
+
+    返回 (zh, en, combined) 元组，combined = '中文\\n(English)'，
+    可直接作为 Toast 的 msg 参数，满足「中文提示 + 附上英文」的需求。
+    """
+    if exc is None:
+        zh, en = "未知网络错误", "Unknown network error"
+        return zh, en, f"{zh}\n({en})"
+    try:
+        msg = str(exc)
+    except Exception:
+        msg = repr(exc)
+    lower = msg.lower()
+
+    zh, en = "", ""
+    # --- urllib / socket ---
+    if isinstance(exc, urllib.error.HTTPError):
+        code = getattr(exc, "code", "?")
+        reason = getattr(exc, "reason", "")
+        zh, en = f"服务器返回 HTTP {code} 错误", f"Server returned HTTP {code} ({reason})"
+    elif isinstance(exc, urllib.error.URLError):
+        r = str(getattr(exc, "reason", exc)).lower()
+        if "timed out" in r or "timeout" in r:
+            zh, en = "连接超时，请检查网络或稍后重试", "Connection timed out. Check your network or retry later."
+        elif "getaddrinfo" in r or "name or service" in r or "nodename" in r:
+            zh, en = "无法解析服务器地址（DNS 失败）", "Could not resolve host (DNS failure)."
+        elif "refused" in r:
+            zh, en = "连接被拒绝", "Connection refused."
+        elif "unreachable" in r:
+            zh, en = "网络不可达", "Network is unreachable."
+        elif "aborted" in r or "reset" in r:
+            zh, en = "网络连接被对方中断", "Connection was reset by peer."
+        else:
+            zh, en = f"网络连接失败：{msg}", f"Network connection failed: {msg}"
+    elif isinstance(exc, socket.timeout):
+        zh, en = "连接超时，请检查网络或稍后重试", "Connection timed out. Check your network or retry later."
+    elif isinstance(exc, ssl.SSLError):
+        zh, en = "SSL/TLS 安全连接失败", "SSL/TLS secure connection failed."
+    # --- requests ---
+    elif isinstance(exc, requests.exceptions.HTTPError):
+        code = getattr(getattr(exc, "response", None), "status_code", "?")
+        zh, en = f"服务器返回 HTTP {code} 错误", f"Server returned HTTP {code}."
+    elif isinstance(exc, requests.exceptions.SSLError):
+        zh, en = "SSL/TLS 安全连接失败", "SSL/TLS secure connection failed."
+    elif isinstance(exc, requests.exceptions.ProxyError):
+        zh, en = "代理服务器连接失败", "Proxy connection failed."
+    elif isinstance(exc, (requests.exceptions.ConnectTimeout, requests.exceptions.ReadTimeout)):
+        zh, en = "连接超时，请检查网络或稍后重试", "Connection timed out. Check your network or retry later."
+    elif isinstance(exc, requests.exceptions.ConnectionError):
+        if "getaddrinfo" in lower or "nameresolutionerror" in lower or "nodename" in lower:
+            zh, en = "无法解析服务器地址（DNS 失败）", "Could not resolve host (DNS failure)."
+        elif "refused" in lower:
+            zh, en = "连接被拒绝", "Connection refused."
+        elif "unreachable" in lower:
+            zh, en = "网络不可达", "Network is unreachable."
+        else:
+            zh, en = "无法连接到服务器", "Failed to connect to server."
+    elif isinstance(exc, requests.exceptions.TooManyRedirects):
+        zh, en = "重定向次数过多", "Too many redirects."
+    elif isinstance(exc, requests.exceptions.RequestException):
+        zh, en = "网络请求失败", f"Network request failed: {msg}"
+
+    if not zh:
+        zh = f"网络请求失败：{msg}"
+    if not en:
+        en = f"Network request failed: {msg}"
+    return zh, en, f"{zh}\n({en})"
 
 def get_server_dir():
     if os.path.exists(CONFIG_FILE):
@@ -954,6 +1053,21 @@ class PackInfoDialog(QDialog):
                 log_error(f"保存 {path} 失败: {e}")
                 return
 
+        # 3. v3 manifest 自定义设置（toggle/slider/dropdown）持久化到 server_overrides.json
+        if getattr(self, "_manifest_settings_present", False):
+            try:
+                sp = getattr(self, "_manifest_settings_path",
+                             os.path.join(self.pack_folder, "server_overrides.json"))
+                if safe_write_json(sp, getattr(self, "_manifest_settings_data", {})):
+                    saved.append(os.path.relpath(sp, self.pack_folder))
+                else:
+                    raise RuntimeError("写入失败")
+            except Exception as e:
+                QMessageBox.critical(self, "保存失败",
+                    f"写入 {os.path.basename(sp)} 失败: {e}")
+                log_error(f"保存 manifest 设置失败: {e}")
+                return
+
         if not saved:
             QMessageBox.information(self, "无设置", "此包未提供可调设置。")
             return
@@ -1295,36 +1409,49 @@ class PackInfoDialog(QDialog):
             self.settings_form.addRow(warn)
 
     def _render_manifest_settings(self, manifest_path, settings):
-        """渲染 manifest v3 的 settings（toggle / slider / dropdown / label）"""
+        """渲染 manifest v3 的 settings（toggle / slider / dropdown / label）
+        并支持把用户选择持久化到 server_overrides.json（B4 修复）"""
         title = QLabel("⚙️ 自定义设置（v3 manifest）")
         title.setStyleSheet("color: #4fc3f7; font-weight: bold; padding-top: 6px;")
         self.settings_form.addRow(title)
 
-        # settings 的修改需要写到 world_resource_packs.json 的子包索引里
-        # 这里仅做展示 + 默认值编辑
-        world_meta = self._find_world_pack_entry()
-        current_default = ""
-        if world_meta:
-            current_default = world_meta.get("subpack", "")
-
-        radio_group = QButtonGroup(self)
-        # 注意：此属性已废弃（manifest settings 不再使用 radio）
+        # 初始化持久化数据：优先读取已有的服务器侧覆盖值
+        self._manifest_settings_path = os.path.join(self.pack_folder, "server_overrides.json")
+        self._manifest_settings_data = {}
+        try:
+            if os.path.isfile(self._manifest_settings_path):
+                with open(self._manifest_settings_path, "r", encoding="utf-8-sig") as f:
+                    loaded = json.load(f)
+                if isinstance(loaded, dict):
+                    self._manifest_settings_data = loaded
+        except Exception as e:
+            log_warning(f"读取 server_overrides.json 失败: {e}")
+        self._manifest_settings_present = True
 
         for i, st in enumerate(settings):
             stype = st.get("type", "")
             text = st.get("text", "")
             text_clean = re.sub(r"§.", "", text)
+            # 该设置项的持久化键：优先用 name，其次 text
+            key = st.get("name") or st.get("text") or f"setting_{i}"
+            # 当前值：已保存覆盖值 > manifest 默认值
+            saved_val = self._manifest_settings_data.get(key, None)
+
             if stype == "label":
                 self.settings_form.addRow(QLabel(f"ℹ️ {text_clean}"))
             elif stype == "toggle":
                 chk = QCheckBox(text_clean)
-                chk.setChecked(bool(st.get("default", False)))
+                default = bool(saved_val if saved_val is not None else st.get("default", False))
+                chk.setChecked(default)
+                def _on_toggle(state, k=key):
+                    self._manifest_settings_data[k] = bool(state)
+                chk.stateChanged.connect(_on_toggle)
                 self.settings_form.addRow(chk)
             elif stype == "slider":
                 mn = int(st.get("min", 0))
                 mx = int(st.get("max", 100))
                 step = int(st.get("step", 1))
-                default = int(st.get("default", mn))
+                default = int(saved_val if saved_val is not None else st.get("default", mn))
                 sld = QSlider(Qt.Horizontal)
                 sld.setMinimum(mn)
                 sld.setMaximum(mx)
@@ -1337,6 +1464,10 @@ class PackInfoDialog(QDialog):
                 spin.setValue(default)
                 sld.valueChanged.connect(spin.setValue)
                 spin.valueChanged.connect(sld.setValue)
+                def _on_slider(v, k=key):
+                    self._manifest_settings_data[k] = v
+                sld.valueChanged.connect(_on_slider)
+                spin.valueChanged.connect(_on_slider)
                 container = QWidget()
                 cl = QHBoxLayout(container)
                 cl.setContentsMargins(0, 0, 0, 0)
@@ -1350,22 +1481,51 @@ class PackInfoDialog(QDialog):
                     items = [o.get("text", o.get("name", "")) for o in options if isinstance(o, dict)]
                     cmb = QComboBox()
                     cmb.addItems(items)
-                    default = st.get("default", "")
+                    default = saved_val if saved_val is not None else st.get("default", "")
                     for j, o in enumerate(options):
                         if isinstance(o, dict) and o.get("name") == default:
                             cmb.setCurrentIndex(j)
                             break
+                    def _on_dropdown(idx, k=key, opts=options):
+                        sel = opts[idx] if 0 <= idx < len(opts) else None
+                        self._manifest_settings_data[k] = sel.get("name") if isinstance(sel, dict) else sel
+                    cmb.currentIndexChanged.connect(_on_dropdown)
                     self.settings_form.addRow(QLabel(f"{text_clean}:"), cmb)
             else:
                 self.settings_form.addRow(QLabel(f"❓ 未知类型: {stype}"))
 
-        hint = QLabel("⚠️ 原版游戏中通过 资源包 → 齿轮图标 修改。\n"
-                      "此界面为只读展示，修改后请在世界设置中重新选择。")
+        hint = QLabel("ℹ️ 这些值会保存到包内的 server_overrides.json（服务器端记录）。\n"
+                      "注意：v3 设置为玩家客户端设置，游戏内玩家可自行调整；\n"
+                      "此处便于在服务器侧统一预设默认覆盖值。")
         hint.setStyleSheet("color: #888; font-size: 11px;")
         self.settings_form.addRow(hint)
 
+    def _get_pack_uuid(self):
+        """读取本包的 UUID（先解析 manifest，回退 get_full_pack_info）"""
+        mp = os.path.join(self.pack_folder, "manifest.json")
+        if os.path.isfile(mp):
+            try:
+                with open(mp, "r", encoding="utf-8-sig") as f:
+                    m, _ = _parse_json(f.read())
+                if isinstance(m, dict):
+                    return m.get("header", {}).get("uuid")
+            except Exception:
+                pass
+        try:
+            info = get_full_pack_info(self.pack_folder)
+            if isinstance(info, dict):
+                uuid = info.get("uuid")
+                if uuid:
+                    return uuid
+        except Exception:
+            pass
+        return None
+
     def _find_world_pack_entry(self):
-        """查找该包在 world_*_packs.json 里的注册项"""
+        """查找该包在 world_*_packs.json 里的注册项（按 pack_id 匹配，符合 BDS 规范）"""
+        pack_uuid = self._get_pack_uuid()
+        if not pack_uuid:
+            return None
         for fname in ("world_resource_packs.json", "world_behavior_packs.json"):
             wp = os.path.join(os.path.dirname(self.pack_folder), "..", fname)
             wp = os.path.normpath(wp)
@@ -1376,8 +1536,10 @@ class PackInfoDialog(QDialog):
                 try:
                     with open(wp, "r", encoding="utf-8") as f:
                         entries = json.load(f)
+                    if not isinstance(entries, list):
+                        continue
                     for e in entries:
-                        if isinstance(e, dict) and os.path.normpath(e.get("folder_name", "")) == os.path.basename(self.pack_folder):
+                        if isinstance(e, dict) and e.get("pack_id") == pack_uuid:
                             return e
                 except Exception:
                     pass
@@ -1451,9 +1613,14 @@ class PackInfoDialog(QDialog):
                 edit.textChanged.connect(lambda t, k=key, d=data: d.__setitem__(k, t))
                 self.settings_form.addRow(QLabel(label_text + ":"), edit)
             elif isinstance(value, list):
-                # 列表 - 用文本编辑 JSON
+                # 列表 - 用文本编辑 JSON（回写时解析，避免静默破坏结构 B2）
                 edit = QLineEdit(json.dumps(value, ensure_ascii=False))
-                edit.textChanged.connect(lambda t, k=key, d=data: d.__setitem__(k, t))
+                def _set_list(t, k=key, d=data):
+                    try:
+                        d[k] = json.loads(t)
+                    except Exception:
+                        pass  # 输入非法时保留原结构，不破坏 JSON
+                edit.textChanged.connect(_set_list)
                 self.settings_form.addRow(QLabel(label_text + " (JSON):"), edit)
             elif isinstance(value, dict):
                 # 嵌套字典 - 标题 + 递归
@@ -1486,9 +1653,7 @@ class ServerProcess(QThread):
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 stdin=subprocess.PIPE,
-                encoding='utf-8',
-                errors='replace',
-                bufsize=1,
+                bufsize=0,
                 creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
             )
         except Exception as e:
@@ -1497,10 +1662,11 @@ class ServerProcess(QThread):
             self.process_stopped.emit()
             return
 
-        for line in iter(self.process.stdout.readline, ""):
+        # 二进制读取并按系统代码页解码，避免中文乱码（R3）
+        for raw in iter(self.process.stdout.readline, b""):
             if self._stop_event.is_set():
                 break
-            self.output_received.emit(line.rstrip())
+            self.output_received.emit(_decode_server_line(raw).rstrip())
         self.process.stdout.close()
         retcode = self.process.wait()
         if retcode != 0 and not self._stop_event.is_set():
@@ -1511,7 +1677,7 @@ class ServerProcess(QThread):
     def send_command(self, command):
         if self.process and self.process.stdin and not self._stop_event.is_set():
             try:
-                self.process.stdin.write(command + "\n")
+                self.process.stdin.write((command + "\n").encode("utf-8"))
                 self.process.stdin.flush()
             except Exception as e:
                 log_error(f"发送命令失败: {e}")
@@ -2420,16 +2586,17 @@ class BaseWorker(QThread):
         self._cancel = True
 
 class BackupWorker(BaseWorker):
-    def __init__(self, level_name, world_path, backup_dir, parent=None):
+    def __init__(self, level_name, world_path, backup_dir, parent=None, prefix=""):
         super().__init__(parent)
         self.level_name = level_name
         self.world_path = world_path
         self.backup_dir = backup_dir
+        self.prefix = prefix
 
     def run(self):
         try:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            backup_name = f"{self.level_name}_{timestamp}.zip"
+            backup_name = f"{self.prefix}{self.level_name}_{timestamp}.zip"
             backup_path = os.path.join(self.backup_dir, backup_name)
             self.progress.emit(f"正在备份 {self.level_name} 到 {backup_name} ...")
             # 使用shutil.make_archive更快，但这里用zipfile保持与原逻辑一致
@@ -4106,7 +4273,10 @@ def _scrape_github_versions():
                 results.append((ver, branch, url))
         return results if results else None
     except Exception as e:
-        log_debug(f"版本列表抓取失败: {e}")
+        if isinstance(e, (urllib.error.URLError, socket.timeout, ssl.SSLError, requests.exceptions.RequestException)):
+            log_debug(f"版本列表抓取失败（网络）: {network_error_text(e)[2]}")
+        else:
+            log_debug(f"版本列表抓取失败: {e}")
         return None
 
 
@@ -4594,7 +4764,10 @@ class UpgradeWorker(BaseWorker):
         except requests.exceptions.HTTPError:
             self._run_simple()
         except Exception as e:
-            self.finished.emit(False, f"下载失败: {str(e)}")
+            if isinstance(e, (requests.exceptions.RequestException, urllib.error.URLError, socket.timeout, ssl.SSLError)):
+                self.finished.emit(False, network_error_text(e)[2])
+            else:
+                self.finished.emit(False, f"下载失败: {str(e)}")
         finally:
             for f in temp_files:
                 try: os.remove(f)
@@ -5507,15 +5680,18 @@ class UpgradeTab(QWidget):
                         changelog or "", dl_url, sha256, min_ver
                     )
                 except urllib.error.HTTPError as e:
-                    self.result_signal.emit(False, "", "", f"HTTP {e.code}: {e.reason}", "", "", "")
+                    self.result_signal.emit(False, "", "", network_error_text(e)[2], "", "", "")
                 except urllib.error.URLError as e:
-                    self.result_signal.emit(False, "", "", f"网络错误: {e.reason}", "", "", "")
+                    self.result_signal.emit(False, "", "", network_error_text(e)[2], "", "", "")
+                except socket.timeout as e:
+                    self.result_signal.emit(False, "", "", network_error_text(e)[2], "", "", "")
                 except json.JSONDecodeError as e:
-                    self.result_signal.emit(False, "", "", f"JSON 解析失败: {e}", "", "", "")
-                except (urllib.error.URLError, urllib.error.HTTPError, socket.timeout) as e:
-                    self.result_signal.emit(False, "", "", f"网络错误: {e}", "", "", "")
+                    self.result_signal.emit(False, "", "", f"返回数据解析失败（非合法 JSON）：{e}", "", "", "")
                 except Exception as e:
-                    self.result_signal.emit(False, "", "", f"未知错误: {e}", "", "", "")
+                    if isinstance(e, (requests.exceptions.RequestException, ssl.SSLError)):
+                        self.result_signal.emit(False, "", "", network_error_text(e)[2], "", "", "")
+                    else:
+                        self.result_signal.emit(False, "", "", f"未知错误: {e}", "", "", "")
 
         self._tool_ver_worker = ToolVersionWorker(self)
         self._tool_ver_worker.result_signal.connect(self._on_tool_update_result)
@@ -5598,15 +5774,18 @@ class UpgradeTab(QWidget):
         expected_sha = meta.get("sha256", "")
         save_path = os.path.join(SCRIPT_DIR, f"_update_v{remote_ver}.zip")
 
-        # 若元数据无 download_url，回退旧式单文件下载
+        # download_url 为必需项：缺失说明 version.json 不完整（旧的「单文件下载」分支已废弃 B5）
         if not dl_url:
-            dl_url = f"https://raw.githubusercontent.com/{GITHUB_REPO_OWNER}/{GITHUB_REPO_NAME}/{GITHUB_REPO_BRANCH}/bds_manager.py"
-            expected_sha = ""
-            save_path = os.path.join(SCRIPT_DIR, f"bds_manager_v{remote_ver}.py.new")
-            is_zip_pkg = False
-        else:
-            save_path = os.path.join(SCRIPT_DIR, f"_update_v{remote_ver}.zip")
-            is_zip_pkg = True
+            self._scrolled_set_text(self.tool_update_status,
+                "❌ 更新信息不完整（version.json 缺少 download_url）")
+            self.tool_update_status.setStyleSheet("color: #f44336; padding: 4px;")
+            toast_error("更新信息缺失", "version.json 未提供下载链接，请手动前往 GitHub Releases 下载")
+            self._log("更新元数据缺少 download_url", "ERROR")
+            self.check_tool_btn.setEnabled(True)
+            self.check_tool_btn.setText("🔍 检查工具更新")
+            return
+        save_path = os.path.join(SCRIPT_DIR, f"_update_v{remote_ver}.zip")
+        is_zip_pkg = True
 
         self.check_tool_btn.setEnabled(False)
         self.check_tool_btn.setText("下载中...")
@@ -5635,9 +5814,12 @@ class UpgradeTab(QWidget):
                                     self_inner.progress.emit(f"下载中... {dl_bytes/1024:.0f}/{total/1024:.0f} KB ({pct}%)")
                     self_inner.finished.emit(True, f"下载完成（{dl_bytes/1024:.1f} KB）")
                 except requests.exceptions.RequestException as e:
-                    self_inner.finished.emit(False, f"网络错误: {e}")
+                    self_inner.finished.emit(False, network_error_text(e)[2])
                 except Exception as e:
-                    self_inner.finished.emit(False, f"下载失败: {e}")
+                    if isinstance(e, (urllib.error.URLError, socket.timeout, ssl.SSLError)):
+                        self_inner.finished.emit(False, network_error_text(e)[2])
+                    else:
+                        self_inner.finished.emit(False, f"下载失败: {e}")
                 finally:
                     if r is not None:
                         try: r.close()
@@ -5742,27 +5924,53 @@ class UpgradeTab(QWidget):
         self._log(f"已备份核心文件到: {backup_dir}", "INFO")
         return backup_dir
 
+    def _common_top_dir(self, names):
+        """若 ZIP 内所有文件都位于同一顶层目录，返回该目录（含结尾 '/'），
+        否则返回空串。用于解压时去掉整体打包造成的一层多余目录（B3）。"""
+        top_set = set()
+        for n in names:
+            if n.endswith("/") or n.endswith("\\"):
+                continue
+            parts = n.replace("\\", "/").split("/")
+            if len(parts) > 1:
+                top_set.add(parts[0] + "/")
+            else:
+                return ""  # 存在顶层文件 → 无公共目录
+        if len(top_set) == 1:
+            return next(iter(top_set))
+        return ""
+
     def _extract_update_zip(self, zip_path):
-        """解压更新 ZIP 到脚本目录，跳过用户数据文件"""
+        """解压更新 ZIP 到脚本目录，保留子目录结构，跳过用户数据文件（B3 修复）"""
         skip_files = {
             "bds_manager_config.json", "bds_version_cache.json",
         }
         skip_dirs = {"logs", "backups", "Server", "Earlier version", ".git"}
         import zipfile
         with zipfile.ZipFile(zip_path, "r") as zf:
-            for name in zf.namelist():
+            names = zf.namelist()
+            top_dir = self._common_top_dir(names)
+            for name in names:
                 # 跳过目录
                 if name.endswith("/") or name.endswith("\\"):
                     continue
-                basename = os.path.basename(name)
-                top = name.split("/")[0]
+                # 去掉公共顶层目录前缀（若存在）
+                rel = name
+                if top_dir and name.startswith(top_dir):
+                    rel = name[len(top_dir):]
+                rel = rel.lstrip("/\\")
+                if not rel:
+                    continue
+                parts = rel.replace("\\", "/").split("/")
+                basename = parts[-1]
+                top = parts[0]
                 if basename in skip_files or top in skip_dirs:
                     continue
-                # Zip Slip 防护：拒绝 ../ 越权
-                if basename in ("", ".", "..") or "/" in basename or "\\" in basename:
+                # Zip Slip 防护：拒绝越权路径
+                if basename in ("", ".", "..") or ".." in parts:
                     self._log(f"跳过可疑路径: {name}", "WARN")
                     continue
-                target = os.path.join(SCRIPT_DIR, basename)
+                target = os.path.join(SCRIPT_DIR, *parts)
                 real = os.path.realpath(target)
                 if not real.startswith(os.path.realpath(SCRIPT_DIR)):
                     self._log(f"拒绝越权写入: {name}", "WARN")
@@ -6072,7 +6280,11 @@ class BDSManager(QMainWindow):
                     else:
                         self.result.emit("latest", remote, "", "", "")
                 except Exception as e:
-                    self.result.emit("error", "", "", "", str(e))
+                    if isinstance(e, (urllib.error.URLError, socket.timeout, ssl.SSLError, requests.exceptions.RequestException)):
+                        detail = network_error_text(e)[2]
+                    else:
+                        detail = str(e)
+                    self.result.emit("error", "", "", "", detail)
 
         self._startup_worker = _SilentCheckWorker(self)
         self._startup_worker.result.connect(self._on_startup_update_found)
@@ -6080,7 +6292,7 @@ class BDSManager(QMainWindow):
 
     def _on_startup_update_found(self, status, remote_ver, dl_url, sha256, detail):
         if status == "error":
-            toast_error("版本检查失败", f"GitHub 连接失败: {detail}")
+            toast_error("版本检查失败", detail)
             return
         if status == "latest":
             toast_success("已是最新版本", f"v{__version__}（远程: v{remote_ver}）")
@@ -6104,7 +6316,10 @@ class BDSManager(QMainWindow):
                             if chunk:
                                 f.write(chunk)
                 except Exception as e:
-                    self.finished.emit(False, f"下载失败: {e}")
+                    if isinstance(e, (requests.exceptions.RequestException, urllib.error.URLError, socket.timeout, ssl.SSLError)):
+                        self.finished.emit(False, network_error_text(e)[2])
+                    else:
+                        self.finished.emit(False, f"下载失败: {e}")
                     return
                 if not os.path.exists(save_path) or os.path.getsize(save_path) < 1000:
                     self.finished.emit(False, "下载文件异常")
@@ -6316,6 +6531,10 @@ class BDSManager(QMainWindow):
             log_debug("自动备份跳过：服务器运行中（可开启强制备份）")
             return
 
+        if getattr(self, "_auto_backup_running", False):
+            log_debug("自动备份跳过：上一次备份仍在进行中")
+            return
+
         if server_was_running:
             log_info("强制备份：暂停服务器...")
             self.console_tab.stop_server()
@@ -6328,26 +6547,43 @@ class BDSManager(QMainWindow):
                 log_error("强制备份失败：服务器未能停止")
                 return
 
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        backup_name = f"auto_{level_name}_{timestamp}.zip"
-        backup_path = os.path.join(_ctx.BACKUP_DIR, backup_name)
+        # 后台压缩，避免大世界阻塞界面（R1 修复）；保留文件计数进度提示
+        self._auto_backup_running = True
+        self._auto_backup_resume = server_was_running
+        worker = BackupWorker(level_name, world_path, _ctx.BACKUP_DIR, self, prefix="auto_")
+        worker.progress.connect(lambda msg: self._safe_set_status(msg))
+        worker.finished.connect(self._on_auto_backup_done)
+        self._auto_backup_worker = worker  # 防止被垃圾回收
+        worker.start()
+        self._safe_set_status("自动备份中...")
+
+    def _safe_set_status(self, msg):
         try:
-            with zipfile.ZipFile(backup_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
-                for root, dirs, files in os.walk(world_path):
-                    for file in files:
-                        file_path = os.path.join(root, file)
-                        arcname = os.path.relpath(file_path, os.path.dirname(world_path))
-                        zipf.write(file_path, arcname)
-            log_success(f"自动备份完成: {backup_name}")
-            toast_success("自动备份完成", backup_name)
-            self._cleanup_old_backups(keep=20)
-        except Exception as e:
-            log_error(f"自动备份失败: {e}")
-            toast_error("备份失败", str(e))
-        finally:
-            if server_was_running:
+            self.status_label.setText(msg)
+        except Exception:
+            pass
+
+    def _on_auto_backup_done(self, success, message):
+        self._auto_backup_running = False
+        self._auto_backup_worker = None
+        self._safe_set_status("就绪")
+        if success:
+            log_success(f"自动备份完成: {message}")
+            toast_success("自动备份完成", message)
+            try:
+                self._cleanup_old_backups(keep=20)
+            except Exception as e:
+                log_warning(f"清理旧备份失败: {e}")
+        else:
+            log_error(f"自动备份失败: {message}")
+            toast_error("自动备份失败", message)
+        # 强制备份时恢复服务器
+        if getattr(self, "_auto_backup_resume", False):
+            try:
                 log_info("强制备份：恢复服务器...")
                 self.console_tab.start_server()
+            except Exception as e:
+                log_error(f"恢复服务器失败: {e}")
 
     def _cleanup_old_backups(self, keep=20):
         """清理旧备份文件，仅保留最近 keep 个"""
