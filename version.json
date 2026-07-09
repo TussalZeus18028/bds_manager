@@ -1,9 +1,9 @@
 {
-    "version": "2.1.1.04",
+    "version": "2.1.1.05",
     "release_date": "2026-07-08",
-    "download_url": "https://github.com/TussalZeus18028/bds_manager/releases/download/v2.1.1.04/bds_manager_v2.1.1.04.zip",
-    "sha256": "77eec90d93f48d8a77846dd9099eaca9091bce2c8b52bc13c553f45e8b1dc607",
-    "file_size": 65164,
+    "download_url": "https://github.com/TussalZeus18028/bds_manager/releases/download/v2.1.1.05/bds_manager_v2.1.1.05.zip",
+    "sha256": "d890a550cc27e063dd68e5f9fc4b7b47c4900c607b0d20f1611902b3a1921542",
+    "file_size": 65245,
     "min_compatible_version": "2.0.0.00",
-    "changelog": "## v2.1.1.04 安全加固 & 资源管理\n\n### 🐛 Bug 修复\n- DownloadUpdateWorker 改用 progress 信号（基类对齐，运行不再崩溃）\n- requests 资源使用 finally 关闭，杜绝连接泄漏\n- _apply_tool_update 解压失败保留 ZIP（防数据丢失）\n\n### 🛡️ 安全加固\n- _extract_update_zip 增加 Zip Slip 防护\n  - 拒绝空名/`.`/`..`/含路径分隔符\n  - 校验 realpath 在 SCRIPT_DIR 内\n\n### 🧹 资源管理\n- 重复下载自动取消旧 QThread\n- fallback 下载流不再被误判为 .zip\n\n### 🔄 Toast 同步终端\n- error / warn / ok / info 全部 print 到 stdout\n- 便于通过终端日志对照代码定位问题\n\n### 📘 文档\n- README 更新 v2.1.1+ 自更新机制、发布流程说明"
+    "changelog": "## v2.1.1.05\n\n### 🐛 资源包解析修复\n- get_full_pack_info 兼容 _parse_json 返回元组的情况\n- 添加 is dict 类型检查，遇到错误 manifest 跳过而非崩溃\n- 资源包信息读取不再抛 AttributeError"
 }
