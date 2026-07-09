@@ -88,7 +88,8 @@ def safe_write_json(path, data, indent=4):
 
 import socket
 import psutil
-import ctypes
+if sys.platform == "win32":
+    import ctypes  # 懒加载：仅 Windows 需要
 import urllib.request
 import urllib.error
 import tempfile
@@ -256,6 +257,49 @@ class ToastNotification(QWidget):
                 inst._calc_position()
         return super().eventFilter(obj, event)
 
+# ---------- 跨平台兼容层（其他 Windows 设备运行）----------
+def _get_subprocess_no_window_flag():
+    """获取 subprocess 在当前平台的隐藏窗口标志；非 Windows 返回 0"""
+    if sys.platform != "win32":
+        return 0
+    try:
+        import subprocess as _sp
+        return _sp.CREATE_NO_WINDOW
+    except AttributeError:
+        return 0
+
+def _open_in_system_explorer(path):
+    """跨平台在文件管理器中打开路径"""
+    if not path:
+        return
+    try:
+        if sys.platform == "win32":
+            os.startfile(path)
+        elif sys.platform == "darwin":
+            subprocess.Popen(["open", path])
+        else:
+            subprocess.Popen(["xdg-open", path])
+    except Exception as e:
+        try:
+            log_warning(f"打开路径失败 {path}: {e}")
+        except Exception:
+            pass
+
+def _get_default_bedrock_exe_name():
+    """根据平台返回 BDS 服务端可执行文件名"""
+    return "bedrock_server.exe" if sys.platform == "win32" else "bedrock_server"
+
+def _get_default_user_agent():
+    """根据实际 Windows 版本生成 User-Agent，避免报假"""
+    if sys.platform == "win32":
+        try:
+            ver = sys.getwindowsversion()
+            # 10.0 = Win10/Win11 共用
+            return f"Mozilla/5.0 (Windows NT {ver.major}.{ver.minor}; Win64; x64)"
+        except Exception:
+            pass
+    return "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+
 # ---------- 启用 Windows 控制台 ANSI 颜色 ----------
 if sys.platform == "win32":
     try:
@@ -351,6 +395,26 @@ CONFIG_FILE = os.path.join(SCRIPT_DIR, "bds_manager_config.json")
 VERSION_CACHE_FILE = os.path.join(SCRIPT_DIR, "bds_version_cache.json")
 VERSION_LIST_URL = "https://raw.githubusercontent.com/TussalZeus18028/bds_version_list/main/bds_versions.json"
 
+# 仓库信息：跨设备/Fork 时改这里（也可用 bds_manager_config.json 的 github_repo 覆盖）
+GITHUB_REPO_OWNER = "TussalZeus18028"
+GITHUB_REPO_NAME = "bds_manager"
+GITHUB_REPO_BRANCH = "main"
+
+def _get_github_repo_info():
+    """从配置文件读取仓库信息；无配置时回退到默认"""
+    try:
+        cfg_path = os.path.join(SCRIPT_DIR, "bds_manager_config.json")
+        if os.path.isfile(cfg_path):
+            with open(cfg_path, "r", encoding="utf-8-sig") as f:
+                cfg = json.load(f)
+            if isinstance(cfg, dict) and cfg.get("github_repo"):
+                parts = str(cfg["github_repo"]).strip("/").split("/")
+                if len(parts) == 2:
+                    return parts[0], parts[1], cfg.get("github_branch", GITHUB_REPO_BRANCH)
+    except Exception:
+        pass
+    return GITHUB_REPO_OWNER, GITHUB_REPO_NAME, GITHUB_REPO_BRANCH
+
 # ---------- GitHub 请求辅助 ----------
 _github_token_cache = None  # 缓存配置中的 token
 
@@ -394,14 +458,15 @@ def _github_headers():
                     _github_token_cache = ""
         except Exception:
             _github_token_cache = ""
-    h = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+    h = {"User-Agent": _get_default_user_agent()}
     if _github_token_cache:
         h["Authorization"] = f"token {_github_token_cache}"
     return h
 
 def _fetch_remote_version_json():
     """通过 GitHub API 获取 version.json，绕开 raw CDN 缓存"""
-    url = "https://api.github.com/repos/TussalZeus18028/bds_manager/contents/version.json?ref=main"
+    owner, name, branch = _get_github_repo_info()
+    url = f"https://api.github.com/repos/{owner}/{name}/contents/version.json?ref={branch}"
     req = urllib.request.Request(url, headers=_github_headers())
     with urllib.request.urlopen(req, timeout=10) as resp:
         api_data = json.loads(resp.read().decode("utf-8"))
@@ -1337,14 +1402,9 @@ class PackInfoDialog(QDialog):
         return None
 
     def _open_in_explorer(self, path):
-        """在资源管理器中打开路径"""
+        """在资源管理器中打开路径（使用全局跨平台辅助）"""
         try:
-            if sys.platform == "win32":
-                os.startfile(path)
-            elif sys.platform == "darwin":
-                subprocess.Popen(["open", path])
-            else:
-                subprocess.Popen(["xdg-open", path])
+            _open_in_system_explorer(path)
         except Exception as e:
             QMessageBox.warning(self, "打开失败", str(e))
 
@@ -1447,7 +1507,7 @@ class ServerProcess(QThread):
                 encoding='utf-8',
                 errors='replace',
                 bufsize=1,
-                creationflags=subprocess.CREATE_NO_WINDOW
+                creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
             )
         except Exception as e:
             log_error(f"启动服务器进程失败: {e}")
@@ -2279,7 +2339,7 @@ class SettingsTab(QWidget):
     def load_config(self):
         self.theme_combo.setCurrentText(self.parent.config.get("theme", "auto"))
         self.server_dir_edit.setText(self.parent.config.get("server_dir", "Server"))
-        self.server_exe_edit.setText(self.parent.config.get("server_exe", "bedrock_server.exe"))
+        self.server_exe_edit.setText(self.parent.config.get("server_exe", _get_default_bedrock_exe_name()))
         self.backup_interval.setValue(self.parent.config.get("backup_interval", 60))
         self.force_backup_cb.setChecked(self.parent.config.get("force_backup", False))
         self.monitor_interval.setValue(self.parent.config.get("monitor_interval", 2000))
@@ -4189,7 +4249,7 @@ def _detect_current_version(server_dir):
             if m:
                 return m.group(1)
     # 方案2: 从 exe 文件版本读取
-    exe_path = server_dir / "bedrock_server.exe"
+    exe_path = server_dir / _get_default_bedrock_exe_name()
     if exe_path.exists():
         try:
             import struct
@@ -4199,8 +4259,8 @@ def _detect_current_version(server_dir):
                 pe_offset = struct.unpack("<I", f.read(4))[0]
                 f.seek(pe_offset + 4)
                 magic = struct.unpack("<H", f.read(2))[0]
-                # PE32+ FileHeader 偏移
-                if magic == 0x8664:
+                # PE32+ FileHeader 偏移（AMD64 = 0x8664，ARM64 = 0xAA64）
+                if magic in (0x8664, 0xAA64):
                     f.seek(pe_offset + 24)
                     characteristics = struct.unpack("<H", f.read(2))[0]
                 # 粗略版：执行 bedrock_server.exe --version 不可行
@@ -5558,7 +5618,8 @@ class UpgradeTab(QWidget):
 
         # 若元数据无 download_url，回退旧式单文件下载
         if not dl_url:
-            dl_url = "https://raw.githubusercontent.com/TussalZeus18028/bds_manager/main/bds_manager.py"
+            owner, name, branch = _get_github_repo_info()
+            dl_url = f"https://raw.githubusercontent.com/{owner}/{name}/{branch}/bds_manager.py"
             expected_sha = ""
             save_path = os.path.join(SCRIPT_DIR, f"bds_manager_v{remote_ver}.py.new")
             is_zip_pkg = False
@@ -6120,7 +6181,7 @@ class BDSManager(QMainWindow):
         return os.path.join(SCRIPT_DIR, server_dir_cfg)
 
     def get_server_exe_path(self):
-        exe_rel = self.config.get("server_exe", "bedrock_server.exe")
+        exe_rel = self.config.get("server_exe", _get_default_bedrock_exe_name())
         server_dir = self.get_absolute_server_dir()
         return os.path.join(server_dir, exe_rel)
 
@@ -6142,7 +6203,7 @@ class BDSManager(QMainWindow):
         default = {
             "theme": "dark",
             "server_dir": "Server",
-            "server_exe": "bedrock_server.exe",
+            "server_exe": _get_default_bedrock_exe_name(),
             "backup_interval": 60,
             "force_backup": False,
             "monitor_interval": 2000,
@@ -6192,7 +6253,7 @@ class BDSManager(QMainWindow):
         config = {
             "theme": self.config.get("theme", "auto"),
             "server_dir": self.config.get("server_dir", "Server"),
-            "server_exe": self.config.get("server_exe", "bedrock_server.exe"),
+            "server_exe": self.config.get("server_exe", _get_default_bedrock_exe_name()),
             "backup_interval": self.config.get("backup_interval", 60),
             "force_backup": self.config.get("force_backup", False),
             "monitor_interval": self.config.get("monitor_interval", 2000),
@@ -6428,7 +6489,7 @@ class BDSManager(QMainWindow):
         else:
             toast_error("服务器目录", f"✗ 不存在: {server_dir}")
         # 服务端程序
-        exe = os.path.join(server_dir, self.config.get("server_exe", "bedrock_server.exe"))
+        exe = os.path.join(server_dir, self.config.get("server_exe", _get_default_bedrock_exe_name()))
         if os.path.exists(exe):
             toast_info("服务端程序", f"✓ {os.path.basename(exe)}")
         else:
@@ -6703,4 +6764,15 @@ if __name__ == "__main__":
         log_warning("系统托盘不可用，将无法最小化到托盘")
     window = BDSManager()
     window.show()
-    sys.exit(app.exec_())
+    try:
+        sys.exit(app.exec_())
+    except (KeyboardInterrupt, SystemExit):
+        raise
+    except Exception as e:
+        import traceback
+        try:
+            log_error(f"主循环异常退出: {e}")
+            log_error(traceback.format_exc())
+        except Exception:
+            print(f"[FATAL] main loop crashed: {e}", file=sys.stderr)
+        sys.exit(1)
