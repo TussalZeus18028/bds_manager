@@ -28,7 +28,7 @@ Minecraft Bedrock Dedicated Server 管理工具
   - 多线程优化：所有耗时操作移至后台线程，避免阻塞主界面
 """
 
-__version__ = "2.1.1.08"
+__version__ = "2.1.1.09"
 
 import sys
 import os
@@ -123,7 +123,7 @@ from PyQt5.QtWidgets import (QGraphicsOpacityEffect,
     QSplitter, QProgressBar, QListWidget, QListWidgetItem, QAbstractItemView,
     QInputDialog, QScrollArea, QMenu, QDialogButtonBox, QSlider, QDoubleSpinBox,
     QTabWidget as QTabWidget2, QSystemTrayIcon, QAction, QStyle, QButtonGroup,
-    QPlainTextEdit
+    QRadioButton, QPlainTextEdit
 )
 from PyQt5.QtCore import Qt, QTimer, pyqtSignal, QThread, QFileSystemWatcher, QEvent, QObject, QPropertyAnimation, QEasingCurve, QPoint
 from PyQt5.QtGui import QFont, QColor, QTextCursor, QIcon, QPainter, QPen
@@ -877,21 +877,128 @@ class PackInfoDialog(QDialog):
         layout.addWidget(button_box)
 
     def _save_settings(self):
-        """保存包调整设置到对应 JSON 配置文件"""
-        if not getattr(self, "_settings_files", None):
-            QMessageBox.information(self, "无设置", "此包未提供可调设置。")
-            return
-        try:
-            for path, data in self._settings_files.items():
-                # data 是 dict，控件值已写入
+        """保存包调整设置：subpack 写入 world_*_packs.json；其他配置文件写回原文件"""
+        saved = []
+
+        # 1. subpack 选择：写入 world_*_packs.json
+        radios = getattr(self, "_subpack_radios", None)
+        if radios:
+            chosen = None
+            for radio, val in radios:
+                if radio.isChecked():
+                    chosen = val
+                    break
+            try:
+                if self._save_subpack_to_world(chosen):
+                    saved.append(f"世界子包: {chosen or '(无)'}")
+            except Exception as e:
+                QMessageBox.critical(self, "保存失败", f"写入 world_*_packs.json 失败: {e}")
+                self._log(f"保存子包失败: {e}", "ERROR")
+                return
+
+        # 2. 其他 JSON 配置文件
+        for path, data in self._settings_files.items():
+            try:
                 with open(path, "w", encoding="utf-8") as f:
                     json.dump(data, f, indent=4, ensure_ascii=False)
-            QMessageBox.information(self, "保存成功",
-                f"已保存 {len(self._settings_files)} 个配置文件。\n重启服务器后生效。")
-            self._log(f"已保存包设置: {self.pack_folder}", "SUCCESS")
-        except Exception as e:
-            QMessageBox.critical(self, "保存失败", str(e))
-            self._log(f"保存包设置失败: {e}", "ERROR")
+                saved.append(os.path.relpath(path, self.pack_folder))
+            except Exception as e:
+                QMessageBox.critical(self, "保存失败", f"{path}: {e}")
+                self._log(f"保存 {path} 失败: {e}", "ERROR")
+                return
+
+        if not saved:
+            QMessageBox.information(self, "无设置", "此包未提供可调设置。")
+            return
+
+        QMessageBox.information(self, "保存成功",
+            "已保存：\n  • " + "\n  • ".join(saved) +
+            "\n\n重启服务器后生效。")
+        self._log(f"已保存包设置: {', '.join(saved)}", "SUCCESS")
+
+    def _save_subpack_to_world(self, subpack_name):
+        """将选中的 subpack 写入当前世界的 world_resource_packs.json
+        返回 True 表示成功（即使无变化也视为成功）"""
+        # 找当前世界目录
+        world_path = None
+        try:
+            level_name = self.parent.get_level_name() if hasattr(self, "parent") and self.parent else None
+            if level_name:
+                world_path = get_world_path(level_name)
+        except Exception:
+            pass
+        # 回退：从包路径推断（Server/resource_packs/xx → Server/）
+        if not world_path:
+            server_dir = os.path.dirname(os.path.dirname(self.pack_folder))  # /Server
+            if os.path.basename(server_dir).lower() == "server":
+                world_path = server_dir
+            else:
+                # 找同级 worlds
+                for cand in [server_dir, os.path.dirname(server_dir)]:
+                    wp = os.path.join(cand, "world_resource_packs.json")
+                    if os.path.isfile(wp):
+                        world_path = cand
+                        break
+        if not world_path:
+            raise RuntimeError("无法确定世界目录（请在主窗口选择世界）")
+
+        reg_file = os.path.join(world_path,
+            "world_resource_packs.json" if self.pack_type == "resource"
+            else "world_behavior_packs.json")
+        # 包 UUID：优先用 pack_info，回退从 manifest 读
+        pack_uuid = None
+        try:
+            info = get_full_pack_info(self.pack_folder)
+            if info and isinstance(info, dict):
+                pack_uuid = info.get("uuid")
+        except Exception:
+            pass
+        if not pack_uuid:
+            # 从 manifest 解析
+            mp = os.path.join(self.pack_folder, "manifest.json")
+            if os.path.isfile(mp):
+                try:
+                    with open(mp, "r", encoding="utf-8-sig") as f:
+                        m, _ = _parse_json(f.read())
+                    if isinstance(m, dict):
+                        pack_uuid = m.get("header", {}).get("uuid")
+                except Exception:
+                    pass
+        if not pack_uuid:
+            raise RuntimeError("无法读取包的 UUID")
+
+        # 读取或初始化
+        entries = []
+        if os.path.isfile(reg_file):
+            try:
+                with open(reg_file, "r", encoding="utf-8-sig") as f:
+                    entries = json.load(f)
+                if not isinstance(entries, list):
+                    entries = []
+            except Exception:
+                entries = []
+        else:
+            os.makedirs(world_path, exist_ok=True)
+
+        # 找/追加该包条目
+        found = None
+        for e in entries:
+            if isinstance(e, dict) and e.get("pack_id") == pack_uuid:
+                found = e
+                break
+        if not found:
+            found = {"pack_id": pack_uuid, "version": [1, 0, 0]}
+            entries.append(found)
+        # 写 subpack 字段
+        if subpack_name:
+            found["subpack"] = subpack_name
+        else:
+            found.pop("subpack", None)
+
+        with open(reg_file, "w", encoding="utf-8") as f:
+            json.dump(entries, f, indent=2, ensure_ascii=False)
+        self._log(f"已写入 {os.path.basename(reg_file)}: {found}", "INFO")
+        return True
 
     def load_info(self):
         self.modules_table.setRowCount(0)
@@ -1067,52 +1174,74 @@ class PackInfoDialog(QDialog):
             self.settings_form.addRow(empty)
 
     def _render_subpack_selector(self, manifest_path, subpacks):
-        """渲染 subpacks 选择器（互斥单选）"""
-        title = QLabel("🎮 功能模式选择（原版游戏里的设置项）")
+        """渲染 subpacks 选择器（互斥单选，写入 world_resource_packs.json）"""
+        title = QLabel("🎮 功能模式选择（服务器端生效，所有玩家统一）")
         title.setStyleSheet("color: #4fc3f7; font-weight: bold; padding-top: 6px;")
         self.settings_form.addRow(title)
 
-        hint = QLabel("提示：subpack 选择需写入 world 目录（启动时由玩家选择）\n"
-                      "下方仅展示 / 修改 manifest 的子包列表与说明。")
+        hint = QLabel("提示：选择后点击「💾 保存设置」写入世界配置（world_resource_packs.json）\n"
+                      "重启服务器后生效。玩家在游戏中无法修改。")
         hint.setStyleSheet("color: #888; font-size: 11px;")
         self.settings_form.addRow(hint)
+
+        # 查当前世界下该包已选的 subpack
+        world_meta = self._find_world_pack_entry()
+        current_subpack = ""
+        if world_meta and isinstance(world_meta, dict):
+            current_subpack = world_meta.get("subpack", "") or ""
+
+        # 单选按钮组（-1 表示"不指定子包"）
+        self._subpack_group = QButtonGroup(self)
+        self._subpack_radios = []
+
+        # 添加"不使用子包"选项
+        none_radio = QRadioButton("🚫 不使用子包（使用根包内容）")
+        none_radio.setChecked(current_subpack == "")
+        self._subpack_group.addButton(none_radio, -1)
+        self._subpack_radios.append((none_radio, ""))
+        self.settings_form.addRow(none_radio)
 
         for i, sp in enumerate(subpacks):
             if not isinstance(sp, dict):
                 continue
             name = sp.get("folder_name", sp.get("name", f"subpack_{i}"))
             display = sp.get("name", name)
-            # 去掉 §6 §7 等颜色码
-            display_clean = re.sub(r"§.", "", display).strip()
+            display_clean = re.sub(r"§.", "", display).strip().replace("\n", " | ")
             tier = sp.get("memory_tier", "")
             tier_text = f"  [内存档 {tier}]" if tier else ""
-            row = QWidget()
-            rl = QHBoxLayout(row)
-            rl.setContentsMargins(0, 0, 0, 0)
-            lbl = QLabel(f"📦 {name}{tier_text}\n  {display_clean}")
-            lbl.setStyleSheet("color: #e0e0e0;")
-            lbl.setWordWrap(True)
-            rl.addWidget(lbl, 1)
-            self.settings_form.addRow(row)
+            radio = QRadioButton(f"📦 {name}{tier_text}  —  {display_clean}")
+            radio.setStyleSheet("color: #e0e0e0; padding: 4px 0;")
+            radio.setChecked(current_subpack == name)
+            self._subpack_group.addButton(radio, i)
+            self._subpack_radios.append((radio, name))
+            self.settings_form.addRow(radio)
 
-        # 提供一个"打开 subpacks 目录"按钮
-        btn_row = QWidget()
-        bl = QHBoxLayout(btn_row)
-        bl.setContentsMargins(0, 0, 0, 0)
+        # 当前选择显示
+        if current_subpack:
+            cur_label = QLabel(f"✅ 当前世界已选: {current_subpack}")
+            cur_label.setStyleSheet("color: #4caf50; padding: 6px;")
+        else:
+            cur_label = QLabel("ℹ️ 当前世界未指定子包（使用包根）")
+            cur_label.setStyleSheet("color: #888; padding: 6px;")
+        self.settings_form.addRow(cur_label)
+
+        # 打开 subpacks 目录
         sub_dir = os.path.join(self.pack_folder, "subpacks")
         if os.path.isdir(sub_dir):
+            btn_row = QWidget()
+            bl = QHBoxLayout(btn_row)
+            bl.setContentsMargins(0, 0, 0, 0)
             open_btn = QPushButton("📂 打开 subpacks 目录")
             open_btn.clicked.connect(lambda: self._open_in_explorer(sub_dir))
             bl.addWidget(open_btn)
             bl.addStretch()
             self.settings_form.addRow(btn_row)
-            # 列出 subpacks 目录
             for sp in os.listdir(sub_dir):
                 sp_path = os.path.join(sub_dir, sp)
                 if os.path.isdir(sp_path):
                     cnt = sum(len(fs) for _, _, fs in os.walk(sp_path))
                     self.settings_form.addRow(
-                        QLabel(f"  └ {sp}/  ({cnt} 个文件)") )
+                        QLabel(f"  └ {sp}/  ({cnt} 个文件)"))
         else:
             warn = QLabel("⚠️ manifest 列出了 subpacks 但 subpacks/ 目录不存在")
             warn.setStyleSheet("color: #f44336;")

@@ -1,9 +1,9 @@
 {
-    "version": "2.1.1.08",
+    "version": "2.1.1.09",
     "release_date": "2026-07-08",
-    "download_url": "https://github.com/TussalZeus18028/bds_manager/releases/download/v2.1.1.08/bds_manager_v2.1.1.08.zip",
-    "sha256": "e30fd67e92bfab717dca361ef88e59f9eb1f371d3be39bc84600b9538dc6daca",
-    "file_size": 68670,
+    "download_url": "https://github.com/TussalZeus18028/bds_manager/releases/download/v2.1.1.09/bds_manager_v2.1.1.09.zip",
+    "sha256": "91ac273c012f544461883beb0c71046b743763fd46c94d0d0c85ecde36ff43ca",
+    "file_size": 69770,
     "min_compatible_version": "2.0.0.00",
-    "changelog": "## v2.1.1.08\n\n### 🐛 资源包设置解析修复\n- manifest.json 改用 _parse_json（json5 优先）\n- 支持带 // 注释的 manifest（如「护眼大补丸」）\n- 5 个 subpacks 现在可正常列出\n  - Borderless_glass / Classic / Functional / JavaOriginal / Redstone\n- 附加配置文件解析同样兼容 json5"
+    "changelog": "## v2.1.1.09\n\n### ✨ 服务器端 subpack 强制选择\n- subpack 选择器从只读改为可写\n- 选择后保存到世界目录 world_resource_packs.json\n- 服务器统一生效，玩家游戏内无法覆盖\n- 默认显示当前世界已选 subpack\n- 含「不使用子包」选项\n- 自动匹配包 UUID，定位注册项"
 }

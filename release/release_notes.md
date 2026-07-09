@@ -1,10 +1,11 @@
-## v2.1.1.08
+## v2.1.1.09
 
-## v2.1.1.08
+## v2.1.1.09
 
-### 🐛 资源包设置解析修复
-- manifest.json 改用 _parse_json（json5 优先）
-- 支持带 // 注释的 manifest（如「护眼大补丸」）
-- 5 个 subpacks 现在可正常列出
-  - Borderless_glass / Classic / Functional / JavaOriginal / Redstone
-- 附加配置文件解析同样兼容 json5
+### ✨ 服务器端 subpack 强制选择
+- subpack 选择器从只读改为可写
+- 选择后保存到世界目录 world_resource_packs.json
+- 服务器统一生效，玩家游戏内无法覆盖
+- 默认显示当前世界已选 subpack
+- 含「不使用子包」选项
+- 自动匹配包 UUID，定位注册项
