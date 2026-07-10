@@ -28,7 +28,7 @@ Minecraft Bedrock Dedicated Server 管理工具
   - 多线程优化：所有耗时操作移至后台线程，避免阻塞主界面
 """
 
-__version__ = "2.1.1.12"
+__version__ = "2.1.2.00"
 
 import sys
 import os
@@ -126,7 +126,7 @@ from PyQt5.QtWidgets import (QGraphicsOpacityEffect,
     QFormLayout, QGroupBox, QSpinBox, QCheckBox, QComboBox, QColorDialog,
     QSplitter, QProgressBar, QListWidget, QListWidgetItem, QAbstractItemView,
     QInputDialog, QScrollArea, QMenu, QDialogButtonBox, QSlider, QDoubleSpinBox,
-    QTabWidget as QTabWidget2, QSystemTrayIcon, QAction, QStyle, QButtonGroup,
+    QTabWidget, QSystemTrayIcon, QAction, QStyle, QButtonGroup,
     QRadioButton, QPlainTextEdit
 )
 from PyQt5.QtCore import Qt, QTimer, pyqtSignal, QThread, QFileSystemWatcher, QEvent, QObject, QPropertyAnimation, QEasingCurve, QPoint
@@ -196,10 +196,10 @@ class ToastNotification(QWidget):
 
     def _apply_mask(self):
         """圆角遮罩"""
-        from PyQt5.QtGui import QBitmap, QPainter as QP2
+        from PyQt5.QtGui import QBitmap
         mask = QBitmap(self.size())
         mask.fill(Qt.color0)
-        p = QP2(mask)
+        p = QPainter(mask)
         p.setRenderHint(QPainter.Antialiasing)
         p.setBrush(Qt.color1)
         p.setPen(Qt.NoPen)
@@ -266,8 +266,7 @@ def _get_subprocess_no_window_flag():
     if sys.platform != "win32":
         return 0
     try:
-        import subprocess as _sp
-        return _sp.CREATE_NO_WINDOW
+        return subprocess.CREATE_NO_WINDOW
     except AttributeError:
         return 0
 
@@ -392,6 +391,33 @@ def toast_info(title, msg=""):
         _toast_parent.config.get("toast_duration_info", 3000) if hasattr(_toast_parent, 'config') else 3000)
     print(f"[TOAST][INFO] {title}: {msg}", flush=True)
 
+
+def send_webhook(event, title, message):
+    """向配置的 Webhook 发送通知（Discord / 企业微信 / 自定义）。
+    仅当 webhook_url 非空且 event 在 webhook_events 列表中时发送。
+    失败静默忽略，不影响主流程。"""
+    parent = _toast_parent
+    if not parent:
+        return
+    url = (parent.config.get("webhook_url") or "").strip()
+    if not url:
+        return
+    events = parent.config.get("webhook_events", [])
+    if event not in events:
+        return
+    try:
+        # Discord / 企业微信 / 通用：以 JSON 的 content / text 字段兼容
+        payload = {
+            "content": f"**[{title}]** {message}",
+            "text": f"[{title}] {message}",
+            "username": "BDS Manager",
+        }
+        resp = requests.post(url, json=payload, timeout=8)
+        if resp.status_code >= 400:
+            log_warning(f"Webhook 通知失败 ({event}): HTTP {resp.status_code}")
+    except Exception as e:
+        log_warning(f"Webhook 通知异常 ({event}): {e}")
+
 # ---------- 全局配置：支持脚本与服务器文件夹分离 ----------
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_FILE = os.path.join(SCRIPT_DIR, "bds_manager_config.json")
@@ -409,14 +435,12 @@ _TOKEN_XOR_KEY = b"bds_manager_2026_token_obfuscation_key"
 
 def _obfuscate_token(token: str) -> str:
     """对 token 做 base64 + XOR 混淆存储"""
-    import base64
     data = token.encode("utf-8")
     key = (_TOKEN_XOR_KEY * (len(data) // len(_TOKEN_XOR_KEY) + 1))[:len(data)]
     return base64.urlsafe_b64encode(bytes(a ^ b for a, b in zip(data, key))).decode()
 
 def _deobfuscate_token(obfuscated: str) -> str:
     """解密被混淆的 token"""
-    import base64
     try:
         data = base64.urlsafe_b64decode(obfuscated.encode())
         key = (_TOKEN_XOR_KEY * (len(data) // len(_TOKEN_XOR_KEY) + 1))[:len(data)]
@@ -895,7 +919,7 @@ def get_folder_size(folder_path):
         log_error(f"计算文件夹大小失败: {e}")
     return total
 
-def register_pack_to_world(world_path, pack_type, pack_name, pack_uuid, pack_version):
+def register_pack_to_world(world_path, pack_type, pack_uuid, pack_version):
     if pack_type == "resource":
         json_path = os.path.join(world_path, "world_resource_packs.json")
     else:
@@ -958,7 +982,7 @@ class PackInfoDialog(QDialog):
 
     def init_ui(self):
         layout = QVBoxLayout(self)
-        self.tab_widget = QTabWidget2()
+        self.tab_widget = QTabWidget()
 
         self.basic_widget = QWidget()
         self.basic_layout = QFormLayout(self.basic_widget)
@@ -1527,23 +1551,20 @@ class PackInfoDialog(QDialog):
         pack_uuid = self._get_pack_uuid()
         if not pack_uuid:
             return None
-        for fname in ("world_resource_packs.json", "world_behavior_packs.json"):
-            wp = os.path.join(os.path.dirname(self.pack_folder), "..", fname)
-            wp = os.path.normpath(wp)
-            if not os.path.isfile(wp):
-                wp = os.path.join(os.path.dirname(self.pack_folder), fname)
-                wp = os.path.normpath(wp)
-            if os.path.isfile(wp):
-                try:
-                    with open(wp, "r", encoding="utf-8") as f:
-                        entries = json.load(f)
-                    if not isinstance(entries, list):
-                        continue
+        # 仅按包类型查询对应文件，移除不可能命中的回退路径（修复 R5）
+        fname = ("world_resource_packs.json" if self.pack_type == "resource"
+                 else "world_behavior_packs.json")
+        wp = os.path.normpath(os.path.join(os.path.dirname(self.pack_folder), "..", fname))
+        if os.path.isfile(wp):
+            try:
+                with open(wp, "r", encoding="utf-8") as f:
+                    entries = json.load(f)
+                if isinstance(entries, list):
                     for e in entries:
                         if isinstance(e, dict) and e.get("pack_id") == pack_uuid:
                             return e
-                except Exception:
-                    pass
+            except Exception:
+                pass
         return None
 
     def _open_in_explorer(self, path):
@@ -1678,7 +1699,18 @@ class ServerProcess(QThread):
     def send_command(self, command):
         if self.process and self.process.stdin and not self._stop_event.is_set():
             try:
-                self.process.stdin.write((command + "\n").encode("utf-8"))
+                line = command + "\n"
+                # 与输出解码保持一致：优先系统代码页，UTF-8 兜底（修复 L1 编码双向不一致）
+                enc = None
+                try:
+                    enc = locale.getpreferredencoding(False)
+                except Exception:
+                    enc = None
+                try:
+                    data = line.encode(enc) if enc else line.encode("utf-8")
+                except (UnicodeEncodeError, LookupError):
+                    data = line.encode("utf-8")
+                self.process.stdin.write(data)
                 self.process.stdin.flush()
             except Exception as e:
                 log_error(f"发送命令失败: {e}")
@@ -2349,13 +2381,46 @@ class SettingsTab(QWidget):
         self.backup_interval.setToolTip("0 = 禁用自动备份")
         backup_layout.addWidget(QLabel("备份间隔:"))
         backup_layout.addWidget(self.backup_interval)
-        backup_layout.addSpacing(20)
-        self.force_backup_cb = QCheckBox("服务器运行时强制备份（先暂停→备份→恢复）")
-        self.force_backup_cb.setToolTip("开启后，即使服务器正在运行，自动备份也会先暂停服务器再执行")
-        backup_layout.addWidget(self.force_backup_cb)
         backup_layout.addStretch()
         backup_group.setLayout(backup_layout)
         layout.addWidget(backup_group)
+
+        # --- 备份策略 ---
+        policy_group = QGroupBox("🗂️ 备份策略")
+        policy_layout = QFormLayout()
+        self.backup_keep = QSpinBox()
+        self.backup_keep.setRange(1, 500)
+        self.backup_keep.setToolTip("保留最近 N 个备份文件")
+        policy_layout.addRow("保留数量:", self.backup_keep)
+        self.backup_min_age = QSpinBox()
+        self.backup_min_age.setRange(0, 365)
+        self.backup_min_age.setSuffix(" 天")
+        self.backup_min_age.setToolTip("超过该天数的备份才允许被自动清理（0=不限制）")
+        policy_layout.addRow("最小保留天数:", self.backup_min_age)
+        self.online_backup_cb = QCheckBox("在线备份（save hold/resume，不停服）")
+        self.online_backup_cb.setToolTip("服务器运行时使用原生命令零停服备份；不支持时自动回退停服备份")
+        policy_layout.addRow("模式:", self.online_backup_cb)
+        policy_group.setLayout(policy_layout)
+        layout.addWidget(policy_group)
+
+        # --- Webhook 通知 ---
+        webhook_group = QGroupBox("🔔 Webhook 通知")
+        webhook_layout = QVBoxLayout()
+        self.webhook_url = QLineEdit()
+        self.webhook_url.setPlaceholderText("https://discord.com/api/webhooks/... 或企业微信/自定义 URL")
+        webhook_layout.addWidget(QLabel("Webhook URL（留空则不通知）:"))
+        webhook_layout.addWidget(self.webhook_url)
+        self.webhook_events = QHBoxLayout()
+        self.webhook_cb_backup = QCheckBox("备份")
+        self.webhook_cb_crash = QCheckBox("崩溃")
+        self.webhook_cb_memory = QCheckBox("内存告警")
+        self.webhook_events.addWidget(self.webhook_cb_backup)
+        self.webhook_events.addWidget(self.webhook_cb_crash)
+        self.webhook_events.addWidget(self.webhook_cb_memory)
+        self.webhook_events.addStretch()
+        webhook_layout.addLayout(self.webhook_events)
+        webhook_group.setLayout(webhook_layout)
+        layout.addWidget(webhook_group)
 
         # --- 系统监视 ---
         monitor_group = QGroupBox("📊 系统资源监视")
@@ -2499,7 +2564,15 @@ class SettingsTab(QWidget):
         self.server_dir_edit.setText(self.parent.config.get("server_dir", "Server"))
         self.server_exe_edit.setText(self.parent.config.get("server_exe", _get_default_bedrock_exe_name()))
         self.backup_interval.setValue(self.parent.config.get("backup_interval", 60))
-        self.force_backup_cb.setChecked(self.parent.config.get("force_backup", False))
+        self.backup_keep.setValue(self.parent.config.get("backup_keep", 20))
+        self.backup_min_age.setValue(self.parent.config.get("backup_min_age_days", 0))
+        self.online_backup_cb.setChecked(self.parent.config.get("online_backup", True))
+        wh_url = self.parent.config.get("webhook_url", "") or ""
+        self.webhook_url.setText(wh_url)
+        wh_events = self.parent.config.get("webhook_events", ["backup", "crash", "memory"])
+        self.webhook_cb_backup.setChecked("backup" in wh_events)
+        self.webhook_cb_crash.setChecked("crash" in wh_events)
+        self.webhook_cb_memory.setChecked("memory" in wh_events)
         self.monitor_interval.setValue(self.parent.config.get("monitor_interval", 2000))
         self.mem_warn.setValue(self.parent.config.get("mem_warn_threshold", 80))
         self.hidpi_cb.setChecked(self.parent.config.get("hidpi_enabled", True))
@@ -2544,7 +2617,9 @@ class SettingsTab(QWidget):
         self.parent.config["server_dir"] = new_dir
         self.parent.config["server_exe"] = new_exe
         self.parent.config["backup_interval"] = self.backup_interval.value()
-        self.parent.config["force_backup"] = self.force_backup_cb.isChecked()
+        self.parent.config["backup_keep"] = self.backup_keep.value()
+        self.parent.config["backup_min_age_days"] = self.backup_min_age.value()
+        self.parent.config["online_backup"] = self.online_backup_cb.isChecked()
         self.parent.config["monitor_interval"] = self.monitor_interval.value()
         self.parent.config["mem_warn_threshold"] = self.mem_warn.value()
         self.parent.config["hidpi_enabled"] = self.hidpi_cb.isChecked()
@@ -2559,6 +2634,15 @@ class SettingsTab(QWidget):
         self.parent.config["github_auth_enabled"] = self.github_auth_cb.isChecked()
         token = self.github_token_edit.text().strip() if self.github_auth_cb.isChecked() else ""
         self.parent.config["github_token"] = _obfuscate_token(token) if token else ""
+        self.parent.config["webhook_url"] = self.webhook_url.text().strip()
+        wh_events = []
+        if self.webhook_cb_backup.isChecked():
+            wh_events.append("backup")
+        if self.webhook_cb_crash.isChecked():
+            wh_events.append("crash")
+        if self.webhook_cb_memory.isChecked():
+            wh_events.append("memory")
+        self.parent.config["webhook_events"] = wh_events
         _refresh_github_token()
         self.parent.save_config()
         self.parent.apply_theme(self.parent.config["theme"])
@@ -2663,11 +2747,11 @@ class RestoreWorker(BaseWorker):
             # 先移到临时目录而非直接删除（安全回滚）
             temp_backup = None
             if os.path.exists(self.world_path) and os.listdir(self.world_path):
-                import tempfile
                 temp_backup = tempfile.mkdtemp(prefix="world_restore_backup_",
                                                dir=os.path.dirname(self.world_path))
                 for item in os.listdir(self.world_path):
                     if self._cancel:
+                        self._rollback_restore(temp_backup, self.world_path)
                         self.finished.emit(False, "还原已取消")
                         return
                     item_path = os.path.join(self.world_path, item)
@@ -2686,7 +2770,29 @@ class RestoreWorker(BaseWorker):
             self.finished.emit(True, f"世界已从 {os.path.basename(self.backup_path)} 还原")
         except Exception as e:
             log_error(f"还原失败: {e}")
+            # 还原失败时回滚：把临时目录内容移回世界目录，避免世界数据丢失（修复 L3）
+            self._rollback_restore(temp_backup, self.world_path)
             self.finished.emit(False, f"还原失败: {e}")
+
+    def _rollback_restore(self, temp_backup, world_path):
+        """把还原过程中临时移出的世界内容移回世界目录，避免世界数据丢失"""
+        if not temp_backup or not os.path.exists(temp_backup):
+            return
+        try:
+            os.makedirs(world_path, exist_ok=True)
+            for item in os.listdir(temp_backup):
+                src = os.path.join(temp_backup, item)
+                dest = os.path.join(world_path, item)
+                if os.path.exists(dest):
+                    # 解压可能已部分写入同名文件，先移除冲突项
+                    if os.path.isdir(dest):
+                        shutil.rmtree(dest, ignore_errors=True)
+                    else:
+                        os.remove(dest)
+                shutil.move(src, dest)
+            shutil.rmtree(temp_backup, ignore_errors=True)
+        except Exception as e2:
+            log_error(f"还原回滚失败（世界数据可能丢失）: {e2}")
 
 class CopyPackWorker(BaseWorker):
     def __init__(self, src_path, dest_path, pack_type, world_path, parent=None):
@@ -2708,7 +2814,7 @@ class CopyPackWorker(BaseWorker):
                 return
             # 自动激活
             if self.world_path and os.path.exists(self.world_path):
-                success = register_pack_to_world(self.world_path, self.pack_type, os.path.basename(self.dest_path), uuid, version)
+                success = register_pack_to_world(self.world_path, self.pack_type, uuid, version)
                 if success:
                     self.progress.emit("包已激活到当前世界")
                 else:
@@ -2760,6 +2866,17 @@ class ConsoleTab(QWidget):
         self._players = {}     # {name: {"xuid": xuid, "joined": timestamp}}
         self._server_start_time = None
         self._bds_version = ""
+        self._crash_tail_lines = 80
+        # 卡顿代理指标：周期性发送 list 命令，测量服务器响应往返延迟（ms）
+        # 注意：Bedrock 基岩版服务端无原生 TPS 输出，此值反映"服务器处理命令的
+        # 响应延迟"，延迟越高代表服务器越繁忙/卡顿，并非真实 TPS。
+        self._lag_samples = []          # 最近若干次 RTT(ms)
+        self._lag_ping_sent = 0.0       # 上次发送 list 的时间戳
+        self._lag_ping_pending = False
+        self._lag_timer = QTimer(self)
+        self._lag_timer.setInterval(30000)   # 每 30 秒探测一次
+        self._lag_timer.timeout.connect(self._lag_ping)
+        self._lag_timer.start()
         # 输出缓冲：批量刷新，避免高负载时每行一次重绘导致卡顿
         self._output_buffer = []
         self._output_flush_timer = QTimer(self)
@@ -2779,10 +2896,20 @@ class ConsoleTab(QWidget):
         btn_layout.addWidget(self.start_btn)
         btn_layout.addWidget(self.stop_btn)
         btn_layout.addStretch()
-        self.auto_restart_cb = QCheckBox("崩溃自动重启（最多5次）")
+        self.auto_restart_cb = QCheckBox("崩溃自动重启")
         self.auto_restart_cb.setToolTip("服务器异常退出后自动重新启动")
         self.auto_restart_cb.toggled.connect(lambda v: setattr(self, '_auto_restart', v))
         btn_layout.addWidget(self.auto_restart_cb)
+        btn_layout.addWidget(QLabel("最多:"))
+        self.restart_retries = QSpinBox()
+        self.restart_retries.setRange(0, 20)
+        self.restart_retries.setToolTip("连续崩溃自动重启的最大次数，0=不重启")
+        try:
+            self.restart_retries.setValue(self.parent.config.get("max_restart_retries", 5))
+        except Exception:
+            self.restart_retries.setValue(5)
+        btn_layout.addWidget(self.restart_retries)
+        btn_layout.addWidget(QLabel("次"))
         layout.addLayout(btn_layout)
 
         self.output_area = QTextEdit()
@@ -2800,6 +2927,30 @@ class ConsoleTab(QWidget):
         self.cmd_input._console_tab = self
         cmd_layout.addWidget(self.cmd_input)
         layout.addLayout(cmd_layout)
+
+        # 搜索 + 导出工具栏
+        tool_layout = QHBoxLayout()
+        self.search_input = QLineEdit()
+        self.search_input.setPlaceholderText("搜索日志（回车跳转下一个匹配）")
+        self.search_input.returnPressed.connect(self._search_next)
+        tool_layout.addWidget(QLabel("🔍"))
+        tool_layout.addWidget(self.search_input)
+        self.search_prev_btn = QPushButton("↑")
+        self.search_prev_btn.setFixedWidth(32)
+        self.search_prev_btn.setToolTip("上一个匹配")
+        self.search_prev_btn.clicked.connect(self._search_prev)
+        self.search_next_btn = QPushButton("↓")
+        self.search_next_btn.setFixedWidth(32)
+        self.search_next_btn.setToolTip("下一个匹配")
+        self.search_next_btn.clicked.connect(self._search_next)
+        tool_layout.addWidget(self.search_prev_btn)
+        tool_layout.addWidget(self.search_next_btn)
+        tool_layout.addStretch()
+        self.export_btn = QPushButton("📤 导出日志")
+        self.export_btn.setToolTip("将当前控制台内容导出为文本文件")
+        self.export_btn.clicked.connect(self._export_log)
+        tool_layout.addWidget(self.export_btn)
+        layout.addLayout(tool_layout)
 
     def eventFilter(self, obj, event):
         """命令输入框的按键历史"""
@@ -2863,14 +3014,26 @@ class ConsoleTab(QWidget):
         return '#888888'  # 普通灰
 
     def _enforce_max_lines(self):
-        """超出最大行数时删除顶部行，避免文档无限增长拖慢渲染"""
+        """超出最大行数时删除顶部行，避免文档无限增长拖慢渲染。
+        若用户正在上方阅读（不在底部），则按被删行的像素高度补偿滚动位置，
+        避免视图整体上移、阅读被打断（修复 R6）。"""
         doc = self.output_area.document()
+        if doc.blockCount() <= self._MAX_LINES:
+            return
+        sb = self.output_area.verticalScrollBar()
+        at_bottom = sb.value() >= sb.maximum() - 4
+        layout = doc.documentLayout()
+        removed_px = 0
         while doc.blockCount() > self._MAX_LINES:
+            block = doc.firstBlock()
+            removed_px += layout.blockBoundingRect(block).height()
             cursor = QTextCursor(doc)
             cursor.movePosition(QTextCursor.Start)
             cursor.select(QTextCursor.BlockUnderCursor)
             cursor.removeSelectedText()
             cursor.deleteChar()  # 删除紧随的换行符
+        if not at_bottom:
+            sb.setValue(max(0, sb.value() - int(removed_px)))
 
     def _flush_output(self):
         """定时器触发：批量处理缓冲中的输出行（仅一次重绘）"""
@@ -2913,7 +3076,18 @@ class ConsoleTab(QWidget):
             sb.setValue(sb.maximum())
 
     def _parse_player_event(self, text):
-        """解析 BDS 玩家连接/生成/断开事件"""
+        """解析 BDS 玩家连接/生成/断开事件，并检测 list 响应以计算延迟"""
+        # list 命令响应形如 "There are N of a max M players online: ..."
+        if self._lag_ping_pending and re.search(r'players online', text, re.I):
+            self._lag_on_response()
+        # 在线备份就绪检测：等待 save hold 完成（"Data saved..."）或命令不支持
+        sr = getattr(self.parent, "_save_ready", None)
+        if sr is not None and not sr.is_set():
+            if re.search(r'Data saved|Files are now ready to be copied', text, re.I):
+                sr.set()
+            elif re.search(r'Unknown command|does not exist', text, re.I):
+                self.parent._save_unsupported = True
+                sr.set()
         # "Player connected: Name, xuid: ..."
         m = re.search(r'Player connected:\s+([A-Za-z0-9_]+)', text, re.I)
         if m:
@@ -2938,9 +3112,34 @@ class ConsoleTab(QWidget):
             self.parent.server_stats["players"] = list(self._players.keys())
             toast_info("玩家离开", name)
 
+    def _lag_ping(self):
+        """向运行中的服务器发送 list 命令，启动一次往返延迟探测。"""
+        if not (self.server_process and self.server_process.isRunning()):
+            self._lag_ping_pending = False
+            return
+        self._lag_ping_sent = time.time()
+        self._lag_ping_pending = True
+        self.server_process.send_command("list")
+
+    def _lag_on_response(self):
+        """当检测到 list 响应行时，计算往返延迟并加入样本。"""
+        if not self._lag_ping_pending:
+            return
+        rtt = (time.time() - self._lag_ping_sent) * 1000.0
+        if 0 < rtt < 60000:   # 合理范围保护
+            self._lag_samples.append(rtt)
+            if len(self._lag_samples) > 10:
+                self._lag_samples.pop(0)
+        self._lag_ping_pending = False
+
     def get_server_stats(self):
         """返回当前服务器状态汇总"""
         uptime = int(time.time() - self._server_start_time) if self._server_start_time else 0
+        # 卡顿代理指标：取最近若干次 RTT 的中位数（ms），无样本时为 0
+        lag = 0.0
+        if self._lag_samples:
+            s = sorted(self._lag_samples)
+            lag = s[len(s) // 2]
         return {
             "running": self.is_server_running(),
             "uptime_seconds": uptime,
@@ -2948,6 +3147,7 @@ class ConsoleTab(QWidget):
             "player_count": len(self._players),
             "auto_restart": self._auto_restart,
             "bds_version": self._bds_version or _detect_current_version(get_server_dir()),
+            "lag_ms": lag,
         }
 
     def _init_log_file(self):
@@ -3002,13 +3202,40 @@ class ConsoleTab(QWidget):
     def on_server_error(self, error_msg):
         self.append_output(f">>> 错误: {error_msg} <<<")
         toast_error("服务器崩溃", error_msg)
-        if self._auto_restart and self._restart_count < 5:
+        send_webhook("crash", "服务器崩溃", error_msg)
+        max_retries = self.parent.config.get("max_restart_retries", 5)
+        if self._auto_restart and self._restart_count < max_retries:
             self._restart_count += 1
-            self.append_output(f">>> {5}秒后自动重启（第 {self._restart_count} 次）... <<<")
+            self.append_output(f">>> {5}秒后自动重启（第 {self._restart_count}/{max_retries} 次）... <<<")
             self._restart_timer.start(5000)
         else:
+            # 超过重试上限或关闭了自动重启：保留崩溃前日志供排查
+            self._save_crash_log(error_msg)
             QMessageBox.critical(self, "服务器错误", error_msg)
         self.on_server_stopped()
+
+    def _save_crash_log(self, error_msg):
+        """将崩溃前的控制台输出末尾若干行写入 logs/crash_*.log 供排查"""
+        try:
+            log_dir = os.path.join(SCRIPT_DIR, "logs")
+            os.makedirs(log_dir, exist_ok=True)
+            ts = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+            path = os.path.join(log_dir, f"crash_{ts}.log")
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(f"崩溃时间: {ts}\n错误: {error_msg}\n\n最近输出:\n")
+                f.write("\n".join(self._crash_tail()))
+            log_info(f"已保存崩溃日志: {path}")
+        except Exception as e:
+            log_warning(f"保存崩溃日志失败: {e}")
+
+    def _crash_tail(self, n=80):
+        """取当前输出区域末尾 n 行文本"""
+        try:
+            text = self.output_area.toPlainText()
+            lines = text.splitlines()
+            return lines[-n:] if lines else []
+        except Exception:
+            return []
 
     def send_command(self):
         cmd = self.cmd_input.text().strip()
@@ -3031,6 +3258,55 @@ class ConsoleTab(QWidget):
 
     def is_server_running(self):
         return self.server_process is not None and self.server_process.isRunning()
+
+    def _search_next(self):
+        """在控制台中查找下一个匹配项并高亮（循环查找）"""
+        self._search(highlight_all=False, backward=False)
+
+    def _search_prev(self):
+        self._search(highlight_all=False, backward=True)
+
+    def _search(self, highlight_all=False, backward=False):
+        text = self.search_input.text().strip()
+        if not text:
+            return
+        doc = self.output_area.document()
+        cursor = self.output_area.textCursor()
+        if backward:
+            found = doc.find(text, cursor, QTextDocument.FindBackward)
+        else:
+            found = doc.find(text, cursor)
+        if found.isNull():
+            # 循环：从头/尾再找一次
+            if backward:
+                c2 = QTextCursor(doc)
+                c2.movePosition(QTextCursor.End)
+                found = doc.find(text, c2, QTextDocument.FindBackward)
+            else:
+                found = doc.find(text, QTextCursor(doc))
+        if not found.isNull():
+            self.output_area.setTextCursor(found)
+            self.output_area.setFocus()
+
+    def _export_log(self):
+        """将当前控制台内容导出为 .log 文本文件"""
+        try:
+            text = self.output_area.toPlainText()
+            if not text.strip():
+                toast_warning("导出取消", "当前控制台为空")
+                return
+            default_name = f"console_export_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.log"
+            path, _ = QFileDialog.getSaveFileName(
+                self, "导出日志", os.path.join(SCRIPT_DIR, default_name), "Log Files (*.log);;Text (*.txt)")
+            if not path:
+                return
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(text)
+            toast_success("导出成功", os.path.basename(path))
+            log_info(f"控制台日志已导出: {path}")
+        except Exception as e:
+            toast_error("导出失败", str(e))
+            log_error(f"导出日志失败: {e}")
 
     def _do_auto_restart(self):
         """崩溃后自动重启服务器"""
@@ -3192,7 +3468,7 @@ class PacksTab(QWidget):
         if not uuid:
             toast_error("缺少 UUID", f"无法读取 {folder_name} 的 manifest.json")
             return
-        success = register_pack_to_world(world_path, pack_type, folder_name, uuid, version)
+        success = register_pack_to_world(world_path, pack_type, uuid, version)
         if success:
             log_success(f"手动激活 {folder_name} 到世界 {level_name}")
             toast_success("激活成功", f"{folder_name} 已激活")
@@ -4447,11 +4723,7 @@ def _detect_current_version(server_dir):
                 f.seek(60)
                 pe_offset = struct.unpack("<I", f.read(4))[0]
                 f.seek(pe_offset + 4)
-                magic = struct.unpack("<H", f.read(2))[0]
-                # PE32+ FileHeader 偏移（AMD64 = 0x8664，ARM64 = 0xAA64）
-                if magic in (0x8664, 0xAA64):
-                    f.seek(pe_offset + 24)
-                    characteristics = struct.unpack("<H", f.read(2))[0]
+                f.read(2)  # 跳过 PE Machine 字段（AMD64 = 0x8664，ARM64 = 0xAA64）
                 # 粗略版：执行 bedrock_server.exe --version 不可行
                 # 作为兜底，尝试读取内嵌字符串
                 raw = f.read()
@@ -4489,6 +4761,24 @@ def _increment_version(ver_str, level=3):
     for i in range(level + 1, 4):
         parts[i] = 0
     return ".".join(str(p) for p in parts)
+
+
+def compare_versions(a, b):
+    """比较两个点分版本号（如 "2.1.1.12"）。
+
+    返回 1 表示 a>b，-1 表示 a<b，0 表示相等或无法解析。
+    统一替换各处分散的 _cmp 内联实现（修复 R9，避免逻辑漂移）。
+    """
+    try:
+        x = [int(n) for n in a.split(".")]
+        y = [int(n) for n in b.split(".")]
+        while len(x) < 4:
+            x.append(0)
+        while len(y) < 4:
+            y.append(0)
+        return (x > y) - (x < y)
+    except (ValueError, IndexError):
+        return 0
 
 
 def _fetch_latest_version_info(branch="stable", current_version=None,
@@ -4776,7 +5066,12 @@ class UpgradeWorker(BaseWorker):
                         return
                     idx, ok, dled = future.result()
                     if not ok:
-                        self.finished.emit(False, f"分段 {idx} 下载失败")
+                        # 明确区分「用户取消」与「分段下载失败」，并主动取消其余分段（修复 L6）
+                        pool.shutdown(wait=False, cancel_futures=True)
+                        if self._cancel:
+                            self.finished.emit(False, "下载已取消")
+                        else:
+                            self.finished.emit(False, f"分段 {idx} 下载失败")
                         return
                     downloaded_bytes[idx] = dled
                     total_dl = sum(downloaded_bytes)
@@ -5750,19 +6045,9 @@ class UpgradeTab(QWidget):
 
         self._log(f"远程版本: v{remote_ver} | 本地: v{__version__}", "INFO")
 
-        def _cmp(v1, v2):
-            try:
-                a = [int(x) for x in v1.split(".")]
-                b = [int(x) for x in v2.split(".")]
-                while len(a) < 4: a.append(0)
-                while len(b) < 4: b.append(0)
-                return (a > b) - (a < b)
-            except (ValueError, IndexError):
-                return 0
-
-        if _cmp(remote_ver, __version__) > 0:
+        if compare_versions(remote_ver, __version__) > 0:
             # 最低兼容版本检查
-            if min_ver and _cmp(__version__, min_ver) < 0:
+            if min_ver and compare_versions(__version__, min_ver) < 0:
                 self._scrolled_set_text(self.tool_update_status,
                     f"⚠️ 当前版本过低，无法自动更新到 v{remote_ver}（最低要求 v{min_ver}）")
                 self.tool_update_status.setStyleSheet("color: #f44336; padding: 4px;")
@@ -5983,7 +6268,6 @@ class UpgradeTab(QWidget):
             "bds_manager_config.json", "bds_version_cache.json",
         }
         skip_dirs = {"logs", "backups", "Server", "Earlier version", ".git"}
-        import zipfile
         with zipfile.ZipFile(zip_path, "r") as zf:
             names = zf.namelist()
             top_dir = self._common_top_dir(names)
@@ -6106,8 +6390,8 @@ class DashboardTab(QWidget):
         perf_layout.addWidget(self.mem_pbar, 1, 1)
         perf_layout.addWidget(self.mem_label, 1, 2)
         perf_layout.addWidget(self.net_label, 2, 2)
-        self.tps_label = QLabel("TPS: N/A")
-        perf_layout.addWidget(QLabel("TPS:"), 2, 0)
+        self.tps_label = QLabel("响应: --")
+        perf_layout.addWidget(QLabel("响应:"), 2, 0)
         perf_layout.addWidget(self.tps_label, 2, 1)
         perf_group.setLayout(perf_layout)
         layout.addWidget(perf_group)
@@ -6193,7 +6477,7 @@ class DashboardTab(QWidget):
         now = time.time()
         if now - self._last_backup_scan > 15:
             self._last_backup_scan = now
-            backup_dir = self.parent.get_absolute_server_dir() + "/backups"
+            backup_dir = os.path.join(self.parent.get_absolute_server_dir(), "backups")
             if os.path.exists(backup_dir):
                 try:
                     backups = sorted(
@@ -6229,23 +6513,26 @@ class DashboardTab(QWidget):
         except Exception:
             pass
 
-        # TPS（活动率估算）
-        tps = stats.get("tps", 0)
-        if tps > 0:
-            if tps >= 5:
-                self.tps_label.setText(f"TPS: {tps:.1f} 🟢")
+        # 卡顿代理指标（RTT 延迟，非真实 TPS）
+        lag = stats.get("lag_ms", 0.0)
+        if stats["running"] and lag > 0:
+            if lag <= 200:
+                self.tps_label.setText(f"响应: {lag:.0f}ms 🟢")
                 self.tps_label.setStyleSheet("color: #4CAF50; font-weight: bold;")
-            elif tps >= 1:
-                self.tps_label.setText(f"TPS: {tps:.1f} 🟡")
+            elif lag <= 800:
+                self.tps_label.setText(f"响应: {lag:.0f}ms 🟡")
                 self.tps_label.setStyleSheet("color: #ffaa33; font-weight: bold;")
             else:
-                self.tps_label.setText(f"TPS: {tps:.1f} 🔴")
+                self.tps_label.setText(f"响应: {lag:.0f}ms 🔴")
                 self.tps_label.setStyleSheet("color: #f44336; font-weight: bold;")
+        elif stats["running"]:
+            self.tps_label.setText("响应: 探测中")
+            self.tps_label.setStyleSheet("color: #888;")
         else:
-            self.tps_label.setText("TPS: --")
+            self.tps_label.setText("响应: --")
             self.tps_label.setStyleSheet("color: #888;")
 
-# ---------- 主窗口 ----------
+# ---------- 玩家与权限管理标签页 ----------
 class BDSManager(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -6291,7 +6578,8 @@ class BDSManager(QMainWindow):
         if not os.path.exists(CONFIG_FILE):
             self.save_config()
         # 启动自检提示 + 自动更新检查
-        QTimer.singleShot(500, self._show_startup_toasts) if self.config.get("show_startup_toasts", True) else None
+        if self.config.get("show_startup_toasts", True):
+            QTimer.singleShot(500, self._show_startup_toasts)
         if self.config.get("auto_check_update", True):
             QTimer.singleShot(4000, self._check_startup_update)
 
@@ -6306,16 +6594,7 @@ class BDSManager(QMainWindow):
                     if not remote:
                         self.result.emit("error", "", "", "", "version.json 无版本号")
                         return
-                    def _cmp(a, b):
-                        try:
-                            x = [int(n) for n in a.split(".")]
-                            y = [int(n) for n in b.split(".")]
-                            while len(x) < 4: x.append(0)
-                            while len(y) < 4: y.append(0)
-                            return (x > y) - (x < y)
-                        except (ValueError, IndexError):
-                            return 0
-                    if _cmp(remote, __version__) > 0:
+                    if compare_versions(remote, __version__) > 0:
                         dl = data.get("download_url", "")
                         sha = data.get("sha256", "")
                         self.result.emit("update", remote, dl, sha, "")
@@ -6443,13 +6722,18 @@ class BDSManager(QMainWindow):
             "server_dir": "Server",
             "server_exe": _get_default_bedrock_exe_name(),
             "backup_interval": 60,
-            "force_backup": False,
             "monitor_interval": 2000,
+            "backup_keep": 20,
+            "backup_min_age_days": 0,
+            "online_backup": True,
+            "webhook_url": "",
+            "webhook_events": ["backup", "crash", "memory"],
             "custom_colors": {},
             "frpc_path": "",
             "version_cache": {},
             "version_list": {},
             "mem_warn_threshold": 80,
+            "max_restart_retries": 5,
             "hidpi_enabled": True,
             "auto_check_update": True,
             "multi_dl_enabled": True,
@@ -6493,8 +6777,12 @@ class BDSManager(QMainWindow):
             "server_dir": self.config.get("server_dir", "Server"),
             "server_exe": self.config.get("server_exe", _get_default_bedrock_exe_name()),
             "backup_interval": self.config.get("backup_interval", 60),
-            "force_backup": self.config.get("force_backup", False),
             "monitor_interval": self.config.get("monitor_interval", 2000),
+            "backup_keep": self.config.get("backup_keep", 20),
+            "backup_min_age_days": self.config.get("backup_min_age_days", 0),
+            "online_backup": self.config.get("online_backup", True),
+            "webhook_url": self.config.get("webhook_url", ""),
+            "webhook_events": self.config.get("webhook_events", ["backup", "crash", "memory"]),
             "custom_colors": self.custom_colors,
             "frpc_path": self.config.get("frpc_path", ""),
             "scan_patch_range": self.config.get("scan_patch_range", constants.DEFAULT_SCAN_PATCH_RANGE if constants else 40),
@@ -6502,6 +6790,7 @@ class BDSManager(QMainWindow):
             "window_width": self.config.get("window_width", 1200),
             "window_height": self.config.get("window_height", 800),
             "mem_warn_threshold": self.config.get("mem_warn_threshold", 80),
+            "max_restart_retries": self.config.get("max_restart_retries", 5),
             "hidpi_enabled": self.config.get("hidpi_enabled", True),
             "auto_check_update": self.config.get("auto_check_update", True),
             "multi_dl_enabled": self.config.get("multi_dl_enabled", True),
@@ -6552,12 +6841,12 @@ class BDSManager(QMainWindow):
     def _check_memory(self):
         """检查内存使用率，超过阈值则告警"""
         try:
-            import psutil
             mem = psutil.virtual_memory().percent
             threshold = self.config.get("mem_warn_threshold", 80)
             if mem > threshold and time.time() - self._last_mem_warn > 120:
                 self._last_mem_warn = time.time()
                 toast_warning("内存不足", f"内存使用率 {mem:.1f}%（阈值 {threshold}%）")
+                send_webhook("memory", "内存不足", f"内存使用率 {mem:.1f}%（阈值 {threshold}%）")
         except Exception:
             pass
 
@@ -6568,30 +6857,70 @@ class BDSManager(QMainWindow):
             log_debug("自动备份跳过：世界不存在")
             return
 
-        server_was_running = self.is_server_running()
-        if server_was_running and not self.config.get("force_backup", False):
-            log_debug("自动备份跳过：服务器运行中（可开启强制备份）")
-            return
-
         if getattr(self, "_auto_backup_running", False):
             log_debug("自动备份跳过：上一次备份仍在进行中")
             return
 
+        server_was_running = self.is_server_running()
+        self._auto_backup_running = True
+        self._auto_backup_resume = server_was_running
+        self._auto_backup_online = False
+
+        # 在线备份：服务器运行时优先用原生 save hold/resume，实现零停服备份
+        if server_was_running and self.config.get("online_backup", True):
+            sp = self.console_tab.server_process
+            if sp and sp.isRunning():
+                self._save_ready = threading.Event()
+                self._save_unsupported = False
+                self._auto_backup_online = True
+                try:
+                    sp.send_command("save hold")
+                    log_info("自动备份：已发送 save hold，等待数据落盘...")
+                    self._safe_set_status("自动备份中（在线）...")
+                    threading.Thread(
+                        target=self._online_backup_wait,
+                        args=(level_name, world_path), daemon=True
+                    ).start()
+                    return
+                except Exception as e:
+                    self._auto_backup_online = False
+                    log_warning(f"在线备份启动失败，回退停服备份: {e}")
+
+        # 停服备份（兜底路径）：先停服再复制，完成后由 _on_auto_backup_done 自动恢复
         if server_was_running:
-            log_info("强制备份：暂停服务器...")
+            log_info("自动备份：暂停服务器...")
             self.console_tab.stop_server()
-            # 等待服务器完全退出（最多 5 秒）
             for _ in range(50):
                 if not self.is_server_running():
                     break
                 time.sleep(0.1)
             if self.is_server_running():
-                log_error("强制备份失败：服务器未能停止")
+                log_error("自动备份失败：服务器未能停止")
+                self._auto_backup_running = False
                 return
+        self._start_backup_worker(level_name, world_path)
 
-        # 后台压缩，避免大世界阻塞界面（R1 修复）；保留文件计数进度提示
-        self._auto_backup_running = True
-        self._auto_backup_resume = server_was_running
+    def _online_backup_wait(self, level_name, world_path):
+        """在线备份：等待 save hold 完成（控制台出现 'Data saved'），
+        超时或命令不支持则回退到停服备份。"""
+        ready = self._save_ready.wait(timeout=30)
+        if not ready or getattr(self, "_save_unsupported", False):
+            log_warning("在线备份 save hold 未就绪，回退到停服备份")
+            # 回到停服路径
+            if self.is_server_running():
+                self.console_tab.stop_server()
+                for _ in range(50):
+                    if not self.is_server_running():
+                        break
+                    time.sleep(0.1)
+            self._auto_backup_online = False
+            self._start_backup_worker(level_name, world_path)
+            return
+        log_info("自动备份：数据已就绪，开始复制世界（在线）...")
+        self._start_backup_worker(level_name, world_path)
+
+    def _start_backup_worker(self, level_name, world_path):
+        """启动后台压缩任务（保留文件计数进度提示）"""
         worker = BackupWorker(level_name, world_path, _ctx.BACKUP_DIR, self, prefix="auto_")
         worker.progress.connect(lambda msg: self._safe_set_status(msg))
         worker.finished.connect(self._on_auto_backup_done)
@@ -6609,36 +6938,60 @@ class BDSManager(QMainWindow):
         self._auto_backup_running = False
         self._auto_backup_worker = None
         self._safe_set_status("就绪")
+        online = getattr(self, "_auto_backup_online", False)
         if success:
             log_success(f"自动备份完成: {message}")
             toast_success("自动备份完成", message)
+            send_webhook("backup", "自动备份完成", message)
             try:
-                self._cleanup_old_backups(keep=20)
+                self._cleanup_old_backups(
+                    keep=self.config.get("backup_keep", 20),
+                    min_age_days=self.config.get("backup_min_age_days", 0),
+                )
             except Exception as e:
                 log_warning(f"清理旧备份失败: {e}")
         else:
             log_error(f"自动备份失败: {message}")
             toast_error("自动备份失败", message)
-        # 强制备份时恢复服务器
-        if getattr(self, "_auto_backup_resume", False):
+            send_webhook("backup", "自动备份失败", message)
+        if online:
+            # 在线备份：服务器一直运行，复制完成后恢复写入
             try:
-                log_info("强制备份：恢复服务器...")
+                sp = self.console_tab.server_process
+                if sp and sp.isRunning():
+                    sp.send_command("save resume")
+                    log_info("自动备份：已发送 save resume，恢复写入")
+            except Exception as e:
+                log_error(f"恢复写入失败（save resume）: {e}")
+        elif getattr(self, "_auto_backup_resume", False):
+            # 停服备份：自动重启服务器
+            try:
+                log_info("自动备份：恢复服务器...")
                 self.console_tab.start_server()
             except Exception as e:
                 log_error(f"恢复服务器失败: {e}")
 
-    def _cleanup_old_backups(self, keep=20):
-        """清理旧备份文件，仅保留最近 keep 个"""
+    def _cleanup_old_backups(self, keep=20, min_age_days=0):
+        """清理旧备份文件。
+        keep: 保留最近 N 个；min_age_days: 超过该天数的备份才允许被清理
+        （避免刚生成的备份被立刻轮转掉，便于保留当日多份）。"""
         try:
             if not os.path.exists(_ctx.BACKUP_DIR):
                 return
+            now = time.time()
+            min_age_sec = max(0, int(min_age_days)) * 86400
             backups = sorted(
                 [f for f in os.listdir(_ctx.BACKUP_DIR) if f.endswith(".zip")],
                 key=lambda f: os.path.getmtime(os.path.join(_ctx.BACKUP_DIR, f)),
                 reverse=True
             )
+            # 超过保留数量且超过最小保留年龄的才删除
             for old in backups[keep:]:
-                os.remove(os.path.join(_ctx.BACKUP_DIR, old))
+                path = os.path.join(_ctx.BACKUP_DIR, old)
+                age = now - os.path.getmtime(path)
+                if age < min_age_sec:
+                    continue
+                os.remove(path)
                 log_info(f"已删除旧备份: {old}")
         except (OSError, PermissionError) as e:
             log_warning(f"清理旧备份失败: {e}")
@@ -6742,7 +7095,6 @@ class BDSManager(QMainWindow):
 
     def _show_startup_toasts(self):
         """启动时自检并提示"""
-        import psutil
         server_dir = get_server_dir()
         # 服务器目录
         if os.path.isdir(server_dir):
@@ -6848,7 +7200,6 @@ class BDSManager(QMainWindow):
         self.status_players.setStyleSheet(f"font-size:11px; color:{'#66ccff' if n else '#888'}; padding:0 8px;")
         # 内存
         try:
-            import psutil
             mem = psutil.virtual_memory().percent
             c = "#4CAF50" if mem < 60 else "#ffaa33" if mem < 80 else "#f44336"
             self.status_mem.setText(f"💾 {mem:.0f}%")
