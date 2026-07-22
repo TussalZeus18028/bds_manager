@@ -56,7 +56,7 @@ class AboutPage(QWidget):
             ("GitHub 仓库", "https://github.com/TussalZeus18028/bds_manager", FluentIcon.GITHUB),
             ("BDS 官网下载", "https://www.minecraft.net/zh-hans/download/server/bedrock", FluentIcon.DOWNLOAD),
             ("ChmlFrp 隧道", "https://www.chmlfrp.net/", FluentIcon.LINK),
-            ("版本数据库", "https://github.com/TussalZeus18028/bds_version_list", FluentIcon.DATABASE),
+            ("版本数据库", "https://github.com/TussalZeus18028/bds_version_list", FluentIcon.LIBRARY),
         ]
         for text, url, icon in links:
             link = HyperlinkButton(url, text, links_card, icon)
