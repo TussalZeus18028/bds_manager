@@ -20,3 +20,5 @@ bds_manager_v*.zip
 # OS
 .DS_Store
 Thumbs.db
+bds_manager_config.json
+bds_version_cache.json
