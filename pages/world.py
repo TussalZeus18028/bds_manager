@@ -30,6 +30,17 @@ class WorldPage(QWidget):
         super().__init__(parent)
         inner, layout = wrap_scrollable(self, spacing=12)
 
+        # ── 世界信息 ──
+        ctx = get_context()
+        info_card = CardWidget(inner)
+        il = QVBoxLayout(info_card)
+        il.setContentsMargins(16, 12, 16, 16); il.setSpacing(4)
+        il.addWidget(SubtitleLabel("世界信息", info_card))
+        self._world_info = BodyLabel("", info_card)
+        il.addWidget(self._world_info)
+        layout.addWidget(info_card)
+        self._refresh_world_info()
+
         # ── 操作栏 ──
         action_card = CardWidget(inner)
         action_layout = QHBoxLayout(action_card)
@@ -133,6 +144,49 @@ class WorldPage(QWidget):
             btn_layout.addWidget(restore_btn)
             btn_layout.addWidget(delete_btn)
             self._table.setCellWidget(i, 3, btn_widget)
+        self._refresh_world_info()
+
+    def _refresh_world_info(self):
+        ctx = get_context()
+        props = ctx.server_properties
+        info_lines = []
+        if os.path.exists(props):
+            try:
+                with open(props, encoding="utf-8") as f:
+                    for line in f:
+                        line = line.strip()
+                        if line.startswith("level-name="):
+                            info_lines.append(f"世界名: {line.split('=', 1)[1]}")
+                        elif line.startswith("level-seed="):
+                            s = line.split("=", 1)[1]
+                            info_lines.append(f"种子: {s if s else '(随机)'}")
+                        elif line.startswith("difficulty="):
+                            info_lines.append(f"难度: {line.split('=', 1)[1]}")
+            except Exception:
+                pass
+        if not info_lines:
+            info_lines.append("(未检测到 server.properties)")
+        if os.path.isdir(ctx.worlds_dir):
+            worlds = [d for d in os.listdir(ctx.worlds_dir)
+                      if os.path.isdir(os.path.join(ctx.worlds_dir, d))]
+            if worlds:
+                wp = os.path.join(ctx.worlds_dir, worlds[0])
+                size = 0
+                try:
+                    for root, _, files in os.walk(wp):
+                        for f in files:
+                            try: size += os.path.getsize(os.path.join(root, f))
+                            except OSError: pass
+                except Exception:
+                    pass
+                if size > 1024 * 1024 * 1024:
+                    info_lines.append(f"大小: {size/1024/1024/1024:.1f} GB")
+                elif size > 1024 * 1024:
+                    info_lines.append(f"大小: {size/1024/1024:.1f} MB")
+                else:
+                    info_lines.append(f"大小: {size/1024:.1f} KB")
+        self._world_info.setText("\n".join(info_lines))
+        self._world_info.setStyleSheet("color: #ccc; line-height: 1.5;")
 
     # ---------- 手动备份 ----------
     def _on_backup(self):

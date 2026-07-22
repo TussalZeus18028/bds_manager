@@ -19,6 +19,40 @@ from qfluentwidgets import (
 from pages.dashboard import wrap_scrollable
 from pages.console_search import ConsoleSearchBar
 from shared.toast import toast_warning, toast_error
+from shared.config import LOG_DIR
+
+# ── 写入日志文件 ──
+import os as _os
+from datetime import datetime as _dt
+from threading import Lock as _Lock
+
+_log_file = None
+_log_lock = _Lock()
+
+def _init_log_file():
+    global _log_file
+    log_path = _os.path.join(LOG_DIR, f"server_{_dt.now().strftime('%Y%m%d_%H%M%S')}.log")
+    try:
+        _log_file = open(log_path, "w", encoding="utf-8")
+    except Exception:
+        _log_file = None
+
+def _write_log(text: str):
+    global _log_file
+    if _log_file:
+        try:
+            ts = _dt.now().strftime("%Y-%m-%d %H:%M:%S")
+            _log_file.write(f"[{ts}] {text}\n")
+            _log_file.flush()
+        except Exception:
+            pass
+
+def _close_log_file():
+    global _log_file
+    if _log_file:
+        try: _log_file.close()
+        except Exception: pass
+        _log_file = None
 
 # ---------- 暗色日志 ----------
 def make_console_log(parent=None, min_height=200):
@@ -78,6 +112,8 @@ class ConsolePage(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self._auto_scroll = True
+        self._cmd_history: list[str] = []
+        self._cmd_history_idx = -1
         inner, layout = wrap_scrollable(self, spacing=12)
 
         # ── 操作栏 ──
@@ -151,6 +187,9 @@ class ConsolePage(QWidget):
         cmd_layout.addWidget(self._cmd_input, 1)
         cmd_layout.addWidget(send_btn)
         layout.addWidget(cmd_card)
+
+        # 命令历史（上下箭头）
+        self._cmd_input.installEventFilter(self)
         layout.addStretch()
 
     # ---------- 输出 + 玩家追踪（公开，供主窗口的 ServerProcess 连接）----------
@@ -192,6 +231,8 @@ class ConsolePage(QWidget):
     _PLAYER_LIST = re.compile(r"players online", re.I)
 
     def _append_output(self, text: str, color: str = "#ccc"):
+        # 写入日志文件
+        _write_log(text)
         # 玩家追踪
         self._track_player(text)
         if color == "#ccc":
@@ -220,6 +261,25 @@ class ConsolePage(QWidget):
             self._players._known.pop(name, None)
             self._players.update_players(list(self._players._known.keys()))
 
+    def eventFilter(self, obj, event):
+        if obj == self._cmd_input and event.type() == event.Type.KeyPress:
+            if event.key() == Qt.Key_Up:
+                if self._cmd_history and self._cmd_history_idx < len(self._cmd_history) - 1:
+                    self._cmd_history_idx += 1
+                    idx = len(self._cmd_history) - 1 - self._cmd_history_idx
+                    self._cmd_input.setText(self._cmd_history[idx])
+                return True
+            if event.key() == Qt.Key_Down:
+                if self._cmd_history_idx > 0:
+                    self._cmd_history_idx -= 1
+                    idx = len(self._cmd_history) - 1 - self._cmd_history_idx
+                    self._cmd_input.setText(self._cmd_history[idx])
+                elif self._cmd_history_idx == 0:
+                    self._cmd_history_idx = -1
+                    self._cmd_input.clear()
+                return True
+        return super().eventFilter(obj, event)
+
     # ---------- 命令 ----------
     def _send(self):
         cmd = self._cmd_input.text().strip()
@@ -231,6 +291,8 @@ class ConsolePage(QWidget):
             self._append_output(f"> {cmd}", "#0DC5D4")
         else:
             toast_warning("提示", "服务器未运行", win or self)
+        self._cmd_history.append(cmd)
+        self._cmd_history_idx = -1
         self._cmd_input.clear()
 
     # ---------- 按钮（委托给主窗口）----------
@@ -245,6 +307,7 @@ class ConsolePage(QWidget):
 
     # ---------- 状态更新（由主窗口调用）----------
     def _on_server_started(self):
+        _init_log_file()
         self._start_btn.setEnabled(False)
         self._stop_btn.setEnabled(True)
         self._append_output("[系统] 服务器启动中...", "#888")
@@ -254,6 +317,7 @@ class ConsolePage(QWidget):
         self._stop_btn.setEnabled(False)
         self._players.update_players([])
         self._append_output("[系统] 服务器已停止", "#888")
+        _close_log_file()
 
     def _on_status_changed(self, running: bool):
         if running:

@@ -3,6 +3,8 @@
 仪表盘页面 —— 服务器概览 + 系统资源监控 + 快捷操作。
 """
 
+import os
+
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QScrollArea, QFrame,
@@ -74,8 +76,10 @@ class StatusCard(CardWidget):
         info_row.addWidget(self._disk_label)
         info_row.addWidget(self._rtt_label)
         info_row.addStretch()
+        self._backup_label = CaptionLabel("备份: —", self)
+        info_row.addWidget(self._backup_label)
         ctx = get_context()
-        info_row.addWidget(CaptionLabel(f"目录: {ctx.server_dir}", self))
+        info_row.addWidget(CaptionLabel(f"目录: {os.path.basename(ctx.server_dir)}", self))
         layout.addLayout(info_row)
 
         # 按钮行
