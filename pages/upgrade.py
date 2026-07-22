@@ -310,8 +310,10 @@ class UpgradePage(QWidget):
         self._ver_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)
         self._ver_table.verticalHeader().setVisible(False)
         self._ver_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self._ver_table.setMinimumHeight(320)
         self._ver_table.setStyleSheet("""
             QTableWidget { background:#1e1e1e;color:#ccc;border:1px solid #3a3a3a;border-radius:6px;gridline-color:#3a3a3a; }
+            QTableWidget::item { padding: 2px 8px; }
             QHeaderView::section { background:#2a2a2a;color:#aaa;border:none;padding:6px 8px;font-weight:bold; }
         """)
         vl.addWidget(self._ver_table)

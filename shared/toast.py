@@ -212,6 +212,7 @@ def toast_info(title: str, content: str, parent, duration: int | None = None, cl
         _enqueue(title, content, "info", duration or _get_duration("info"))
     else:
         _show_modern(InfoBarIcon.INFORMATION, title, content, parent, duration, "info", closable)
+    _log_to_terminal("INFO", title, content)
 
 
 def toast_success(title: str, content: str, parent, duration: int | None = None, closable: bool = True):
@@ -220,6 +221,7 @@ def toast_success(title: str, content: str, parent, duration: int | None = None,
         _enqueue(title, content, "success", duration or _get_duration("success"))
     else:
         _show_modern(InfoBarIcon.SUCCESS, title, content, parent, duration, "success", closable)
+    _log_to_terminal("OK  ", title, content)
 
 
 def toast_warning(title: str, content: str, parent, duration: int | None = None, closable: bool = True):
@@ -228,6 +230,7 @@ def toast_warning(title: str, content: str, parent, duration: int | None = None,
         _enqueue(title, content, "warning", duration or _get_duration("warning"))
     else:
         _show_modern(InfoBarIcon.WARNING, title, content, parent, duration, "warning", closable)
+    _log_to_terminal("WARN", title, content)
 
 
 def toast_error(title: str, content: str, parent, duration: int | None = None, closable: bool = True):
@@ -236,3 +239,10 @@ def toast_error(title: str, content: str, parent, duration: int | None = None, c
         _enqueue(title, content, "error", duration or _get_duration("error"))
     else:
         _show_modern(InfoBarIcon.ERROR, title, content, parent, duration, "error", closable)
+    _log_to_terminal("ERR ", title, content)
+
+
+def _log_to_terminal(level: str, title: str, content: str):
+    import sys
+    target = sys.stderr if level in ("ERR ", "WARN") else sys.stdout
+    print(f"[TOAST][{level}] {title}: {content}", file=target, flush=True)

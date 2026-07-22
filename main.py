@@ -201,9 +201,9 @@ class BDSFluentWindow(FluentWindow):
         # 后台自动扫描 BDS 版本（5 秒延迟，不阻塞启动）
         QTimer.singleShot(5000, self.upgrade_page._fetch)
 
-        # 工具自更新检查（4 秒延迟）
+        # 工具自更新检查（5 秒延迟）
         if config_mgr.get("auto_check_update", True):
-            QTimer.singleShot(4000, self._check_self_update)
+            QTimer.singleShot(5000, self._check_self_update)
 
     def _restore_window_state(self):
         w = config_mgr.get("window_width", 1200)
