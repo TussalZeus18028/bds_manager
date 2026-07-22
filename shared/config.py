@@ -136,7 +136,7 @@ DEFAULT_CONFIG = {
     "webhook_url": "",
     "webhook_events": ["backup", "crash", "memory"],
     "frpc_path": "",
-    "mem_warn_threshold": 80,
+    "mem_warn_threshold": 70,
     "max_restart_retries": 5,
     "auto_check_update": True,
     "multi_dl_enabled": True,

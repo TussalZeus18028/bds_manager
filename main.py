@@ -361,11 +361,13 @@ class BDSFluentWindow(FluentWindow):
         if not hasattr(self, "_last_mem_warn"):
             self._last_mem_warn = 0.0
         import time as _t
-        threshold = config_mgr.get("mem_warn_threshold", 80)
+        threshold = config_mgr.get("mem_warn_threshold", 80) or 80
         if snap.mem_percent >= threshold and _t.time() - self._last_mem_warn > 30:
             self._last_mem_warn = _t.time()
-            send_webhook("memory", "内存告警",
-                         f"内存使用率 {snap.mem_percent:.1f}%（阈值: {threshold}%）")
+            msg = f"内存使用率 {snap.mem_percent:.1f}%（阈值: {threshold}%）"
+            send_webhook("memory", "内存告警", msg)
+            from shared.toast import toast_warning
+            toast_warning("内存告警", msg, self, duration=8000)
 
     # ── 工具自更新 ──
     def _check_self_update(self):
