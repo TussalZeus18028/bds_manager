@@ -263,6 +263,54 @@ class BDSFluentWindow(FluentWindow):
             setThemeColor(QColor(accent_color))
         except Exception:
             setThemeColor(QColor("#0DC5D4"))
+
+        # 现代化细滚动条（全局）
+        is_dark = theme_map.get(theme, Theme.DARK) != Theme.LIGHT
+        handle = "#555" if is_dark else "#bbb"
+        handle_hover = "#777" if is_dark else "#999"
+        track = "transparent"
+        self.setStyleSheet(f"""
+            QScrollBar:vertical {{
+                width: 6px;
+                background: {track};
+                border: none;
+                margin: 0;
+            }}
+            QScrollBar::handle:vertical {{
+                background: {handle};
+                border-radius: 3px;
+                min-height: 30px;
+            }}
+            QScrollBar::handle:vertical:hover {{
+                background: {handle_hover};
+            }}
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{
+                height: 0; border: none;
+            }}
+            QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{
+                background: none;
+            }}
+            QScrollBar:horizontal {{
+                height: 6px;
+                background: {track};
+                border: none;
+                margin: 0;
+            }}
+            QScrollBar::handle:horizontal {{
+                background: {handle};
+                border-radius: 3px;
+                min-width: 30px;
+            }}
+            QScrollBar::handle:horizontal:hover {{
+                background: {handle_hover};
+            }}
+            QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {{
+                width: 0; border: none;
+            }}
+            QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal {{
+                background: none;
+            }}
+        """)
         logger.info("主题: %s, 主色: %s", theme, accent_color)
 
     # ---------- 服务器管理（共享）----------
