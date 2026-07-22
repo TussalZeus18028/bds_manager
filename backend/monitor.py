@@ -3,6 +3,11 @@
 系统资源监控（纯后端，无 UI 依赖）。
 
 提供 CPU / 内存 / 磁盘 / 网络数据采集，通过 PySide6 信号推送到 UI。
+
+v3.1 改进：
+- 快照结构增加 net_total_sent/recv 累计值
+- 提供历史 deque 接口（CPU/内存/磁盘/网络）
+- 与 BDS 进程级监控解耦（数据从 server.py 自己的信号来）
 """
 
 import time
@@ -22,6 +27,7 @@ class SystemStatsSnapshot:
         "cpu_percent", "mem_percent", "mem_used_gb", "mem_total_gb",
         "disk_percent", "disk_used_gb", "disk_total_gb",
         "net_sent_kb_per_sec", "net_recv_kb_per_sec",
+        "net_total_sent_gb", "net_total_recv_gb",
         "timestamp",
     )
 
@@ -35,6 +41,8 @@ class SystemStatsSnapshot:
         self.disk_total_gb: float = 0.0
         self.net_sent_kb_per_sec: float = 0.0
         self.net_recv_kb_per_sec: float = 0.0
+        self.net_total_sent_gb: float = 0.0
+        self.net_total_recv_gb: float = 0.0
         self.timestamp: float = 0.0
 
 
@@ -47,16 +55,28 @@ class SystemResourceMonitor(QObject):
         monitor.start(2000)
         ...
         monitor.stop()
+
+    v3.1：提供 history 字典，UI 可订阅最新 60 点数据用于曲线图。
     """
 
     stats_updated = Signal(SystemStatsSnapshot)
+
+    HISTORY_SIZE = 60
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self._timer: QTimer | None = None
         self._last_net_io = None
         self._last_time = time.time()
-        self._cpu_history = deque(maxlen=60)
+        # 各类资源历史曲线（用 deque 自动滚动）
+        self.history: dict[str, deque] = {
+            "cpu": deque(maxlen=self.HISTORY_SIZE),
+            "mem": deque(maxlen=self.HISTORY_SIZE),
+            "disk": deque(maxlen=self.HISTORY_SIZE),
+            "net_send": deque(maxlen=self.HISTORY_SIZE),
+            "net_recv": deque(maxlen=self.HISTORY_SIZE),
+            "timestamps": deque(maxlen=self.HISTORY_SIZE),
+        }
 
     def start(self, interval_ms: int = 2000):
         """启动定时采集。"""
@@ -85,7 +105,6 @@ class SystemResourceMonitor(QObject):
             # CPU
             cpu = psutil.cpu_percent(interval=None)
             snap.cpu_percent = cpu
-            self._cpu_history.append(cpu)
 
             # 内存
             mem = psutil.virtual_memory()
@@ -95,6 +114,8 @@ class SystemResourceMonitor(QObject):
 
             # 网络
             net = psutil.net_io_counters()
+            snap.net_total_sent_gb = net.bytes_sent / (1024**3)
+            snap.net_total_recv_gb = net.bytes_recv / (1024**3)
             if self._last_net_io is not None:
                 dt = snap.timestamp - self._last_time
                 if dt > 0:
@@ -110,5 +131,14 @@ class SystemResourceMonitor(QObject):
             snap.disk_total_gb = disk.total / (1024**3)
         except Exception as e:
             logger.debug("资源采集异常: %s", e)
+
+        # 写入历史
+        h = self.history
+        h["cpu"].append(snap.cpu_percent)
+        h["mem"].append(snap.mem_percent)
+        h["disk"].append(snap.disk_percent)
+        h["net_send"].append(snap.net_sent_kb_per_sec)
+        h["net_recv"].append(snap.net_recv_kb_per_sec)
+        h["timestamps"].append(snap.timestamp)
 
         self.stats_updated.emit(snap)

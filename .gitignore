@@ -23,6 +23,7 @@ Thumbs.db
 bds_manager_config.json
 bds_version_cache.json
 dist/
+archives/
 .workbuddy/
 release/
 logs/

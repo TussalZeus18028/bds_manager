@@ -37,7 +37,9 @@ class AboutPage(QWidget):
         desc = BodyLabel(
             "Minecraft Bedrock 版服务器全功能管理器。\n"
             "一键启停、实时监控、世界管理、版本升级、隧道穿透、资源包管理。\n"
-            "基于 PySide6 + QFluentWidgets Fluent Design 构建。",
+            "基于 PySide6 + QFluentWidgets Fluent Design 构建。\n\n"
+            "v3.1 更新：资源曲线、级别过滤、命令补全、备份预览、\n"
+            "配置预设、原子写、命令面板（Ctrl+K）、系统主题跟随。",
             title_card,
         )
         desc.setWordWrap(True)

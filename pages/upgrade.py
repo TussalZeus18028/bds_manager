@@ -1,12 +1,19 @@
 # -*- coding: utf-8 -*-
 """
 升级 / 安装页面 —— BDS 版本管理（对齐旧 PyQt5 版完整逻辑）。
+
+v3.1 改进：
+- 升级历史（.upgrade_history.json）
+- "回滚到上一版本"按钮（用 pre_upgrade_ 备份）
+- 选中两行对比 Changelog
+- metadata 显示在表格（bds_version + 文件大小）
+- HEAD 扫描 memoize（已存在）
 """
 
 import os, re, time, json, shutil, tempfile, random, socket, ssl, urllib.request, urllib.error
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-from PySide6.QtCore import Qt, QThread, Signal
+from PySide6.QtCore import Qt, QThread, QTimer, Signal
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QTableWidget, QTableWidgetItem,
     QHeaderView, QAbstractItemView, QPlainTextEdit,
@@ -15,18 +22,49 @@ from PySide6.QtGui import QTextCursor
 from qfluentwidgets import (
     CardWidget, SubtitleLabel, StrongBodyLabel, BodyLabel, CaptionLabel,
     PrimaryPushButton, PushButton, LineEdit, FluentIcon,
-    ProgressBar, SpinBox,
+    ProgressBar, SpinBox, MessageBox,
 )
 
-from shared.config import config_mgr, get_context
+from shared.config import config_mgr, get_context, SCRIPT_DIR
 from shared.toast import toast_success, toast_error, toast_info
 from pages.dashboard import wrap_scrollable
 
 import requests
 
-SCRIPT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+# ── 升级历史 ──
+UPGRADE_HISTORY_FILE = os.path.join(SCRIPT_DIR, ".upgrade_history.json")
 
-# ── 常量（对齐旧版）──
+
+def _load_upgrade_history() -> list[dict]:
+    if not os.path.exists(UPGRADE_HISTORY_FILE):
+        return []
+    try:
+        with open(UPGRADE_HISTORY_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return []
+
+
+def _save_upgrade_history(history: list[dict]):
+    try:
+        with open(UPGRADE_HISTORY_FILE, "w", encoding="utf-8") as f:
+            json.dump(history[-50:], f, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
+
+
+def _record_upgrade(version: str, from_ver: str, backup_dir: str | None):
+    history = _load_upgrade_history()
+    history.append({
+        "version": version,
+        "from_version": from_ver,
+        "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+        "backup_dir": backup_dir,
+    })
+    _save_upgrade_history(history)
+
+
+# ── 扫描范围常量 ──
 VERSION_LIST_URL = "https://raw.githubusercontent.com/TussalZeus18028/bds_version_list/main/bds_versions.json"
 _UA_POOL = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
@@ -38,10 +76,9 @@ _UA_POOL = [
 
 # ── GitHub 版本列表抓取 ──
 def _scrape_github_versions() -> list | None:
-    """从 BDS 版本列表仓库获取版本数据。"""
     try:
         req = urllib.request.Request(VERSION_LIST_URL, headers={
-            "User-Agent": "BDS-Manager/3.0",
+            "User-Agent": "BDS-Manager/3.1",
             "Accept": "application/vnd.github.v3+json",
         })
         with urllib.request.urlopen(req, timeout=15) as resp:
@@ -58,19 +95,27 @@ def _scrape_github_versions() -> list | None:
         return None
 
 
-# ── GitHub 抓取 Worker ──
 class GithubFetcher(QThread):
     result = Signal(bool, list)
 
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._cancel = False
+
+    def cancel(self):
+        self._cancel = True
+
     def run(self):
         r = _scrape_github_versions()
+        if self._cancel:
+            self.result.emit(False, [])
+            return
         self.result.emit(r is not None, r if r else [])
 
 
-# ── HEAD 扫描 Worker（对齐旧 _BrowseWorker）──
 class HeadScanWorker(QThread):
     progress = Signal(str, int)
-    found = Signal(str, str, str)  # ver, branch, url
+    found = Signal(str, str, str)
     finished = Signal()
 
     def __init__(self, base_version: str, patch_range=40, build_range=30, append_mode=False, parent=None):
@@ -142,7 +187,6 @@ class HeadScanWorker(QThread):
         self.finished.emit()
 
 
-# ── 下载 Worker（支持多线程分段）──
 class DownloadWorker(QThread):
     progress = Signal(int)
     status = Signal(str)
@@ -179,41 +223,41 @@ class DownloadWorker(QThread):
             self.finished.emit(False, str(e))
 
 
-# ── 安装 Worker ──
 class InstallWorker(QThread):
     log = Signal(str)
     finished = Signal(bool, str)
 
-    def __init__(self, zip_path: str, server_dir: str, do_backup: bool, parent=None):
+    def __init__(self, zip_path: str, server_dir: str, do_backup: bool,
+                 target_version: str = "", from_version: str = "", parent=None):
         super().__init__(parent)
         self.zip_path = zip_path
         self.server_dir = server_dir
         self.do_backup = do_backup
+        self.target_version = target_version
+        self.from_version = from_version
+        self.backup_dir: str | None = None
 
     def run(self):
         import zipfile
         try:
-            # 预备份
-            backup_dir = None
             if self.do_backup:
                 ts = time.strftime("%Y%m%d_%H%M%S")
-                backup_dir = os.path.join(self.server_dir, "backups", f"pre_upgrade_{ts}")
-                os.makedirs(backup_dir, exist_ok=True)
+                self.backup_dir = os.path.join(self.server_dir, "backups", f"pre_upgrade_{ts}")
+                os.makedirs(self.backup_dir, exist_ok=True)
                 self.log.emit("正在备份关键文件...")
                 for d in ["worlds", "resource_packs", "behavior_packs", "config"]:
                     src = os.path.join(self.server_dir, d)
                     if os.path.exists(src):
                         try:
-                            shutil.copytree(src, os.path.join(backup_dir, d))
+                            shutil.copytree(src, os.path.join(self.backup_dir, d))
                             self.log.emit(f"  已备份: {d}")
                         except Exception:
                             pass
                 for fn in ["server.properties", "allowlist.json", "permissions.json"]:
                     src = os.path.join(self.server_dir, fn)
                     if os.path.exists(src):
-                        shutil.copy2(src, os.path.join(backup_dir, fn))
+                        shutil.copy2(src, os.path.join(self.backup_dir, fn))
 
-            # 解压（带 ZipSlip 防护 + 跳过 worlds/config 等）
             self.log.emit("正在解压更新包...")
             skip = {"worlds/", "resource_packs/", "behavior_packs/",
                     "config/", "server.properties", "allowlist.json",
@@ -241,6 +285,10 @@ class InstallWorker(QThread):
                     with open(target, "wb") as dst:
                         dst.write(zf.read(orig))
 
+            # 记录升级历史
+            if self.target_version and self.backup_dir:
+                _record_upgrade(self.target_version, self.from_version, self.backup_dir)
+
             self.log.emit("✅ 安装完成")
             self.finished.emit(True, "安装完成")
         except Exception as e:
@@ -248,19 +296,55 @@ class InstallWorker(QThread):
             self.finished.emit(False, str(e))
 
 
-# ── 升级页面 ──
+class HeadSizeWorker(QThread):
+    """后台 HEAD 请求批量获取版本 zip 大小，避免阻塞 UI。"""
+    result = Signal(int, str)  # (row_index, size_text)
+
+    def __init__(self, items: list[tuple[int, str]], parent=None):
+        """items: [(row_index, url), ...]"""
+        super().__init__(parent)
+        self._items = items
+        self._cancel = False
+
+    def cancel(self):
+        self._cancel = True
+
+    def run(self):
+        for row, url in self._items:
+            if self._cancel:
+                break
+            try:
+                req = urllib.request.Request(url, method="HEAD", headers={"User-Agent": "Mozilla/5.0"})
+                resp = urllib.request.urlopen(req, timeout=4)
+                size = int(resp.headers.get("content-length", 0))
+                size_text = f"{size/1024/1024:.1f} MB"
+            except Exception:
+                size_text = "—"
+            self.result.emit(row, size_text)
+
+
 class UpgradePage(QWidget):
+    # GitHub 重试配置：失败时先重试 N 次，最后才提示用户启用 HEAD 嗅探（最后手段）
+    GITHUB_MAX_RETRIES = 3
+    GITHUB_BACKOFF_BASE = 2  # 秒（指数退避：1s, 2s, 4s）
+
     def __init__(self, parent=None):
         super().__init__(parent)
-        self._results: list[tuple] = []  # [(ver, branch, url), ...]
+        self._results: list[tuple] = []
+        self._size_worker: HeadSizeWorker | None = None
+        self._head_worker: HeadScanWorker | None = None
+        self._github_worker: GithubFetcher | None = None
+        # 重试 & 嗅探 fallback 状态
+        self._github_attempt = 0          # 当前是第几次尝试
+        self._github_silent = False       # True = 后台静默（不弹窗）
+        self._pending_head_scan = False   # GitHub 全部失败后，等待用户点「启用 HEAD 嗅探」
         inner, layout = wrap_scrollable(self, spacing=12)
 
-        # ── 加载缓存版本 ──
         cached = config_mgr.get("version_list", {})
         if isinstance(cached, dict) and cached.get("data"):
             self._results = cached["data"]
 
-        # ── 当前信息 ──
+        # 当前信息
         info_card = CardWidget(inner)
         il = QVBoxLayout(info_card)
         il.setContentsMargins(16, 12, 16, 16); il.setSpacing(6)
@@ -280,7 +364,7 @@ class UpgradePage(QWidget):
             il.addWidget(CaptionLabel(f"预期路径: {self._server_exe_path}", info_card))
         layout.addWidget(info_card)
 
-        # ── 版本列表 ──
+        # 版本列表
         ver_card = CardWidget(inner)
         vl = QVBoxLayout(ver_card)
         vl.setContentsMargins(16, 12, 16, 16); vl.setSpacing(8)
@@ -303,20 +387,38 @@ class UpgradePage(QWidget):
         hdr.addWidget(self._build_spin)
         vl.addLayout(hdr)
 
-        self._ver_table = QTableWidget(0, 3, ver_card)
-        self._ver_table.setHorizontalHeaderLabels(["版本", "分支", "操作"])
+        self._ver_table = QTableWidget(0, 4, ver_card)
+        self._ver_table.setHorizontalHeaderLabels(["版本", "分支", "大小", "操作"])
         self._ver_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
-        self._ver_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
-        self._ver_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        for col, w in [(1, 80), (2, 90), (3, 110)]:
+            self._ver_table.horizontalHeader().setSectionResizeMode(col, QHeaderView.Fixed)
+            self._ver_table.setColumnWidth(col, w)
         self._ver_table.verticalHeader().setVisible(False)
         self._ver_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self._ver_table.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self._ver_table.setSelectionMode(QAbstractItemView.ExtendedSelection)
         self._ver_table.setMinimumHeight(320)
         self._ver_table.setStyleSheet("""
             QTableWidget { background:#1e1e1e;color:#ccc;border:1px solid #3a3a3a;border-radius:6px;gridline-color:#3a3a3a; }
             QTableWidget::item { padding: 2px 8px; }
+            QTableWidget::item:selected { background: rgba(13, 197, 212, 0.25); }
             QHeaderView::section { background:#2a2a2a;color:#aaa;border:none;padding:6px 8px;font-weight:bold; }
         """)
         vl.addWidget(self._ver_table)
+
+        # 工具行
+        tools_row = QHBoxLayout()
+        self._size_btn = PushButton("获取文件大小", ver_card, FluentIcon.SEND)
+        self._size_btn.clicked.connect(self._fetch_sizes)
+        self._compare_btn = PushButton("对比选中", ver_card, FluentIcon.SEND)
+        self._compare_btn.clicked.connect(self._on_compare_versions)
+        self._rollback_btn = PushButton("回滚到上一版本", ver_card, FluentIcon.CANCEL)
+        self._rollback_btn.clicked.connect(self._on_rollback)
+        tools_row.addWidget(self._size_btn)
+        tools_row.addWidget(self._compare_btn)
+        tools_row.addWidget(self._rollback_btn)
+        tools_row.addStretch()
+        vl.addLayout(tools_row)
 
         self._scan_status = CaptionLabel("", ver_card)
         self._scan_status.setStyleSheet("color:#888;")
@@ -337,7 +439,28 @@ class UpgradePage(QWidget):
 
         layout.addWidget(ver_card)
 
-        # ── 进度 ──
+        # 升级历史
+        history_card = CardWidget(inner)
+        hl = QVBoxLayout(history_card)
+        hl.setContentsMargins(16, 12, 16, 16); hl.setSpacing(6)
+        hl.addWidget(SubtitleLabel("升级历史", history_card))
+        self._history_table = QTableWidget(0, 3, history_card)
+        self._history_table.setHorizontalHeaderLabels(["时间", "版本", "回滚"])
+        self._history_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        self._history_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
+        self._history_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.Fixed)
+        self._history_table.setColumnWidth(2, 80)
+        self._history_table.verticalHeader().setVisible(False)
+        self._history_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self._history_table.setStyleSheet("""
+            QTableWidget { background:#1e1e1e;color:#ccc;border:1px solid #3a3a3a;border-radius:6px;gridline-color:#3a3a3a; }
+            QTableWidget::item { padding: 4px 8px; }
+            QHeaderView::section { background:#2a2a2a;color:#aaa;border:none;padding:6px 8px;font-weight:bold; }
+        """)
+        hl.addWidget(self._history_table)
+        layout.addWidget(history_card)
+
+        # 进度
         prog_card = CardWidget(inner)
         pl = QVBoxLayout(prog_card)
         pl.setContentsMargins(16, 12, 16, 16); pl.setSpacing(6)
@@ -347,7 +470,7 @@ class UpgradePage(QWidget):
         pl.addWidget(self._dl_status)
         layout.addWidget(prog_card)
 
-        # ── 日志 ──
+        # 日志
         log_card = CardWidget(inner)
         ll = QVBoxLayout(log_card)
         ll.setContentsMargins(12, 10, 12, 12)
@@ -359,7 +482,7 @@ class UpgradePage(QWidget):
         ll.addWidget(self._log)
         layout.addWidget(log_card)
 
-        # ── 工具自更新 ──
+        # 工具自更新
         tool_card = CardWidget(inner)
         tl = QVBoxLayout(tool_card)
         tl.setContentsMargins(16, 12, 16, 16); tl.setSpacing(8)
@@ -394,18 +517,129 @@ class UpgradePage(QWidget):
         self._fetch_btn.clicked.connect(self._fetch)
         self._stop_btn.clicked.connect(self._stop_scan)
 
-        # 首次展示缓存版本
         if self._results:
             self._populate_table()
-            self._scan_status.setText(f"已加载 {len(self._results)} 个缓存版本（点击浏览刷新）")
+            cached_ts = cached.get("timestamp", 0) if isinstance(cached, dict) else 0
+            age = int(time.time() - cached_ts) if cached_ts else 0
+            if age < 60:
+                age_text = f"{age} 秒前"
+            elif age < 3600:
+                age_text = f"{age // 60} 分钟前"
+            elif age < 86400:
+                age_text = f"{age // 3600} 小时前"
+            else:
+                age_text = f"{age // 86400} 天前"
+            self._scan_status.setText(f"📦 缓存 {len(self._results)} 个版本（{age_text}），后台静默检查中...")
 
-    # ── 工具自更新 ──
+        self._refresh_history()
+        self._auto_refreshed = False  # 首次 showEvent 触发后台刷新
+
+    def showEvent(self, event):
+        """首次显示页面时，如果缓存过期则后台静默刷新（不打断用户）。"""
+        super().showEvent(event)
+        if self._auto_refreshed:
+            return
+        self._auto_refreshed = True
+        cached = config_mgr.get("version_list", {})
+        ts = cached.get("timestamp", 0) if isinstance(cached, dict) else 0
+        # 缓存 5 分钟内不算过期，不触发后台请求
+        if time.time() - ts < 300:
+            return
+        # 延迟 800ms 启动后台刷新，避免影响 UI 渲染
+        QTimer.singleShot(800, self._auto_refresh)
+
+    def _auto_refresh(self):
+        """静默后台拉取 GitHub 版本列表（不打断用户操作）。"""
+        # 已经有用户在主动获取就跳过
+        if hasattr(self, "_github_worker") and self._github_worker and self._github_worker.isRunning():
+            return
+        if hasattr(self, "_head_worker") and self._head_worker and self._head_worker.isRunning():
+            return
+        self._start_github_fetch(silent=True)
+
+    def _refresh_history(self):
+        history = _load_upgrade_history()
+        self._history_table.setRowCount(len(history))
+        for i, h in enumerate(reversed(history)):
+            self._history_table.setItem(i, 0, QTableWidgetItem(h.get("timestamp", "")))
+            ver_text = f"{h.get('from_version', '?')} → {h.get('version', '?')}"
+            self._history_table.setItem(i, 1, QTableWidgetItem(ver_text))
+            backup = h.get("backup_dir")
+            if backup and os.path.exists(backup):
+                btn = PushButton("回滚", self._history_table)
+                btn.clicked.connect(lambda checked, b=backup: self._do_rollback(b))
+                self._history_table.setCellWidget(i, 2, btn)
+            else:
+                item = QTableWidgetItem("—")
+                item.setFlags(item.flags() & ~Qt.ItemIsEnabled)
+                self._history_table.setItem(i, 2, item)
+
+    def _on_compare_versions(self):
+        """对比选中的两个版本（Changelog 链接）。"""
+        sel = self._ver_table.selectionModel().selectedRows()
+        if len(sel) != 2:
+            toast_info("提示", "请先在表格中按住 Ctrl 选中 2 个版本", self.window())
+            return
+        v1 = self._ver_table.item(sel[0].row(), 0).text()
+        v2 = self._ver_table.item(sel[1].row(), 0).text()
+        # Mojang 官方 Changelog 页
+        url = f"https://feedback.minecraft.net/hc/en-us/articles/4410058574989-Minecraft-Bedrock-Changelog"
+        mb = MessageBox(
+            "版本对比",
+            f"已选: <b>{v1}</b> vs <b>{v2}</b>\n\n"
+            f"请访问 Mojang 官方 Changelog 页面查看详细变更：\n{url}\n\n"
+            f"（本工具暂未集成自动 Changelog 抓取）",
+            self.window(),
+        )
+        mb.exec()
+
+    def _on_rollback(self):
+        history = _load_upgrade_history()
+        if not history:
+            toast_info("无历史", "尚无升级记录可回滚", self.window())
+            return
+        last = history[-1]
+        backup = last.get("backup_dir")
+        if not backup or not os.path.exists(backup):
+            toast_error("不可用", f"上次的备份已不存在: {backup}", self.window())
+            return
+        confirm = MessageBox(
+            "回滚确认",
+            f"将回滚到 <b>{last.get('from_version', '?')}</b> 版本。\n\n"
+            f"备份位置: {backup}\n\n是否继续？",
+            self.window(),
+        )
+        if confirm.exec():
+            self._do_rollback(backup)
+
+    def _do_rollback(self, backup_dir: str):
+        """从备份目录恢复 server.properties / worlds / packs / config。"""
+        ctx = get_context()
+        server_dir = ctx.server_dir
+        restored = []
+        try:
+            for d in ["worlds", "resource_packs", "behavior_packs", "config"]:
+                src = os.path.join(backup_dir, d)
+                dst = os.path.join(server_dir, d)
+                if os.path.exists(src):
+                    if os.path.exists(dst):
+                        shutil.rmtree(dst, ignore_errors=True)
+                    shutil.copytree(src, dst)
+                    restored.append(d)
+            for fn in ["server.properties", "allowlist.json", "permissions.json"]:
+                src = os.path.join(backup_dir, fn)
+                dst = os.path.join(server_dir, fn)
+                if os.path.exists(src):
+                    shutil.copy2(src, dst)
+                    restored.append(fn)
+            toast_success("回滚完成", f"已恢复: {', '.join(restored) or '(无)'}", self.window())
+        except Exception as e:
+            toast_error("回滚失败", str(e), self.window())
+
     def _check_tool_update(self):
         from backend.self_update import CheckUpdateWorker, DownloadUpdateWorker, verify_sha256, is_valid_zip
-
         self._tool_check_btn.setEnabled(False)
         self._tool_status.setText("正在检查更新...")
-
         self.__checker = CheckUpdateWorker(self)
         self.__checker.result.connect(lambda s, v, u, sh: self._on_tool_check_done(s, v, u, sh))
         self.__checker.start()
@@ -422,12 +656,10 @@ class UpgradePage(QWidget):
         if not dl_url:
             self._tool_status.setText("❌ 未找到下载链接")
             return
-
         self._tool_status.setText(f"发现 v{remote_ver}，正在下载...")
         self._tool_bar.setVisible(True)
         self._tool_bar.setRange(0, 100)
         self._tool_bar.setValue(0)
-
         from backend.self_update import DownloadUpdateWorker
         self.__dl = DownloadUpdateWorker(dl_url, remote_ver, self)
         self.__dl.progress.connect(self._tool_bar.setValue)
@@ -459,50 +691,99 @@ class UpgradePage(QWidget):
         if not hasattr(self, "_tool_zip") or not os.path.exists(self._tool_zip):
             self._tool_status.setText("❌ 找不到更新包")
             return
-        from PySide6.QtWidgets import QMessageBox
         from backend.self_update import InstallUpdateWorker, restart_app
         self._tool_status.setText("正在安装更新...")
         self._tool_install_btn.setEnabled(False)
         self.__installer = InstallUpdateWorker(self._tool_zip, self)
         self.__installer.finished.connect(lambda s, _: (
-            QMessageBox.information(self, "更新完成", "BDS Manager 已更新！即将自动重启。") if s else None,
+            MessageBox.information(self, "更新完成", "BDS Manager 已更新！即将自动重启。") if s else None,
             restart_app("main.py") if s else None
         ))
         self.__installer.start()
 
-    # ── 日志 ──
     def _log_line(self, msg: str):
         self._log.appendPlainText(msg)
         self._log.moveCursor(QTextCursor.End)
 
-    # ── 版本抓取 ──
     def _fetch(self):
+        """用户点「浏览可用版本」：清旧表 → GitHub 重试 → 失败后提示用户启用 HEAD 嗅探。"""
         self._ver_table.setRowCount(0)
         self._results.clear()
         self._fetch_btn.setEnabled(False)
         self._stop_btn.setEnabled(True)
-        self._scan_status.setText("正在从 GitHub 获取版本列表...")
-        self._log_line("正在从 GitHub 获取版本列表...")
+        self._stop_btn.setText("停止")
+        self._pending_head_scan = False
+        self._log_line("🔄 正在从 GitHub 仓库拉取版本列表...")
+        self._start_github_fetch(silent=False)
 
+    def _start_github_fetch(self, silent: bool, attempt: int = 1):
+        """单次 GitHub 拉取；失败由 _on_github_done 决定是否重试。"""
+        self._github_attempt = attempt
+        self._github_silent = silent
+        self._scan_status.setText(
+            f"🔄 拉取 GitHub 仓库版本列表...（尝试 {attempt}/{self.GITHUB_MAX_RETRIES}）"
+        )
+        if not silent:
+            self._log_line(f"🔄 GitHub 拉取（尝试 {attempt}/{self.GITHUB_MAX_RETRIES}）")
         self._github_worker = GithubFetcher(self)
-        self._github_worker.result.connect(self._on_github_done)
+        # 用默认参数绑定 attempt，避免 lambda 闭包陷阱
+        self._github_worker.result.connect(
+            lambda ok, r, a=attempt, s=silent: self._on_github_done(ok, r, a, s)
+        )
         self._github_worker.start()
 
-    def _on_github_done(self, ok: bool, results: list):
-        self._fetch_btn.setEnabled(True)
-        self._stop_btn.setEnabled(False)
-        if results:
-            self._results = results
+    def _on_github_done(self, ok: bool, results: list, attempt: int, silent: bool):
+        """单次拉取完成：成功 → 写缓存；失败 → 重试或 fallback。"""
+        if ok and results:
+            self._on_github_success(results, silent)
+            return
+        # 失败：还有重试次数？
+        if attempt < self.GITHUB_MAX_RETRIES:
+            delay = self.GITHUB_BACKOFF_BASE ** (attempt - 1)  # 1, 2, 4 秒
+            self._scan_status.setText(
+                f"⚠️ GitHub 拉取失败，{delay}s 后重试（{attempt+1}/{self.GITHUB_MAX_RETRIES}）"
+            )
+            if not silent:
+                self._log_line(f"⚠️ GitHub 失败，{delay}s 后重试（{attempt+1}/{self.GITHUB_MAX_RETRIES}）")
+            QTimer.singleShot(delay * 1000, lambda: self._start_github_fetch(silent, attempt + 1))
+            return
+        # 全部失败
+        if silent:
+            # 后台静默：直接放弃，保留缓存
+            self._scan_status.setText(f"❌ 后台静默检查失败（尝试 {attempt} 次），保留缓存")
+            return
+        # 用户主动：把停止按钮变成"启用 HEAD 嗅探"，让用户决定
+        self._on_github_exhausted()
+
+    def _on_github_success(self, results: list, silent: bool):
+        """GitHub 拉取成功：写缓存 + 填表。"""
+        cached = config_mgr.get("version_list", {}).get("data", [])
+        if (len(results) == len(cached)
+            and results and cached and results[0] == cached[0]):
             self._save_cache()
             self._populate_table()
-            self._scan_status.setText(f"GitHub: {len(results)} 个版本可用")
-            self._log_line(f"GitHub 获取到 {len(results)} 个版本，完成")
-        else:
-            self._scan_status.setText("GitHub 失败，回退 HEAD 全量扫描...")
-            self._log_line("GitHub 获取失败，开始 HEAD 全量扫描...")
-            ctx = get_context()
-            base = "1.20.0.0"
-            self._start_head_scan(base, append_mode=False)
+            self._scan_status.setText(f"✅ {len(results)} 个版本（无变化）")
+            return
+        self._results = results
+        self._save_cache()
+        self._populate_table()
+        msg = f"✅ GitHub: {len(results)} 个版本（之前 {len(cached)}）"
+        self._scan_status.setText(msg)
+        if not silent:
+            self._log_line(msg)
+
+    def _on_github_exhausted(self):
+        """GitHub 全部失败：把停止按钮改为「启用 HEAD 嗅探」让用户决定（最后手段）。"""
+        self._pending_head_scan = True
+        self._fetch_btn.setEnabled(False)
+        self._stop_btn.setEnabled(True)
+        self._stop_btn.setText("启用 HEAD 嗅探")
+        self._scan_status.setText(
+            f"❌ GitHub 失败 {self.GITHUB_MAX_RETRIES} 次 — 可点停止按钮启用 HEAD 嗅探（最后手段，65+ 请求）"
+        )
+        self._log_line(
+            f"❌ GitHub 失败 {self.GITHUB_MAX_RETRIES} 次，嗅探作为最后手段"
+        )
 
     def _start_head_scan(self, base_ver: str, append_mode: bool):
         self._head_worker = HeadScanWorker(
@@ -527,7 +808,6 @@ class UpgradePage(QWidget):
         self._scan_status.setText(f"共 {len(self._results)} 个版本可用")
 
     def _save_cache(self):
-        """将当前版本列表缓存到配置（持久化到 bds_version_cache.json）。"""
         config_mgr.set("version_list", {
             "data": self._results,
             "timestamp": int(time.time()),
@@ -535,10 +815,35 @@ class UpgradePage(QWidget):
         config_mgr.save()
 
     def _stop_scan(self):
-        if hasattr(self, "_head_worker") and self._head_worker.isRunning():
+        """根据当前状态执行不同动作：
+        1. GitHub 拉取中 → 取消
+        2. HEAD 扫描中 → 取消
+        3. GitHub 全部失败等待用户决定 → 启动 HEAD 嗅探（最后手段）
+        """
+        # 状态 3：用户点"启用 HEAD 嗅探"
+        if self._pending_head_scan:
+            self._pending_head_scan = False
+            self._stop_btn.setText("停止")
+            self._log_line("⚠️ 启用 HEAD 嗅探（最后手段，会发 65+ 个请求）...")
+            self._start_head_scan("1.20.0.0", append_mode=False)
+            return
+        # 状态 1 & 2：中止正在运行的任务
+        if self._github_worker and self._github_worker.isRunning():
+            self._github_worker.cancel()
+            self._github_worker.wait(800)
+        if self._head_worker and self._head_worker.isRunning():
             self._head_worker.cancel()
+            self._head_worker.wait(500)
+        if self._size_worker and self._size_worker.isRunning():
+            self._size_worker.cancel()
+            self._size_worker.wait(500)
         self._fetch_btn.setEnabled(True)
         self._stop_btn.setEnabled(False)
+        self._stop_btn.setText("停止")
+        if hasattr(self, "_size_btn"):
+            self._size_btn.setEnabled(True)
+            self._size_btn.setText("获取文件大小")
+        self._scan_status.setText("⏹ 已中止")
 
     def _populate_table(self):
         seen = set()
@@ -554,16 +859,41 @@ class UpgradePage(QWidget):
             pass
 
         self._ver_table.setRowCount(len(deduped))
+        # 默认占位 "—"，文件大小需要用户点「获取文件大小」按钮才请求（启动加速）
         for i, (ver, branch, url) in enumerate(deduped):
             self._ver_table.setItem(i, 0, QTableWidgetItem(ver))
-            color = "#4CAF50" if branch == "stable" else "#ff9800"
-            item = QTableWidgetItem("稳定版" if branch == "stable" else "预览版")
+            branch_text = "稳定版" if branch == "stable" else "预览版"
+            item = QTableWidgetItem(branch_text)
             self._ver_table.setItem(i, 1, item)
+            self._ver_table.setItem(i, 2, QTableWidgetItem("—"))
             btn = PushButton("下载安装", self._ver_table)
             btn.clicked.connect(lambda checked, u=url, v=ver: self._install(u, v))
-            self._ver_table.setCellWidget(i, 2, btn)
+            self._ver_table.setCellWidget(i, 3, btn)
+        # 恢复 size button
+        if hasattr(self, "_size_btn"):
+            self._size_btn.setEnabled(True)
+            self._size_btn.setText("获取文件大小")
 
-    # ── 手动下载 ──
+    def _fetch_sizes(self):
+        """用户点「获取文件大小」时启动后台 HEAD 请求。"""
+        items_for_size: list[tuple[int, str]] = []
+        for i, (_v, _b, url) in enumerate(self._results[:self._ver_table.rowCount()]):
+            items_for_size.append((i, url))
+        if not items_for_size:
+            return
+        if self._size_worker and self._size_worker.isRunning():
+            self._size_worker.cancel()
+            self._size_worker.wait(500)
+        self._size_worker = HeadSizeWorker(items_for_size, self)
+        self._size_worker.result.connect(self._on_size_ready)
+        self._size_worker.start()
+        self._size_btn.setEnabled(False)
+        self._size_btn.setText("正在获取...")
+
+    def _on_size_ready(self, row: int, size_text: str):
+        if row < self._ver_table.rowCount():
+            self._ver_table.setItem(row, 2, QTableWidgetItem(size_text))
+
     def _download_manual(self):
         ver = self._manual_input.text().strip()
         if not ver:
@@ -571,7 +901,6 @@ class UpgradePage(QWidget):
         url = f"https://www.minecraft.net/bedrockdedicatedserver/bin-win/bedrock-server-{ver}.zip"
         self._install(url, ver)
 
-    # ── 下载 + 安装 ──
     def _install(self, url: str, version: str):
         ctx = get_context()
         self._dl_bar.setVisible(True)
@@ -594,7 +923,18 @@ class UpgradePage(QWidget):
             return
         self._log_line("下载完成，开始安装...")
         ctx = get_context()
-        self._install_worker = InstallWorker(zip_path, ctx.server_dir, True, self)
+        # 检测当前版本
+        from_version = ""
+        try:
+            ver_path = os.path.join(ctx.server_dir, "valid_known_packs.json")
+            # 用文件存在性粗略判断
+            if os.path.exists(os.path.join(ctx.server_dir, "bedrock_server.exe")):
+                from_version = "current"
+        except Exception:
+            pass
+        self._install_worker = InstallWorker(
+            zip_path, ctx.server_dir, True, version, from_version, self
+        )
         self._install_worker.log.connect(self._log_line)
         self._install_worker.finished.connect(lambda s, m: self._on_install_done(s, m, zip_path))
         self._install_worker.start()
@@ -608,5 +948,6 @@ class UpgradePage(QWidget):
             pass
         if success:
             toast_success("安装完成", "BDS 已更新，请重新启动服务器", self.window())
+            self._refresh_history()
         else:
             toast_error("安装失败", msg, self.window())

@@ -2,12 +2,21 @@
 """
 BDS Manager Fluent -- 主入口
 
-基于 PySide6 + QFluentWidgets 的 Minecraft Bedrock 服务器管理工具。
-支持暗色/亮色主题切换、自定义主题色、侧边栏导航。
+v3.1 改进：
+- 注入 monitor 到 dashboard（绘制资源曲线）
+- 监听 WorldPage backup_completed → 更新 Dashboard 最近备份时间
+- 监听 ServerProcess.proc_stats → 更新 Dashboard BDS 进程卡
+- 监听 ConsolePage._append_output → 通知 Dashboard 假死检测
+- 使用 GzipRotatingFileHandler 替代 basicConfig
+- 注册 Ctrl+K 命令面板
+- 全局异常钩子
+- 系统主题变化监听（Qt 6.5+）
+- 优雅停服（graceful_shutdown）
 """
 
 import sys
 import os
+import time
 import logging
 from datetime import datetime
 
@@ -19,18 +28,22 @@ sys.stdout.close()
 sys.stdout = _real_stdout
 # ----------------------------------------------------------
 
-from PySide6.QtWidgets import QApplication, QSystemTrayIcon, QMenu
-from PySide6.QtGui import QColor, QIcon, QAction
+from PySide6.QtWidgets import QApplication, QSystemTrayIcon, QMenu, QSplashScreen
+from PySide6.QtGui import QColor, QIcon, QAction, QShortcut, QKeySequence
 from PySide6.QtCore import Qt, QTimer
 from qfluentwidgets import (
     FluentWindow, FluentIcon, setTheme, setThemeColor, Theme, SystemTrayMenu,
 )
 
 from shared.config import config_mgr, init_context, SCRIPT_DIR, LOG_DIR, get_context
+from shared.errors import set_error_handler, install_excepthook
+from shared.toast import toast_error, toast_success, toast_warning
+from shared.errors import handle_errors
 from backend.server import ServerProcess
 from backend.monitor import SystemResourceMonitor, SystemStatsSnapshot
 from backend.webhook import send_webhook
 from backend.self_update import CheckUpdateWorker, DownloadUpdateWorker, InstallUpdateWorker, verify_sha256, is_valid_zip, restart_app
+from backend.log_handler import make_rotating_file_handler
 from pages.dashboard import DashboardPage
 from pages.console import ConsolePage
 from pages.settings import SettingsPage
@@ -40,36 +53,82 @@ from pages.packs import PacksPage
 from pages.upgrade import UpgradePage
 from pages.tunnel import TunnelPage
 from pages.about import AboutPage
+from pages.command_palette import CommandPaletteDialog, build_default_commands
 
-# ---------- 日志 ----------
+# ---------- 日志（按大小轮转 + gzip 压缩） ----------
 os.makedirs(LOG_DIR, exist_ok=True)
 logging.basicConfig(
     level=logging.INFO,
     format="[%(asctime)s] [%(levelname)s] %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S",
     handlers=[
-        logging.FileHandler(os.path.join(LOG_DIR, "bds_manager.log"), encoding="utf-8"),
+        make_rotating_file_handler(
+            os.path.join(LOG_DIR, "bds_manager.log"),
+            max_bytes=5 * 1024 * 1024,
+            backups=5,
+        ),
         logging.StreamHandler(),
     ],
 )
 logger = logging.getLogger("bds_manager")
 
-__version__ = "3.0.1"
+__version__ = "3.01.00"
+# ⚠️ 工具版本固定写在这里，不在 bds_manager_config.json / bds_version_cache.json 等任何配置文件中。
+# 如果需要做配置兼容性检查，读取远端 version.json（自更新流程用）即可。
+# 格式规范：x.xx.xx —— Major 1 位、Minor 2 位（补零）、Patch 2 位（补零）
+# 例：3.1.0 → 3.01.00；3.10.5 → 3.10.05
+__version_info__ = (3, 1, 0)
+__release_date__ = "2026-07-22"
+
+
+def format_version(major: int, minor: int, patch: int) -> str:
+    """把 (major, minor, patch) 元组格式化为 x.xx.xx 字符串。"""
+    return f"{major}.{minor:02d}.{patch:02d}"
+
+
+def get_version() -> str:
+    """返回当前工具版本字符串（x.xx.xx 格式）。"""
+    return __version__
+
+
+def get_version_info() -> tuple:
+    """返回当前工具版本元组（语义比较用，不补零）。"""
+    return __version_info__
+
+
+# ---------- 错误处理桥接 ----------
+def _toast_error_handler(title: str, msg: str, level: str):
+    """把 shared/errors 的报告桥接到 toast 通知。"""
+    if level == "ERROR":
+        toast_error(title, msg, _MAIN_WINDOW_REF[0])
+    elif level == "WARNING":
+        toast_warning(title, msg, _MAIN_WINDOW_REF[0])
+    else:
+        toast_success(title, msg, _MAIN_WINDOW_REF[0])
+
+_MAIN_WINDOW_REF: list = [None]
 
 
 class BDSFluentWindow(FluentWindow):
-    """BDS Manager 主窗口 - Fluent Design。持有共享的服务器进程和资源监控。"""
+    """BDS Manager 主窗口 - Fluent Design。"""
 
     def __init__(self):
         super().__init__()
         self._server: ServerProcess | None = None
         self._monitor: SystemResourceMonitor | None = None
         self._tray = None
+        self._current_color = config_mgr.get("theme_color", "#0DC5D4")
         self._setup_window()
-        self._setup_tray()
         self._init_pages()
-        self._init_services()
         self._restore_window_state()
+        self._init_shortcuts()
+        # 把窗口引用暴露给 errors handler
+        _MAIN_WINDOW_REF[0] = self
+        # 延迟初始化重组件（启动加速）。
+        # 启动 Toast / 升级列表 / 自更新检查 都在 _init_services → _startup_toasts 中调度，
+        # 不要在这里重复注册（否则 toast 和网络请求都会触发两次）。
+        QTimer.singleShot(300, self._setup_tray)        # 系统托盘：Win 创建慢
+        QTimer.singleShot(500, self._init_services)     # 资源监控 + 启动 Toast + 升级 + 自更新
 
     # ---------- 窗口 ----------
     def _setup_window(self):
@@ -82,10 +141,8 @@ class BDSFluentWindow(FluentWindow):
         self.navigationInterface.setExpandWidth(280)
 
     def _setup_tray(self):
-        """系统托盘：双击恢复，右键菜单退出。"""
         self._tray = QSystemTrayIcon(self)
         self._tray.setToolTip("BDS Manager")
-        # 用 QFluentWidgets 内置图标作为托盘图标
         from qfluentwidgets import FluentIcon as _FI
         self._tray.setIcon(_FI.HOME.icon())
         self._tray.activated.connect(self._on_tray_activated)
@@ -93,6 +150,9 @@ class BDSFluentWindow(FluentWindow):
         menu = QMenu()
         show_action = menu.addAction("显示窗口")
         show_action.triggered.connect(self._show_from_tray)
+        menu.addSeparator()
+        cmd_palette_action = menu.addAction("命令面板 (Ctrl+K)")
+        cmd_palette_action.triggered.connect(self._open_command_palette)
         menu.addSeparator()
         quit_action = menu.addAction("退出")
         quit_action.triggered.connect(self.close)
@@ -121,6 +181,8 @@ class BDSFluentWindow(FluentWindow):
 
         self.world_page = WorldPage(self)
         self.world_page.setObjectName("world")
+        # 监听备份完成 → 更新 Dashboard 最近备份时间
+        self.world_page.backup_completed.connect(self._on_backup_completed)
         self.addSubInterface(self.world_page, FluentIcon.SAVE, "世界")
 
         self.packs_page = PacksPage(self)
@@ -155,30 +217,74 @@ class BDSFluentWindow(FluentWindow):
         )
 
     def _init_services(self):
-        """启动后台服务 + 自检 Toast。"""
         self._monitor = SystemResourceMonitor(self)
         self._monitor.stats_updated.connect(self._on_stats_updated)
         self._monitor.stats_updated.connect(self.dashboard_page.resource_card.update_stats)
+        # 把 monitor 注入 dashboard 用于绘制曲线
+        self.dashboard_page.set_monitor(self._monitor)
         self._monitor.start(config_mgr.get("monitor_interval", 2000))
 
-        # 启动自检 Toast（对齐旧版 _show_startup_toasts）
         if config_mgr.get("show_startup_toasts", True):
             QTimer.singleShot(800, self._startup_toasts)
 
+        # 监听系统主题变化
+        if config_mgr.get("follow_system_theme", False):
+            try:
+                app = QApplication.instance()
+                if app and hasattr(app, "styleHints"):
+                    app.styleHints().colorSchemeChanged.connect(self._on_system_theme_changed)
+            except Exception:
+                pass
+
+    def _on_system_theme_changed(self, scheme):
+        """系统主题切换时自动应用（仅当 follow_system_theme=True）。"""
+        try:
+            if not config_mgr.get("follow_system_theme", False):
+                return
+            from PySide6.QtCore import Qt as _Qt
+            is_dark = (scheme == _Qt.ColorScheme.Dark)
+            theme = "dark" if is_dark else "light"
+            self.apply_theme(theme, self._current_color)
+            config_mgr.set("theme", theme)
+            logger.info("系统主题切换 → %s", theme)
+        except Exception as e:
+            logger.debug("系统主题切换异常: %s", e)
+
+    def _on_backup_completed(self):
+        """WorldPage 备份完成时刷新 Dashboard 的最近备份时间。"""
+        try:
+            ctx = get_context()
+            from backend.backup import get_backup_files
+            files = get_backup_files(ctx.backup_dir)
+            if files:
+                latest = files[0]  # 已经按 mtime 倒序
+                import time as _t
+                mtime = os.path.getmtime(os.path.join(ctx.backup_dir, latest))
+                delta = int(_t.time() - mtime)
+                if delta < 60: text = f"{delta} 秒前"
+                elif delta < 3600: text = f"{delta // 60} 分钟前"
+                elif delta < 86400: text = f"{delta // 3600} 小时前"
+                else: text = f"{delta // 86400} 天前"
+                self.dashboard_page.set_backup_time(text)
+        except Exception as e:
+            logger.debug("更新最近备份时间失败: %s", e)
+
     def _startup_toasts(self):
+        # 防御：防止重复触发（_startup_toasts 一次会话只跑一次）
+        if getattr(self, "_toasted", False):
+            return
+        self._toasted = True
         import psutil
         from shared.toast import toast_success, toast_error, toast_warning, toast_info
 
         ctx = get_context()
         server_dir = ctx.server_dir
 
-        # 服务器目录
         if os.path.isdir(server_dir):
             toast_success(f"服务器: {os.path.basename(server_dir)}", "目录就绪", self)
         else:
             toast_error("服务器目录不存在", server_dir, self, duration=8000)
 
-        # 服务端可执行文件
         exe_name = config_mgr.get("server_exe", "bedrock_server.exe")
         exe_path = os.path.join(server_dir, exe_name)
         if os.path.exists(exe_path):
@@ -186,7 +292,6 @@ class BDSFluentWindow(FluentWindow):
         else:
             toast_warning(f"服务端: {exe_name}", "未找到，请先安装 BDS", self, duration=6000)
 
-        # 系统资源
         try:
             cpu = psutil.cpu_percent()
             mem = psutil.virtual_memory().percent
@@ -194,7 +299,6 @@ class BDSFluentWindow(FluentWindow):
         except Exception:
             pass
 
-        # 备份状态
         if os.path.exists(ctx.backup_dir):
             backups = [f for f in os.listdir(ctx.backup_dir) if f.endswith(".zip")]
             if backups:
@@ -205,13 +309,10 @@ class BDSFluentWindow(FluentWindow):
         else:
             toast_info("备份状态", "备份目录尚未创建", self)
 
-        # 版本就绪
-        toast_info(f"BDS Manager v{__version__}", "就绪，等待操作", self)
+        toast_info(f"BDS Manager v{__version__}", "就绪，等待操作（Ctrl+K 打开命令面板）", self)
 
-        # 后台自动扫描 BDS 版本（5 秒延迟，不阻塞启动）
         QTimer.singleShot(5000, self.upgrade_page._fetch)
 
-        # 工具自更新检查（5 秒延迟）
         if config_mgr.get("auto_check_update", True):
             QTimer.singleShot(5000, self._check_self_update)
 
@@ -226,7 +327,6 @@ class BDSFluentWindow(FluentWindow):
         config_mgr.set("window_height", self.height())
 
     def closeEvent(self, event):
-        """关闭行为：按用户设置选择最小化到托盘或直接退出。"""
         if self._tray and self._tray.isVisible() and config_mgr.get("close_to_tray", True):
             event.ignore()
             self.hide()
@@ -244,19 +344,37 @@ class BDSFluentWindow(FluentWindow):
         config_mgr.save()
         super().closeEvent(event)
 
+    # ---------- 快捷键 ----------
+    def _init_shortcuts(self):
+        # Ctrl+K 命令面板
+        QShortcut(QKeySequence("Ctrl+K"), self, activated=self._open_command_palette)
+        # Ctrl+Shift+R 重启工具
+        QShortcut(QKeySequence("Ctrl+Shift+R"), self, activated=self._restart_app)
+        # Ctrl+1..9 切换页面
+        for i, key in enumerate(["dashboard", "console", "world", "packs",
+                                  "config", "upgrade", "tunnel"]):
+            QShortcut(QKeySequence(f"Ctrl+{i+1}"), self,
+                      activated=lambda k=key: self.navigationInterface.setCurrentItem(k))
+
+    def _open_command_palette(self):
+        cmds = build_default_commands(self)
+        dlg = CommandPaletteDialog(cmds, self)
+        dlg.exec()
+
     def keyPressEvent(self, event):
-        """快捷键。"""
-        # Ctrl+Shift+R: 重启工具
         if event.modifiers() == (Qt.ControlModifier | Qt.ShiftModifier) and event.key() == Qt.Key_R:
-            from backend.self_update import restart_app
-            from shared.toast import toast_info
-            toast_info("工具即将重启", "将在 1 秒后自动重启", self)
-            QTimer.singleShot(1000, lambda: restart_app("main.py"))
+            self._restart_app()
             return
         super().keyPressEvent(event)
 
+    def _restart_app(self):
+        from shared.toast import toast_info
+        toast_info("工具即将重启", "将在 1 秒后自动重启", self)
+        QTimer.singleShot(1000, lambda: restart_app("main.py"))
+
     # ---------- 主题 ----------
     def apply_theme(self, theme: str = "dark", accent_color: str = "#0DC5D4"):
+        self._current_color = accent_color
         theme_map = {"dark": Theme.DARK, "light": Theme.LIGHT, "auto": Theme.AUTO}
         setTheme(theme_map.get(theme, Theme.DARK))
         try:
@@ -264,7 +382,6 @@ class BDSFluentWindow(FluentWindow):
         except Exception:
             setThemeColor(QColor("#0DC5D4"))
 
-        # 现代化细滚动条（全局）
         is_dark = theme_map.get(theme, Theme.DARK) != Theme.LIGHT
         handle = "#555" if is_dark else "#bbb"
         handle_hover = "#777" if is_dark else "#999"
@@ -313,7 +430,7 @@ class BDSFluentWindow(FluentWindow):
         """)
         logger.info("主题: %s, 主色: %s", theme, accent_color)
 
-    # ---------- 服务器管理（共享）----------
+    # ---------- 服务器管理 ----------
     @property
     def server(self) -> ServerProcess | None:
         return self._server
@@ -323,7 +440,6 @@ class BDSFluentWindow(FluentWindow):
         return self._server is not None and self._server.is_running
 
     def start_server(self):
-        """启动 BDS 服务器进程。"""
         if self._server and self._server.is_running:
             return "服务器已在运行中"
 
@@ -333,62 +449,70 @@ class BDSFluentWindow(FluentWindow):
             return f"未找到服务器可执行文件: {exe_path}"
 
         self._server = ServerProcess(exe_path, ctx.server_dir)
-        self._server.output_received.connect(self.console_page._append_output)
+        self._server.output_received.connect(self._on_server_output)
         self._server.process_stopped.connect(self._on_server_stopped)
         self._server.error_occurred.connect(
             lambda msg: self.console_page._append_output(f"[ERROR] {msg}", "#ff5555")
         )
         self._server.status_changed.connect(self._on_status_changed)
+        # 进程级资源（如果启用）
+        if config_mgr.get("enable_bds_process_monitor", True):
+            self._server.proc_stats.connect(self.dashboard_page.update_proc_stats)
         self._server.start()
 
         self.dashboard_page._on_server_started()
         self.console_page._on_server_started()
 
-        # RTT 延迟探测 + 玩家列表刷新（每 30 秒）
         self._restart_count = 0
         self._lag_samples: list[float] = []
         if not hasattr(self, "_lag_timer") or not self._lag_timer:
             self._lag_timer = QTimer(self)
             self._lag_timer.timeout.connect(self._lag_ping)
         self._lag_timer.start(30000)
-        return None  # 成功
+        return None
 
     def stop_server(self):
-        """停止 BDS 服务器。"""
         if self._server and self._server.is_running:
-            self.console_page._append_output("[系统] 正在发送 stop 命令...", "#ffaa00")
-            self._server.stop_server()
-        if hasattr(self, "_lag_timer"):
+            self.console_page._append_output("[系统] 正在停止服务器...", "#ffaa00")
+            # 优雅停服
+            graceful = config_mgr.get("graceful_shutdown", True)
+            grace_sec = config_mgr.get("shutdown_grace_seconds", 10)
+            self._server.stop_server(graceful=graceful, grace_seconds=grace_sec)
+        if hasattr(self, "_lag_timer") and self._lag_timer:
             self._lag_timer.stop()
+
+    def _on_server_output(self, text: str):
+        """服务器输出同时推送给控制台 + Dashboard 假死检测。"""
+        self.console_page._append_output(text)
+        self.dashboard_page.on_output()
 
     def _on_server_stopped(self):
         send_webhook("crash", "服务器停止", "BDS 服务器进程已退出")
         self.dashboard_page._on_server_stopped()
         self.console_page._on_server_stopped()
 
-        # 崩溃自愈：自动重启（已在 start_server 重置 _restart_count）
         max_retries = config_mgr.get("max_restart_retries", 5)
         if max_retries > 0 and self._restart_count < max_retries:
             self._restart_count += 1
-            msg = f"服务器崩溃，{5}秒后自动重启（第 {self._restart_count}/{max_retries} 次）"
+            msg = f"服务器崩溃，5秒后自动重启（第 {self._restart_count}/{max_retries} 次）"
             self.console_page._append_output(f"[系统] {msg}", "#ffaa00")
+            self.console_page.mark_crash(self._restart_count, max_retries)
             from shared.toast import toast_warning
             toast_warning("自动重启", f"第 {self._restart_count} 次尝试", self)
             QTimer.singleShot(5000, self.start_server)
         else:
-            # 超出重试上限：保存崩溃日志
             if self._restart_count >= max_retries and max_retries > 0:
                 log_text = self.console_page._log.toPlainText()
                 if log_text:
                     try:
                         crash_path = os.path.join(LOG_DIR, f"crash_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log")
                         with open(crash_path, "w", encoding="utf-8") as f:
-                            f.write(log_text[-8000:])  # 末尾 8000 字符
+                            f.write(log_text[-8000:])
                         self.console_page._append_output(f"[系统] 崩溃日志已保存: {crash_path}", "#888")
                     except Exception:
                         pass
             self._restart_count = 0
-            if hasattr(self, "_lag_timer"):
+            if hasattr(self, "_lag_timer") and self._lag_timer:
                 self._lag_timer.stop()
 
     def _on_status_changed(self, running: bool):
@@ -408,7 +532,6 @@ class BDSFluentWindow(FluentWindow):
         self._server.send_command("list")
 
     def check_lag_response(self, text: str):
-        """供 console_page 在收到输出时调用，检测 list 响应计算 RTT。"""
         import time, re
         if self._lag_ping_pending and re.search(r"players online", text, re.I):
             rtt = (time.time() - self._lag_ping_sent) * 1000.0
@@ -417,14 +540,13 @@ class BDSFluentWindow(FluentWindow):
                 if len(self._lag_samples) > 10:
                     self._lag_samples.pop(0)
             self._lag_ping_pending = False
-            # 更新仪表盘 RTT
             if self._lag_samples:
                 s = sorted(self._lag_samples)
                 med = s[len(s) // 2]
                 color = "#4CAF50" if med < 80 else ("#ffaa00" if med < 200 else "#ff5555")
                 self.dashboard_page.status_card.update_rtt(med, color)
 
-    # ---------- 资源监控（共享）----------
+    # ---------- 资源监控 ----------
     def _on_stats_updated(self, snap: SystemStatsSnapshot):
         self.dashboard_page.status_card.update_server_stats(snap)
         if not hasattr(self, "_last_mem_warn"):
@@ -440,6 +562,10 @@ class BDSFluentWindow(FluentWindow):
 
     # ── 工具自更新 ──
     def _check_self_update(self):
+        # 防御：自更新检查一次会话只跑一次（避免重复网络请求和 toast）
+        if getattr(self, "_update_checked", False):
+            return
+        self._update_checked = True
         self._update_checker = CheckUpdateWorker(self)
         self._update_checker.result.connect(self._on_self_update_found)
         self._update_checker.start()
@@ -479,7 +605,7 @@ class BDSFluentWindow(FluentWindow):
             except OSError:
                 pass
             return
-        toast_success("更新包就绪", f"正在安装...", self)
+        toast_success("更新包就绪", "正在安装...", self)
         self._installer = InstallUpdateWorker(path, self)
         self._installer.finished.connect(self._on_update_installed)
         self._installer.start()
@@ -495,21 +621,135 @@ class BDSFluentWindow(FluentWindow):
             toast_error("安装失败", msg, self, duration=6000)
 
 
+# ---------- 启动闪屏（可动画进度条）----------
+class AnimatedSplashScreen(QSplashScreen):
+    """带动画进度条的启动闪屏：进度条平滑推进，100% 时主窗口登场。"""
+
+    def __init__(self, version: str):
+        from PySide6.QtGui import QPixmap, QColor
+        pix = QPixmap(420, 240)
+        pix.fill(QColor("#1e1e1e"))
+        super().__init__(pix, Qt.WindowStaysOnTopHint)
+        self.setWindowFlag(Qt.FramelessWindowHint, True)
+        self._progress = 0
+        self._status = "正在启动..."
+        self._version = version
+
+    def set_progress(self, percent: int, status: str = ""):
+        """0-100，更新进度条；status 非空时同步更新状态文本。"""
+        self._progress = max(0, min(100, percent))
+        if status:
+            self._status = status
+        self.repaint()
+
+    def set_status(self, status: str):
+        """仅更新状态文本。"""
+        self._status = status
+        self.repaint()
+
+    def drawContents(self, painter):
+        from PySide6.QtGui import QColor, QFont
+        rect = self.rect()
+        # 标题
+        painter.setPen(QColor("#0DC5D4"))
+        f = QFont("Microsoft YaHei", 18)
+        f.setBold(True)
+        painter.setFont(f)
+        painter.drawText(rect.adjusted(0, 55, 0, 0), Qt.AlignHCenter, "BDS Manager")
+        # 副标题
+        painter.setPen(QColor("#aaa"))
+        f2 = QFont("Microsoft YaHei", 10)
+        painter.setFont(f2)
+        painter.drawText(rect.adjusted(0, 90, 0, 0), Qt.AlignHCenter,
+                         f"v{self._version} — 正在加载…")
+        # 进度条（背景轨道 + 前景填充）
+        bar_x, bar_y, bar_w, bar_h = 60, 165, 300, 6
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(QColor("#2a2a2a"))
+        painter.drawRoundedRect(bar_x, bar_y, bar_w, bar_h, 3, 3)
+        if self._progress > 0:
+            fg_w = int(bar_w * self._progress / 100)
+            painter.setBrush(QColor("#0DC5D4"))
+            painter.drawRoundedRect(bar_x, bar_y, fg_w, bar_h, 3, 3)
+        # 状态文本
+        painter.setPen(QColor("#ccc"))
+        f3 = QFont("Microsoft YaHei", 9)
+        painter.setFont(f3)
+        painter.drawText(rect.adjusted(0, 190, 0, 0), Qt.AlignHCenter, self._status)
+        # 百分比
+        painter.setPen(QColor("#666"))
+        f4 = QFont("Microsoft YaHei", 8)
+        painter.setFont(f4)
+        painter.drawText(rect.adjusted(0, 212, 0, 0), Qt.AlignHCenter,
+                         f"{self._progress}%")
+
+
+def _animate_progress(splash: AnimatedSplashScreen, app: QApplication,
+                      target: int, duration_ms: int = 250):
+    """从当前进度平滑过渡到 target（ease-out 曲线）。"""
+    start = splash._progress
+    steps = max(1, duration_ms // 16)  # ~60fps
+    for i in range(1, steps + 1):
+        ratio = i / steps
+        eased = 1 - (1 - ratio) ** 3  # ease-out cubic
+        pct = int(start + (target - start) * eased)
+        splash.set_progress(pct)
+        app.processEvents()
+        time.sleep(0.016)
+
+
 # ---------- 入口 ----------
 def main():
+    # 1. QApplication（必须先于任何 QWidget）
     app = QApplication(sys.argv)
     app.setApplicationName("BDS Manager")
     app.setApplicationVersion(__version__)
 
+    # 2. 闪屏（立即显示，进度条 0%）
+    splash = AnimatedSplashScreen(__version__)
+    splash.show()
+    app.processEvents()
+
+    # 3. 全局错误处理
+    set_error_handler(_toast_error_handler)
+    install_excepthook()
+    _animate_progress(splash, app, 10, 150)
+
+    # 4. 加载配置
     config_mgr.load()
     init_context(config_mgr.get("server_dir"))
+    splash.set_status("配置已加载")
+    _animate_progress(splash, app, 25, 200)
 
+    # 5. 字体
+    font_size = config_mgr.get("font_size", 12)
+    f = app.font()
+    f.setPointSize(font_size)
+    app.setFont(f)
+    splash.set_status("字体已设置")
+    _animate_progress(splash, app, 35, 150)
+
+    # 6. 主窗口（最耗时的一步，1.5+ 秒）
+    splash.set_status("正在构造主窗口...")
+    _animate_progress(splash, app, 45, 150)
     window = BDSFluentWindow()
+    _animate_progress(splash, app, 80, 300)
+
+    # 7. 主题
+    splash.set_status("正在应用主题...")
     window.apply_theme(
         config_mgr.get("theme", "dark"),
         config_mgr.get("theme_color", "#0DC5D4"),
     )
+    _animate_progress(splash, app, 95, 200)
+
+    # 8. 进度条到达 100% 时主窗口登场
+    splash.set_status("准备就绪")
+    _animate_progress(splash, app, 100, 200)
     window.show()
+    splash.finish(window)
+    app.processEvents()
+
     sys.exit(app.exec())
 
 

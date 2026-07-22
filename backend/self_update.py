@@ -12,6 +12,19 @@ from PySide6.QtWidgets import QApplication
 
 from shared.config import config_mgr, SCRIPT_DIR
 from shared.toast import toast_success, toast_error, toast_warning
+from shared.retry import retry
+from shared.errors import NetworkError
+import urllib.request, urllib.error
+import socket, ssl
+
+# 网络重试白名单
+_RETRY_EXC = (
+    urllib.error.URLError,
+    socket.timeout,
+    ConnectionError,
+    TimeoutError,
+    ssl.SSLError,
+)
 
 logger = logging.getLogger("bds_manager")
 
@@ -62,6 +75,7 @@ def compare_versions(a: str, b: str) -> int:
 
 
 # ── 获取远程版本 ──
+@retry(max_attempts=3, backoff=2.0, initial_delay=1.0, retry_on=_RETRY_EXC)
 def fetch_remote_version_json() -> dict:
     """通过 GitHub API 获取 version.json。"""
     url = (f"https://api.github.com/repos/{GITHUB_REPO_OWNER}/{GITHUB_REPO_NAME}"
