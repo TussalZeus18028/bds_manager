@@ -24,13 +24,14 @@ def _row(label_text: str, widget: QWidget, parent: QWidget, hint: str = "") -> Q
     row = QHBoxLayout()
     row.setSpacing(8)
     lbl = BodyLabel(label_text, parent)
-    lbl.setMinimumWidth(130)
+    lbl.setMinimumWidth(100)
+    lbl.setMaximumWidth(180)
     row.addWidget(lbl)
     row.addWidget(widget, 1)
     if hint:
         h = BodyLabel(hint, parent)
         h.setStyleSheet("color: #888; font-size: 12px;")
-        h.setMinimumWidth(180)
+        h.setMaximumWidth(160)
         row.addWidget(h)
     return row
 
@@ -102,7 +103,7 @@ class SettingsPage(QWidget):
         self._backup_keep.setValue(config_mgr.get("backup_keep", 20))
         bl.addLayout(_row("保留备份数", self._backup_keep, backup))
 
-        self._online_backup = ToggleButton("在线备份 (save hold)", backup)
+        self._online_backup = ToggleButton("在线备份", backup)
         self._online_backup.setChecked(config_mgr.get("online_backup", True))
         bl.addWidget(self._online_backup)
         layout.addWidget(backup)
@@ -133,9 +134,9 @@ class SettingsPage(QWidget):
         tl.addLayout(_row("Toast 透明度(%)", self._toast_opacity, toast))
 
         self._toast_style = ComboBox(toast)
-        self._toast_style.addItems(["原版（圆角滑入排队）", "现代（InfoBar）"])
+        self._toast_style.addItems(["原版滑动排队", "现代 InfoBar"])
         current_style = config_mgr.get("toast_style", "original")
-        self._toast_style.setCurrentText("原版（圆角滑入排队）" if current_style == "original" else "现代（InfoBar）")
+        self._toast_style.setCurrentText("原版滑动排队" if current_style == "original" else "现代 InfoBar")
         tl.addLayout(_row("Toast 风格", self._toast_style, toast))
 
         self._queue_delay = SpinBox(toast)
@@ -204,7 +205,7 @@ class SettingsPage(QWidget):
         self._mem_warn.setValue(config_mgr.get("mem_warn_threshold", 80))
         ol.addLayout(_row("内存告警阈值(%)", self._mem_warn, other))
 
-        self._close_tray = ToggleButton("关闭窗口 → 最小化到托盘", other)
+        self._close_tray = ToggleButton("点X最小化到托盘", other)
         self._close_tray.setChecked(config_mgr.get("close_to_tray", True))
         ol.addWidget(self._close_tray)
 

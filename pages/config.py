@@ -98,7 +98,9 @@ class ConfigPage(QWidget):
             row = QHBoxLayout()
             row.setSpacing(8)
             lbl = BodyLabel(key, prop_card)
-            lbl.setMinimumWidth(180)
+            lbl.setMinimumWidth(140)
+            lbl.setMaximumWidth(200)
+            lbl.setWordWrap(True)
             lbl.setToolTip(_HINTS.get(key, ""))
             row.addWidget(lbl)
 
@@ -110,8 +112,9 @@ class ConfigPage(QWidget):
                 w.setRange(0, 65535)
                 w.setValue(int(default))
             elif typ == "bool":
-                w = ToggleButton(str(default), prop_card)
+                w = ToggleButton("启用" if default else "禁用", prop_card)
                 w.setChecked(bool(default))
+                w.toggled.connect(lambda chk, btn=w: btn.setText("启用" if chk else "禁用"))
             elif typ == "combo":
                 w = ComboBox(prop_card)
                 w.addItems(default)
@@ -177,7 +180,9 @@ class ConfigPage(QWidget):
                             try: w.setValue(int(value))
                             except: pass
                         elif typ == "bool":
-                            w.setChecked(value.lower() == "true")
+                            val = value.lower() == "true"
+                            w.setChecked(val)
+                            w.setText("启用" if val else "禁用")
                         elif typ == "combo":
                             idx = w.findText(value)
                             if idx >= 0: w.setCurrentIndex(idx)
