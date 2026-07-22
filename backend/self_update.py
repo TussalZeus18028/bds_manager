@@ -22,12 +22,26 @@ GITHUB_REPO_BRANCH = "main"
 
 
 # ── Token 辅助 ──
+_TOKEN_XOR_KEY = b"bds_manager_2026_token_obfuscation_key"
+
+def _deobfuscate_token(obfuscated: str) -> str:
+    try:
+        data = base64.urlsafe_b64decode(obfuscated.encode())
+        key = (_TOKEN_XOR_KEY * (len(data) // len(_TOKEN_XOR_KEY) + 1))[:len(data)]
+        return bytes(a ^ b for a, b in zip(data, key)).decode("utf-8")
+    except Exception:
+        return ""
+
+
 def _github_headers():
     headers = {"User-Agent": "BDS-Manager/3.0", "Accept": "application/vnd.github.v3+json"}
     if config_mgr.get("github_auth_enabled"):
         token = config_mgr.get("github_token") or ""
         if token:
-            headers["Authorization"] = f"token {token}"
+            # 配置中存储的是 XOR+base64 混淆后的 token
+            real = _deobfuscate_token(token)
+            if real:
+                headers["Authorization"] = f"token {real}"
     return headers
 
 
