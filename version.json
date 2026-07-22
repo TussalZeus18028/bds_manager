@@ -1,9 +1,9 @@
 {
-    "version": "3.0.0",
+    "version": "3.0.1",
     "release_date": "2026-07-22",
-    "download_url": "https://github.com/TussalZeus18028/bds_manager/releases/download/v3.0.0/bds_manager_v3.0.0.zip",
-    "sha256": "6a462fd90125318899134390ebf27f412d95a2867e5f0837dbde7e0b3693ef99",
-    "file_size": 50697,
+    "download_url": "https://github.com/TussalZeus18028/bds_manager/releases/download/v3.0.1/bds_manager_v3.0.1.zip",
+    "sha256": "7dac28a2f9ae1ea665a1bfae73c3760180b972e3539661f367b1287babef30e0",
+    "file_size": 63994,
     "min_compatible_version": "3.0.0",
-    "changelog": "### Fluent UI 重写\n- 8 页面侧边栏\n- 双模式 Toast\n- 工具自更新\n- 版本缓存\n- 系统托盘\n- Webhook\n- 玩家追踪\n- 端口检测"
+    "changelog": "## v3.0.1\n- 隧道编辑锁定 + 打开目录/模板按钮\n- 配置页 server.properties 不存在时自动创建默认文件\n- 新增关于页（版本+链接）\n- 控制台日志落盘 + 命令历史（上下箭头）\n- 控制台搜索/导出 + 崩溃日志保存\n- 世界详情（世界名/种子/难度/磁盘大小）\n- 崩溃自愈重启 + RTT 延迟显示\n- 内存告警 Toast + Toast 终端同步打印\n- 网络友好错误提示\n- UI 美化（按钮左对齐/超长文字/布尔值 ToggleButton）\n- FluentIcon 替代 emoji 图标"
 }
