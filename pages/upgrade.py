@@ -264,10 +264,20 @@ class UpgradePage(QWidget):
         info_card = CardWidget(inner)
         il = QVBoxLayout(info_card)
         il.setContentsMargins(16, 12, 16, 16); il.setSpacing(6)
-        il.addWidget(SubtitleLabel("当前信息", info_card))
+        il.addWidget(SubtitleLabel("当前状态", info_card))
         ctx = get_context()
-        self._info = BodyLabel(f"服务器目录: {ctx.server_dir}", info_card)
-        il.addWidget(self._info)
+        exe_name = config_mgr.get("server_exe", "bedrock_server.exe")
+        self._server_exe_path = os.path.join(ctx.server_dir, exe_name)
+        self._server_installed = os.path.exists(self._server_exe_path)
+
+        if self._server_installed:
+            self._info = BodyLabel(f"✅ BDS 已安装 — {ctx.server_dir}", info_card)
+            il.addWidget(self._info)
+        else:
+            self._info = BodyLabel(f"❌ 未检测到 BDS — 请先安装服务器", info_card)
+            self._info.setStyleSheet("color: #ffaa00;")
+            il.addWidget(self._info)
+            il.addWidget(CaptionLabel(f"预期路径: {self._server_exe_path}", info_card))
         layout.addWidget(info_card)
 
         # ── 版本列表 ──
@@ -346,6 +356,37 @@ class UpgradePage(QWidget):
         self._log.setStyleSheet("QPlainTextEdit{background:#1e1e1e;color:#ccc;border:1px solid #3a3a3a;border-radius:6px;padding:6px;font-family:Consolas,monospace;font-size:12px;}")
         ll.addWidget(self._log)
         layout.addWidget(log_card)
+
+        # ── 工具自更新 ──
+        tool_card = CardWidget(inner)
+        tl = QVBoxLayout(tool_card)
+        tl.setContentsMargins(16, 12, 16, 16); tl.setSpacing(8)
+        hdr = QHBoxLayout()
+        hdr.addWidget(SubtitleLabel("BDS Manager 自身更新", tool_card))
+        hdr.addStretch()
+        import main
+        self._tool_ver_label = CaptionLabel(f"当前 v{main.__version__}", tool_card)
+        hdr.addWidget(self._tool_ver_label)
+        tl.addLayout(hdr)
+
+        btn_row = QHBoxLayout()
+        self._tool_check_btn = PushButton("检查工具更新", tool_card, FluentIcon.SYNC)
+        self._tool_check_btn.clicked.connect(self._check_tool_update)
+        self._tool_install_btn = PushButton("安装更新并重启", tool_card, FluentIcon.UPDATE)
+        self._tool_install_btn.setEnabled(False)
+        self._tool_install_btn.clicked.connect(self._install_tool_update)
+        btn_row.addWidget(self._tool_check_btn)
+        btn_row.addWidget(self._tool_install_btn)
+        btn_row.addStretch()
+        tl.addLayout(btn_row)
+
+        self._tool_bar = ProgressBar(tool_card)
+        self._tool_bar.setVisible(False)
+        tl.addWidget(self._tool_bar)
+        self._tool_status = CaptionLabel("", tool_card)
+        tl.addWidget(self._tool_status)
+
+        layout.addWidget(tool_card)
         layout.addStretch()
 
         self._fetch_btn.clicked.connect(self._fetch)
@@ -356,6 +397,78 @@ class UpgradePage(QWidget):
             self._populate_table()
             self._scan_status.setText(f"已加载 {len(self._results)} 个缓存版本（点击浏览刷新）")
 
+    # ── 工具自更新 ──
+    def _check_tool_update(self):
+        from backend.self_update import CheckUpdateWorker, DownloadUpdateWorker, verify_sha256, is_valid_zip
+
+        self._tool_check_btn.setEnabled(False)
+        self._tool_status.setText("正在检查更新...")
+
+        self.__checker = CheckUpdateWorker(self)
+        self.__checker.result.connect(lambda s, v, u, sh: self._on_tool_check_done(s, v, u, sh))
+        self.__checker.start()
+
+    def _on_tool_check_done(self, status, remote_ver, dl_url, sha256):
+        self._tool_check_btn.setEnabled(True)
+        import main
+        if status == "error":
+            self._tool_status.setText(f"检查失败: {remote_ver}")
+            return
+        if status == "latest":
+            self._tool_status.setText(f"✅ 已是最新 v{main.__version__}")
+            return
+        if not dl_url:
+            self._tool_status.setText("❌ 未找到下载链接")
+            return
+
+        self._tool_status.setText(f"发现 v{remote_ver}，正在下载...")
+        self._tool_bar.setVisible(True)
+        self._tool_bar.setRange(0, 100)
+        self._tool_bar.setValue(0)
+
+        from backend.self_update import DownloadUpdateWorker
+        self.__dl = DownloadUpdateWorker(dl_url, remote_ver, self)
+        self.__dl.progress.connect(self._tool_bar.setValue)
+        self.__dl.finished.connect(lambda s, m, p: self._on_tool_dl_done(s, m, p, sha256))
+        self.__dl.start()
+
+    def _on_tool_dl_done(self, success, msg, path, sha256):
+        self._tool_bar.setVisible(False)
+        if not success:
+            self._tool_status.setText(f"❌ 下载失败: {msg}")
+            return
+        from backend.self_update import verify_sha256, is_valid_zip
+        if not is_valid_zip(path):
+            self._tool_status.setText("❌ 下载文件无效")
+            try: os.remove(path)
+            except OSError: pass
+            return
+        ok, sha_msg = verify_sha256(path, sha256)
+        if not ok:
+            self._tool_status.setText(f"❌ SHA256 校验失败: {sha_msg}")
+            try: os.remove(path)
+            except OSError: pass
+            return
+        self._tool_zip = path
+        self._tool_status.setText(f"✅ 就绪: {os.path.basename(path)} | {sha_msg}")
+        self._tool_install_btn.setEnabled(True)
+
+    def _install_tool_update(self):
+        if not hasattr(self, "_tool_zip") or not os.path.exists(self._tool_zip):
+            self._tool_status.setText("❌ 找不到更新包")
+            return
+        from PySide6.QtWidgets import QMessageBox
+        from backend.self_update import InstallUpdateWorker, restart_app
+        self._tool_status.setText("正在安装更新...")
+        self._tool_install_btn.setEnabled(False)
+        self.__installer = InstallUpdateWorker(self._tool_zip, self)
+        self.__installer.finished.connect(lambda s, _: (
+            QMessageBox.information(self, "更新完成", "BDS Manager 已更新！即将自动重启。") if s else None,
+            restart_app("main.py") if s else None
+        ))
+        self.__installer.start()
+
+    # ── 日志 ──
     def _log_line(self, msg: str):
         self._log.appendPlainText(msg)
         self._log.moveCursor(QTextCursor.End)
