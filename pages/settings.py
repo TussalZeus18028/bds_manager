@@ -105,7 +105,7 @@ class SettingsPage(QWidget):
 
         self._online_backup = ToggleButton("在线备份", backup)
         self._online_backup.setChecked(config_mgr.get("online_backup", True))
-        bl.addWidget(self._online_backup)
+        bl.addWidget(self._online_backup, alignment=Qt.AlignLeft)
         layout.addWidget(backup)
 
         # ═══ Toast 通知 ═══
@@ -116,7 +116,7 @@ class SettingsPage(QWidget):
 
         self._toast_show = ToggleButton("显示启动提示", toast)
         self._toast_show.setChecked(config_mgr.get("show_startup_toasts", True))
-        tl.addWidget(self._toast_show)
+        tl.addWidget(self._toast_show, alignment=Qt.AlignLeft)
 
         for name, key, dflt in [("错误", "toast_duration_error", 5000),
                                  ("警告", "toast_duration_warning", 4000),
@@ -177,7 +177,7 @@ class SettingsPage(QWidget):
 
         self._gh_auth = ToggleButton("启用 GitHub Token", gh)
         self._gh_auth.setChecked(config_mgr.get("github_auth_enabled", False))
-        gl.addWidget(self._gh_auth)
+        gl.addWidget(self._gh_auth, alignment=Qt.AlignLeft)
 
         self._gh_token = LineEdit(gh)
         self._gh_token.setText(config_mgr.get("github_token", ""))
@@ -194,11 +194,11 @@ class SettingsPage(QWidget):
 
         self._auto_update = ToggleButton("自动检查更新", other)
         self._auto_update.setChecked(config_mgr.get("auto_check_update", True))
-        ol.addWidget(self._auto_update)
+        ol.addWidget(self._auto_update, alignment=Qt.AlignLeft)
 
         self._multi_dl = ToggleButton("多线程下载", other)
         self._multi_dl.setChecked(config_mgr.get("multi_dl_enabled", True))
-        ol.addWidget(self._multi_dl)
+        ol.addWidget(self._multi_dl, alignment=Qt.AlignLeft)
 
         self._mem_warn = SpinBox(other)
         self._mem_warn.setRange(50, 99)
@@ -207,7 +207,7 @@ class SettingsPage(QWidget):
 
         self._close_tray = ToggleButton("点X最小化到托盘", other)
         self._close_tray.setChecked(config_mgr.get("close_to_tray", True))
-        ol.addWidget(self._close_tray)
+        ol.addWidget(self._close_tray, alignment=Qt.AlignLeft)
 
         self._crash_restart = SpinBox(other)
         self._crash_restart.setRange(0, 20)
