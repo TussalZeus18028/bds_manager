@@ -139,10 +139,10 @@ class TunnelPage(QWidget):
         # 按钮行（对齐旧版：锁定/保存/加载/打开目录/模板）
         btn_row = QHBoxLayout()
         btn_row.setSpacing(6)
-        self._edit_lock_btn = PushButton("🔒 点击编辑", cfg_card)
+        self._edit_lock_btn = PushButton("点击编辑", cfg_card, FluentIcon.EDIT)
         self._edit_lock_btn.setCheckable(True)
         self._edit_lock_btn.toggled.connect(self._toggle_ini_edit)
-        self._edit_lock_btn.setMaximumWidth(120)
+        self._edit_lock_btn.setMaximumWidth(130)
         btn_row.addWidget(self._edit_lock_btn)
 
         save_btn = PrimaryPushButton("保存", cfg_card, FluentIcon.SAVE)
@@ -207,10 +207,12 @@ class TunnelPage(QWidget):
         """锁定/解锁编辑器"""
         self._cfg_edit.setReadOnly(not checked)
         if checked:
-            self._edit_lock_btn.setText("✏️ 编辑中")
+            self._edit_lock_btn.setText("编辑中")
+            self._edit_lock_btn.setIcon(FluentIcon.PENCIL_INK)
             self._edit_lock_btn.setStyleSheet("color: #ffaa33; font-weight: bold;")
         else:
-            self._edit_lock_btn.setText("🔒 点击编辑")
+            self._edit_lock_btn.setText("点击编辑")
+            self._edit_lock_btn.setIcon(FluentIcon.EDIT)
             self._edit_lock_btn.setStyleSheet("")
 
     def _load_ini_from_file(self):
