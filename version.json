@@ -1,9 +1,9 @@
 {
-    "version": "2.1.2.00",
-    "release_date": "2026-07-10",
-    "download_url": "https://github.com/TussalZeus18028/bds_manager/releases/download/v2.1.2.00/bds_manager_v2.1.2.00.zip",
-    "sha256": "cff8bc3791ac8ac80a6ac19cb84e8b995d5bc1707b8938426f3008bf67b0d703",
-    "file_size": 80140,
-    "min_compatible_version": "2.0.0.00",
-    "changelog": "### ✨ 新功能\n- 在线备份：服务器运行时优先用原生 `save hold` / `save resume` 实现零停服备份，落盘就绪后再复制世界，完成自动恢复写入；若服务端不支持该命令则自动回退到「停服备份」\n- 卡顿 / 响应监控：定时发送 `list` 探测命令，取往返延迟(RTT)中位数，在仪表盘以「响应: xx ms 🟢🟡🔴」显示（vanilla BDS 无原生 TPS 输出，改用真实可测的响应延迟，不造假 TPS）\n- 备份轮转策略：可配置「保留份数」与「最小保留天数」，超量且超龄的旧备份自动清理\n- Webhook 通知：备份完成 / 服务器崩溃 / 内存告警三类事件可推送到自定义 Webhook（Discord / 企业微信 / 通用 JSON）\n- 控制台增强：日志实时搜索（上一个 / 下一个，支持回绕）与一键导出为 .log 文件\n- 崩溃自愈增强：可设置自动重启重试上限，超限后将崩溃日志尾部落盘保存，便于排查\n\n### 🧹 清理 / 优化\n- 移除失效的「强制备份(force_backup)」逻辑，统一为「自动备份」，避免语义混淆\n- 设置页新增「备份策略」与「Webhook 通知」配置组，全部配置项持久化到配置文件\n- 新增单元测试(pytest)覆盖版本比较 / 服务器输出解码 / 网络错误文案 / Webhook 发送 / 更新包顶层目录探测等纯函数"
+    "version": "3.0.0",
+    "release_date": "2026-07-22",
+    "download_url": "https://github.com/TussalZeus18028/bds_manager/releases/download/v3.0.0/bds_manager_v3.0.0.zip",
+    "sha256": "6a462fd90125318899134390ebf27f412d95a2867e5f0837dbde7e0b3693ef99",
+    "file_size": 50697,
+    "min_compatible_version": "3.0.0",
+    "changelog": "### Fluent UI 重写\n- 8 页面侧边栏\n- 双模式 Toast\n- 工具自更新\n- 版本缓存\n- 系统托盘\n- Webhook\n- 玩家追踪\n- 端口检测"
 }

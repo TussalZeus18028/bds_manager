@@ -1,14 +1,22 @@
+# BDS Manager Fluent - .gitignore
 __pycache__/
-.workbuddy/
 *.pyc
-*.pyo
-debug.log
-*.bak
-bds_manager_config.json
-bds_version_cache.json
-web_ui/
-Earlier version/
-Server/
 logs/
-backups/
-!release/
+*.log
+
+# Backups
+backups/pre_refactor_*
+backups/upgrade_backup_*
+
+# Temp
+_update_*.zip
+bds_manager_v*.zip
+*.bak_*
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
