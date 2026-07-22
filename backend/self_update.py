@@ -127,7 +127,9 @@ class CheckUpdateWorker(QThread):
             else:
                 self.result.emit("latest", remote, "", "")
         except Exception as e:
-            self.result.emit("error", str(e), "", "")
+            from backend.network import network_error_text
+            _, _, msg = network_error_text(e)
+            self.result.emit("error", msg, "", "")
 
 
 # ── 下载 Worker ──

@@ -17,6 +17,7 @@ from qfluentwidgets import (
 )
 
 from pages.dashboard import wrap_scrollable
+from pages.console_search import ConsoleSearchBar
 from shared.toast import toast_warning, toast_error
 
 # ---------- 暗色日志 ----------
@@ -128,7 +129,16 @@ class ConsolePage(QWidget):
         log_player.addWidget(player_card, 1)
         layout.addLayout(log_player)
 
-        # ── 命令输入 ──
+        # ── 搜索 + 命令输入 ──
+        # 搜索栏
+        search_card = CardWidget(inner)
+        search_layout = QHBoxLayout(search_card)
+        search_layout.setContentsMargins(12, 6, 12, 6)
+        self._search_bar = ConsoleSearchBar(search_card, self._log)
+        search_layout.addLayout(self._search_bar)
+        layout.addWidget(search_card)
+
+        # 命令输入
         cmd_card = CardWidget(inner)
         cmd_layout = QHBoxLayout(cmd_card)
         cmd_layout.setContentsMargins(16, 10, 16, 10)
@@ -138,11 +148,8 @@ class ConsolePage(QWidget):
         self._cmd_input.returnPressed.connect(self._send)
         send_btn = PushButton("发送", cmd_card, FluentIcon.SEND)
         send_btn.clicked.connect(self._send)
-        clear_btn = PushButton("清屏", cmd_card, FluentIcon.DELETE)
-        clear_btn.clicked.connect(self._log.clear)
         cmd_layout.addWidget(self._cmd_input, 1)
         cmd_layout.addWidget(send_btn)
-        cmd_layout.addWidget(clear_btn)
         layout.addWidget(cmd_card)
         layout.addStretch()
 

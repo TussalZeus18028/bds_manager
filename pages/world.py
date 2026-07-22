@@ -65,7 +65,8 @@ class WorldPage(QWidget):
         self._table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
         self._table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
         self._table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)
-        self._table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeToContents)
+        self._table.horizontalHeader().setSectionResizeMode(3, QHeaderView.Fixed)
+        self._table.setColumnWidth(3, 120)
         self._table.verticalHeader().setVisible(False)
         self._table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self._table.setSelectionBehavior(QAbstractItemView.SelectRows)
@@ -119,11 +120,19 @@ class WorldPage(QWidget):
             self._table.setItem(i, 1, QTableWidgetItem(f"{info['size_mb']:.1f} MB"))
             self._table.setItem(i, 2, QTableWidgetItem(info["modified"]))
             restore_btn = PushButton("还原", self._table, FluentIcon.CANCEL)
-            backup_filename = fn  # capture
-            restore_btn.clicked.connect(
-                lambda checked, fn=backup_filename: self._on_restore(fn)
-            )
-            self._table.setCellWidget(i, 3, restore_btn)
+            restore_btn.setMaximumWidth(50)
+            backup_filename = fn
+            restore_btn.clicked.connect(lambda checked, fn=backup_filename: self._on_restore(fn))
+            delete_btn = PushButton("删除", self._table)
+            delete_btn.setMaximumWidth(50)
+            delete_btn.clicked.connect(lambda checked, fn=backup_filename: self._on_delete(fn))
+            btn_widget = QWidget()
+            btn_layout = QHBoxLayout(btn_widget)
+            btn_layout.setContentsMargins(0, 0, 0, 0)
+            btn_layout.setSpacing(2)
+            btn_layout.addWidget(restore_btn)
+            btn_layout.addWidget(delete_btn)
+            self._table.setCellWidget(i, 3, btn_widget)
 
     # ---------- 手动备份 ----------
     def _on_backup(self):
@@ -201,6 +210,16 @@ class WorldPage(QWidget):
             toast_success("还原完成", message, self.window())
         else:
             toast_error("还原失败", message, self.window())
+
+    def _on_delete(self, filename: str):
+        ctx = get_context()
+        fp = os.path.join(ctx.backup_dir, filename)
+        try:
+            os.remove(fp)
+            toast_success("已删除", filename, self.window())
+        except Exception as e:
+            toast_error("删除失败", str(e), self.window())
+        self._refresh_list()
 
     # ---------- 自动备份 ----------
     def _schedule_auto_backup(self):

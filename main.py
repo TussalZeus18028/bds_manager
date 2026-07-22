@@ -9,6 +9,7 @@ BDS Manager Fluent -- 主入口
 import sys
 import os
 import logging
+from datetime import datetime
 
 # ---------- 屏蔽 QFluentWidgets 的 ANSI 彩色 Tips ----------
 _real_stdout = sys.stdout
@@ -76,6 +77,7 @@ class BDSFluentWindow(FluentWindow):
             config_mgr.get("window_width", 1200),
             config_mgr.get("window_height", 800),
         )
+        self.setMinimumSize(960, 620)
         self.navigationInterface.setExpandWidth(280)
 
     def _setup_tray(self):
@@ -318,6 +320,17 @@ class BDSFluentWindow(FluentWindow):
             toast_warning("自动重启", f"第 {self._restart_count} 次尝试", self)
             QTimer.singleShot(5000, self.start_server)
         else:
+            # 超出重试上限：保存崩溃日志
+            if self._restart_count >= max_retries and max_retries > 0:
+                log_text = self.console_page._log.toPlainText()
+                if log_text:
+                    try:
+                        crash_path = os.path.join(LOG_DIR, f"crash_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log")
+                        with open(crash_path, "w", encoding="utf-8") as f:
+                            f.write(log_text[-8000:])  # 末尾 8000 字符
+                        self.console_page._append_output(f"[系统] 崩溃日志已保存: {crash_path}", "#888")
+                    except Exception:
+                        pass
             self._restart_count = 0
             if hasattr(self, "_lag_timer"):
                 self._lag_timer.stop()
