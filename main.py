@@ -39,6 +39,7 @@ from pages.config import ConfigPage
 from pages.packs import PacksPage
 from pages.upgrade import UpgradePage
 from pages.tunnel import TunnelPage
+from pages.about import AboutPage
 
 # ---------- 日志 ----------
 os.makedirs(LOG_DIR, exist_ok=True)
@@ -137,6 +138,13 @@ class BDSFluentWindow(FluentWindow):
         self.tunnel_page = TunnelPage(self)
         self.tunnel_page.setObjectName("tunnel")
         self.addSubInterface(self.tunnel_page, FluentIcon.LINK, "隧道")
+
+        self.about_page = AboutPage(self)
+        self.about_page.setObjectName("about")
+        self.addSubInterface(
+            self.about_page, FluentIcon.INFO, "关于",
+            position=NavigationItemPosition.BOTTOM,
+        )
 
         self.settings_page = SettingsPage(self)
         self.settings_page._main_window = self

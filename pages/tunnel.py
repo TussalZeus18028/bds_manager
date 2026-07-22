@@ -3,11 +3,12 @@
 内网穿透页面 —— ChmlFrp / frpc 隧道管理。
 """
 
-import os, subprocess
+import os, subprocess, sys
 
 from PySide6.QtCore import Qt, QThread, Signal
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPlainTextEdit, QFileDialog,
+    QMessageBox,
 )
 from PySide6.QtGui import QTextCursor
 from qfluentwidgets import (
@@ -127,15 +128,45 @@ class TunnelPage(QWidget):
         cfl.addWidget(SubtitleLabel("frpc.ini 配置", cfg_card))
         self._cfg_edit = QPlainTextEdit(cfg_card)
         self._cfg_edit.setPlaceholderText("[common]\nserver_addr = example.com\nserver_port = 7000\ntoken = your_token\n\n[your_service]\ntype = udp\nlocal_ip = 127.0.0.1\nlocal_port = 19132\nremote_port = 19132")
+        self._cfg_edit.setReadOnly(True)  # 默认锁定防误触
         self._cfg_edit.setMinimumHeight(120)
         self._cfg_edit.setStyleSheet("""
             QPlainTextEdit { background: #1e1e1e; color: #ccc; border: 1px solid #3a3a3a; border-radius: 6px;
                              padding: 6px; font-family: Consolas, monospace; font-size: 12px; }
         """)
         cfl.addWidget(self._cfg_edit)
-        save_btn = PrimaryPushButton("保存 frpc.ini", cfg_card, FluentIcon.SAVE)
+
+        # 按钮行（对齐旧版：锁定/保存/加载/打开目录/模板）
+        btn_row = QHBoxLayout()
+        btn_row.setSpacing(6)
+        self._edit_lock_btn = PushButton("🔒 点击编辑", cfg_card)
+        self._edit_lock_btn.setCheckable(True)
+        self._edit_lock_btn.toggled.connect(self._toggle_ini_edit)
+        self._edit_lock_btn.setMaximumWidth(120)
+        btn_row.addWidget(self._edit_lock_btn)
+
+        save_btn = PrimaryPushButton("保存", cfg_card, FluentIcon.SAVE)
         save_btn.clicked.connect(self._save_config)
-        cfl.addWidget(save_btn)
+        save_btn.setMaximumWidth(70)
+        btn_row.addWidget(save_btn)
+
+        load_btn = PushButton("加载", cfg_card, FluentIcon.FOLDER)
+        load_btn.clicked.connect(self._load_ini_from_file)
+        load_btn.setMaximumWidth(60)
+        btn_row.addWidget(load_btn)
+
+        open_dir_btn = PushButton("打开目录", cfg_card, FluentIcon.FOLDER)
+        open_dir_btn.clicked.connect(self._open_frpc_dir)
+        open_dir_btn.setMaximumWidth(80)
+        btn_row.addWidget(open_dir_btn)
+
+        template_btn = PushButton("模板", cfg_card, FluentIcon.HELP)
+        template_btn.clicked.connect(self._load_template)
+        template_btn.setMaximumWidth(60)
+        btn_row.addWidget(template_btn)
+
+        btn_row.addStretch()
+        cfl.addLayout(btn_row)
         layout.addWidget(cfg_card)
 
         layout.addStretch()
@@ -164,11 +195,76 @@ class TunnelPage(QWidget):
     def _save_config(self):
         cfg = self._cfg_path()
         try:
+            os.makedirs(os.path.dirname(cfg), exist_ok=True)
             with open(cfg, "w", encoding="utf-8") as f:
                 f.write(self._cfg_edit.toPlainText())
+            self._append_log(f"✅ frpc.ini 已保存: {cfg}", "#4CAF50")
             toast_success("已保存", cfg, self.window())
         except Exception as e:
             toast_error("保存失败", str(e), self.window())
+
+    def _toggle_ini_edit(self, checked):
+        """锁定/解锁编辑器"""
+        self._cfg_edit.setReadOnly(not checked)
+        if checked:
+            self._edit_lock_btn.setText("✏️ 编辑中")
+            self._edit_lock_btn.setStyleSheet("color: #ffaa33; font-weight: bold;")
+        else:
+            self._edit_lock_btn.setText("🔒 点击编辑")
+            self._edit_lock_btn.setStyleSheet("")
+
+    def _load_ini_from_file(self):
+        """从文件加载 frpc.ini（不清空，追加到编辑器）"""
+        cfg = self._cfg_path()
+        if not os.path.exists(cfg):
+            toast_warning("文件不存在", f"frpc.ini 不存在：{cfg}", self.window())
+            return
+        try:
+            with open(cfg, "r", encoding="utf-8") as f:
+                self._cfg_edit.setPlainText(f.read())
+            self._append_log(f"📂 已加载: {cfg}", "#888")
+            toast_success("已加载", cfg, self.window())
+        except Exception as e:
+            toast_error("加载失败", str(e), self.window())
+
+    def _open_frpc_dir(self):
+        """打开 frpc.exe 所在目录"""
+        dir_path = os.path.dirname(self._path_edit.text())
+        if not dir_path or not os.path.exists(dir_path):
+            toast_warning("目录不存在", "请先设置正确的 frpc.exe 路径", self.window())
+            return
+        try:
+            os.startfile(dir_path) if sys.platform == "win32" else subprocess.Popen(["xdg-open", dir_path])
+        except Exception as e:
+            toast_error("打开目录失败", str(e), self.window())
+
+    def _load_template(self):
+        """加载 frpc.ini 模板"""
+        template = (
+            "# frpc.ini 配置模板\n"
+            "# 请访问 ChmlFrp 官网获取隧道信息：https://www.chmlfrp.net/\n"
+            "# 在官网创建隧道后，复制生成的配置到下方\n"
+            "#\n"
+            "# 示例配置:\n"
+            "# [common]\n"
+            "# server_addr = 你的服务器地址\n"
+            "# server_port = 7000\n"
+            "# token = 你的token\n"
+            "#\n"
+            "# [你的隧道名称]\n"
+            "# type = tcp\n"
+            "# local_ip = 127.0.0.1\n"
+            "# local_port = 19132\n"
+            "# remote_port = 外网端口\n"
+        )
+        reply = QMessageBox.question(
+            self, "加载模板",
+            "将用模板替换当前编辑内容，是否继续？\n\n"
+            "提示：请前往 https://www.chmlfrp.net/ 创建隧道。",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No,
+        )
+        if reply == QMessageBox.Yes:
+            self._cfg_edit.setPlainText(template)
 
     def _append_log(self, text: str, color="#ccc"):
         self._log.appendHtml(

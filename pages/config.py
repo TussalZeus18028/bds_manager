@@ -8,7 +8,7 @@ import os
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QTableWidget, QTableWidgetItem,
-    QHeaderView, QAbstractItemView, QFileDialog,
+    QHeaderView, QAbstractItemView, QFileDialog, QMessageBox,
 )
 from qfluentwidgets import (
     CardWidget, SubtitleLabel, StrongBodyLabel, BodyLabel,
@@ -17,7 +17,40 @@ from qfluentwidgets import (
 )
 
 from shared.config import get_context
-from shared.toast import toast_success, toast_error
+from shared.toast import toast_success, toast_error, toast_info
+
+# 默认 server.properties 模板
+_DEFAULT_PROPERTIES = """#server.properties
+server-name=Dedicated Server
+gamemode=survival
+force-gamemode=false
+difficulty=easy
+allow-cheats=false
+max-players=10
+online-mode=true
+allow-list=false
+server-port=19132
+server-portv6=19133
+enable-lan-visibility=true
+view-distance=32
+tick-distance=4
+player-idle-timeout=30
+max-threads=8
+level-name=Bedrock level
+level-seed=
+default-player-permission-level=member
+texturepack-required=false
+content-log-file-enabled=false
+compression-threshold=1
+compression-algorithm=zlib
+op-permission-level=4
+server-authoritative-movement=server-auth
+server-authoritative-block-breaking=false
+chat-restriction=None
+disable-player-interaction=false
+emit-server-telemetry=true
+correct-player-movement=false
+"""
 from pages.dashboard import wrap_scrollable
 
 # --- server.properties 完整属性定义（来自旧版 ConfigTab）---
@@ -164,6 +197,14 @@ class ConfigPage(QWidget):
         ctx = get_context()
         fp = ctx.server_properties
         if not os.path.exists(fp):
+            reply = QMessageBox.question(
+                self, "配置文件不存在",
+                f"server.properties 不存在：\n{fp}\n\n是否创建默认配置文件？",
+                QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes,
+            )
+            if reply == QMessageBox.Yes:
+                self._create_default_properties()
+                self._load_properties()  # 递归重新加载
             return
         try:
             with open(fp, "r", encoding="utf-8") as f:
@@ -188,6 +229,18 @@ class ConfigPage(QWidget):
                             if idx >= 0: w.setCurrentIndex(idx)
         except Exception as e:
             toast_error("加载失败", str(e), self.window())
+
+    def _create_default_properties(self):
+        """创建默认 server.properties 文件"""
+        ctx = get_context()
+        fp = ctx.server_properties
+        try:
+            os.makedirs(os.path.dirname(fp), exist_ok=True)
+            with open(fp, "w", encoding="utf-8") as f:
+                f.write(_DEFAULT_PROPERTIES)
+            toast_success("配置文件已创建", f"已生成默认 server.properties", self.window())
+        except Exception as e:
+            toast_error("创建失败", str(e), self.window())
 
     def _save(self):
         ctx = get_context()
