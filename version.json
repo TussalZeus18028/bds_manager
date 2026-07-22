@@ -2,8 +2,8 @@
     "version": "3.0.0",
     "release_date": "2026-07-22",
     "download_url": "https://github.com/TussalZeus18028/bds_manager/releases/download/v3.0.0/bds_manager_v3.0.0.zip",
-    "sha256": "197d9646eeec64695dcfe6d0777576b4604fd643a29fe89b53cb207b7c9120b1",
-    "file_size": 53021,
+    "sha256": "6a462fd90125318899134390ebf27f412d95a2867e5f0837dbde7e0b3693ef99",
+    "file_size": 50697,
     "min_compatible_version": "3.0.0",
-    "changelog": "### Fluent UI 重写 (PySide6 + QFluentWidgets)\n- 8 页面侧边栏导航\n- 双模式 Toast\n- 工具自更新\n- 版本缓存\n- 系统托盘\n- Webhook\n- 玩家追踪\n- 端口检测"
+    "changelog": "### Fluent UI 重写\n- 8 页面侧边栏\n- 双模式 Toast\n- 工具自更新\n- 版本缓存\n- 系统托盘\n- Webhook\n- 玩家追踪\n- 端口检测"
 }
