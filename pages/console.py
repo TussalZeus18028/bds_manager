@@ -194,6 +194,9 @@ class ConsolePage(QWidget):
         )
         if self._auto_scroll:
             self._log.moveCursor(QTextCursor.End)
+        win = self.window()
+        if hasattr(win, "check_lag_response"):
+            win.check_lag_response(text)
 
     def _track_player(self, text: str):
         """解析 BDS 输出中的玩家事件，更新玩家列表。"""

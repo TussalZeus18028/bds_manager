@@ -216,8 +216,8 @@ class BDSFluentWindow(FluentWindow):
         config_mgr.set("window_height", self.height())
 
     def closeEvent(self, event):
-        """点 X 时最小化到托盘；用托盘右键退出或 Ctrl+Q 真正退出。"""
-        if self._tray and self._tray.isVisible():
+        """关闭行为：按用户设置选择最小化到托盘或直接退出。"""
+        if self._tray and self._tray.isVisible() and config_mgr.get("close_to_tray", True):
             event.ignore()
             self.hide()
             return
@@ -285,6 +285,14 @@ class BDSFluentWindow(FluentWindow):
 
         self.dashboard_page._on_server_started()
         self.console_page._on_server_started()
+
+        # RTT 延迟探测 + 玩家列表刷新（每 30 秒）
+        self._restart_count = 0
+        self._lag_samples: list[float] = []
+        if not hasattr(self, "_lag_timer") or not self._lag_timer:
+            self._lag_timer = QTimer(self)
+            self._lag_timer.timeout.connect(self._lag_ping)
+        self._lag_timer.start(30000)
         return None  # 成功
 
     def stop_server(self):
@@ -292,15 +300,60 @@ class BDSFluentWindow(FluentWindow):
         if self._server and self._server.is_running:
             self.console_page._append_output("[系统] 正在发送 stop 命令...", "#ffaa00")
             self._server.stop_server()
+        if hasattr(self, "_lag_timer"):
+            self._lag_timer.stop()
 
     def _on_server_stopped(self):
         send_webhook("crash", "服务器停止", "BDS 服务器进程已退出")
         self.dashboard_page._on_server_stopped()
         self.console_page._on_server_stopped()
 
+        # 崩溃自愈：自动重启（已在 start_server 重置 _restart_count）
+        max_retries = config_mgr.get("max_restart_retries", 5)
+        if max_retries > 0 and self._restart_count < max_retries:
+            self._restart_count += 1
+            msg = f"服务器崩溃，{5}秒后自动重启（第 {self._restart_count}/{max_retries} 次）"
+            self.console_page._append_output(f"[系统] {msg}", "#ffaa00")
+            from shared.toast import toast_warning
+            toast_warning("自动重启", f"第 {self._restart_count} 次尝试", self)
+            QTimer.singleShot(5000, self.start_server)
+        else:
+            self._restart_count = 0
+            if hasattr(self, "_lag_timer"):
+                self._lag_timer.stop()
+
     def _on_status_changed(self, running: bool):
         self.dashboard_page._on_status_changed(running)
         self.console_page._on_status_changed(running)
+
+    # ── RTT 延迟探测 ──
+    _lag_ping_sent = 0.0
+    _lag_ping_pending = False
+
+    def _lag_ping(self):
+        if not self._server or not self._server.is_running:
+            return
+        import time
+        self._lag_ping_sent = time.time()
+        self._lag_ping_pending = True
+        self._server.send_command("list")
+
+    def check_lag_response(self, text: str):
+        """供 console_page 在收到输出时调用，检测 list 响应计算 RTT。"""
+        import time, re
+        if self._lag_ping_pending and re.search(r"players online", text, re.I):
+            rtt = (time.time() - self._lag_ping_sent) * 1000.0
+            if 0 < rtt < 60000:
+                self._lag_samples.append(rtt)
+                if len(self._lag_samples) > 10:
+                    self._lag_samples.pop(0)
+            self._lag_ping_pending = False
+            # 更新仪表盘 RTT
+            if self._lag_samples:
+                s = sorted(self._lag_samples)
+                med = s[len(s) // 2]
+                color = "#4CAF50" if med < 80 else ("#ffaa00" if med < 200 else "#ff5555")
+                self.dashboard_page.status_card.update_rtt(med, color)
 
     # ---------- 资源监控（共享）----------
     def _on_stats_updated(self, snap: SystemStatsSnapshot):

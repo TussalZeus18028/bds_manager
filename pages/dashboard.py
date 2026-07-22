@@ -68,9 +68,11 @@ class StatusCard(CardWidget):
         self._cpu_label = CaptionLabel("CPU: —%", self)
         self._mem_label = CaptionLabel("内存: —%", self)
         self._disk_label = CaptionLabel("磁盘: —%", self)
+        self._rtt_label = CaptionLabel("RTT: —ms", self)
         info_row.addWidget(self._cpu_label)
         info_row.addWidget(self._mem_label)
         info_row.addWidget(self._disk_label)
+        info_row.addWidget(self._rtt_label)
         info_row.addStretch()
         ctx = get_context()
         info_row.addWidget(CaptionLabel(f"目录: {ctx.server_dir}", self))
@@ -103,6 +105,12 @@ class StatusCard(CardWidget):
             self._status_badge.setStyleSheet("color: #888;")
             self._start_btn.setEnabled(True)
             self._stop_btn.setEnabled(False)
+            self._rtt_label.setText("RTT: —ms")
+            self._rtt_label.setStyleSheet("")
+
+    def update_rtt(self, ms: float, color: str):
+        self._rtt_label.setText(f"RTT: {ms:.0f}ms")
+        self._rtt_label.setStyleSheet(f"color: {color}; font-weight: bold;")
 
 
 # ---------- 资源卡片 ----------

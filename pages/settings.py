@@ -203,6 +203,15 @@ class SettingsPage(QWidget):
         self._mem_warn.setRange(50, 99)
         self._mem_warn.setValue(config_mgr.get("mem_warn_threshold", 80))
         ol.addLayout(_row("内存告警阈值(%)", self._mem_warn, other))
+
+        self._close_tray = ToggleButton("关闭窗口 → 最小化到托盘", other)
+        self._close_tray.setChecked(config_mgr.get("close_to_tray", True))
+        ol.addWidget(self._close_tray)
+
+        self._crash_restart = SpinBox(other)
+        self._crash_restart.setRange(0, 20)
+        self._crash_restart.setValue(config_mgr.get("max_restart_retries", 5))
+        ol.addLayout(_row("崩溃自动重启次数(0=禁用)", self._crash_restart, other))
         layout.addWidget(other)
 
         # ═══ 保存 ═══
@@ -265,5 +274,7 @@ class SettingsPage(QWidget):
         config_mgr.set("auto_check_update", self._auto_update.isChecked())
         config_mgr.set("multi_dl_enabled", self._multi_dl.isChecked())
         config_mgr.set("mem_warn_threshold", self._mem_warn.value())
+        config_mgr.set("close_to_tray", self._close_tray.isChecked())
+        config_mgr.set("max_restart_retries", self._crash_restart.value())
         config_mgr.save()
         toast_success("保存成功", "设置已保存", self.window())
