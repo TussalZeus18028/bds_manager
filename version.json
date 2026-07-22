@@ -2,8 +2,8 @@
     "version": "3.01.00",
     "release_date": "2026-07-22",
     "download_url": "https://github.com/TussalZeus18028/bds_manager/releases/download/v3.01.00/bds_manager_v3.01.00.zip",
-    "sha256": "76ec0b0f08ca4ee69154b8f4663ed1b34a34d715f6976f055bb19202bc5d1a7d",
-    "file_size": 107519,
+    "sha256": "6ac41c2e1f76fa2a3a550485f0ce88ec5bf268364fbb3f8eba91b0bc2b116b6e",
+    "file_size": 105581,
     "min_compatible_version": "3.01.00",
     "changelog": "## v3.01.00 (2026-07-22)"
 }
