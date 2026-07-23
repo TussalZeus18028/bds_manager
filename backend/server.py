@@ -214,7 +214,7 @@ class ServerProcess(QThread):
         """停止 BDS。
 
         graceful=True: 先 save-all → save-on → stop → 等待 grace 秒 → terminate → 1s 后 kill
-        graceful=False: 立即 terminate → 1s 后 kill
+        graceful=False: stop → 等 3s → 未退出则 terminate → 1s 后 kill
         """
         if not self.process:
             return
@@ -237,11 +237,16 @@ class ServerProcess(QThread):
                 self.send_command("stop")
             except Exception:
                 pass
+            # v3.02.01: 等 3 秒让 BDS 处理 stop 命令并自行退出
+            for _ in range(30):  # 3 秒 / 0.1 秒步进
+                if self.process.poll() is not None:
+                    return
+                time.sleep(0.1)
         if self.process.poll() is None:
             if graceful:
                 logger.warning("BDS 未在 %ds 内退出，强制 terminate", grace_seconds)
             else:
-                logger.info("BDS 未立即退出，强制 terminate")
+                logger.info("BDS 未在 3s 内退出，强制 terminate")
             try:
                 self.process.terminate()
             except Exception:
