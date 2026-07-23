@@ -130,7 +130,7 @@ class BackupWorker(BaseWorker):
 
             file_count = 0
             total_bytes = 0
-            with zipfile.ZipFile(backup_path, "w", zipfile.ZIP_DEFLATED) as zipf:
+            with zipfile.ZipFile(backup_path, "w", zipfile.ZIP_DEFLATED, compresslevel=1) as zipf:
                 for root, dirs, files in os.walk(self.world_path):
                     for file in files:
                         if self._cancel:

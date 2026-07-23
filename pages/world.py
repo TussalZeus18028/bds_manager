@@ -28,6 +28,7 @@ from qfluentwidgets import (
 
 from shared.config import config_mgr, get_context
 from shared.toast import toast_info, toast_success, toast_warning, toast_error
+from shared.workers import SimpleWorker
 from shared.errors import FileMissingError
 from backend.webhook import send_webhook
 from backend.backup import (
@@ -51,6 +52,21 @@ def _format_size_mb(size_mb: float) -> str:
     if size_mb >= 1024:
         return f"{size_mb/1024:.2f} GB"
     return f"{size_mb:.1f} MB"
+
+
+def _calc_world_size(world_path: str) -> str:
+    """v3.02.01: 在后台线程计算世界目录占用。"""
+    total_size = 0
+    try:
+        for root, _, files in os.walk(world_path):
+            for f in files:
+                try:
+                    total_size += os.path.getsize(os.path.join(root, f))
+                except OSError:
+                    pass
+    except Exception:
+        return "(无法计算)"
+    return _format_size(total_size)
 
 
 def _time_bucket(mtime: float) -> str:
@@ -337,7 +353,7 @@ class WorldPage(QWidget):
         props = ctx.server_properties
         info_lines = []
         size_text = ""
-        # 从 server.properties 提取
+        # 从 server.properties 提取（快速，主线程无阻塞）
         if os.path.exists(props):
             try:
                 with open(props, encoding="utf-8") as f:
@@ -364,26 +380,31 @@ class WorldPage(QWidget):
                 pass
         if not info_lines:
             info_lines.append("(未检测到 server.properties)")
-        # 磁盘大小
+        info_lines.append("磁盘占用: <b>正在计算…</b>")
+        self._world_info.setText("<br>".join(info_lines))
+
+        # v3.02.01: 世界目录 os.walk 可能耗时数秒（数万文件），移到后台线程
         if os.path.isdir(ctx.worlds_dir):
             worlds = [d for d in os.listdir(ctx.worlds_dir)
                       if os.path.isdir(os.path.join(ctx.worlds_dir, d))]
             if worlds:
                 wp = os.path.join(ctx.worlds_dir, worlds[0])
-                total_size = 0
-                try:
-                    for root, _, files in os.walk(wp):
-                        for f in files:
-                            try:
-                                total_size += os.path.getsize(os.path.join(root, f))
-                            except OSError:
-                                pass
-                except Exception:
-                    pass
-                size_text = _format_size(total_size)
-                info_lines.append(f"磁盘占用: <b>{size_text}</b>")
-        # HTML 渲染
-        self._world_info.setText("<br>".join(info_lines))
+                self._size_worker = SimpleWorker(
+                    lambda: _calc_world_size(wp),
+                    parent=self,
+                )
+                self._size_worker.finished.connect(
+                    lambda ok, result: self._on_world_size_done(ok, result)
+                )
+                self._size_worker.start()
+
+    def _on_world_size_done(self, ok, result):
+        """v3.02.01: 后台线程算完世界大小后更新 UI。"""
+        current = self._world_info.text()
+        size_text = result if ok else "(无法计算)"
+        # 替换"正在计算…"为实际值
+        updated = current.replace("正在计算…", size_text)
+        self._world_info.setText(updated)
 
     # ---------- 手动备份 ----------
     def _on_backup(self):
