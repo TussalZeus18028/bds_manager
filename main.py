@@ -749,10 +749,8 @@ class BDSFluentWindow(FluentWindow):
     def stop_server(self):
         if self._server and self._server.is_running:
             self.console_page._append_output("[系统] 正在停止服务器...", "#ffaa00")
-            # 优雅停服
-            graceful = config_mgr.get("graceful_shutdown", True)
-            grace_sec = config_mgr.get("shutdown_grace_seconds", 10)
-            self._server.stop_server(graceful=graceful, grace_seconds=grace_sec)
+            # v3.02.01: 直接 stop，不经过 save-all + 10s 等待（BDS 经常卡在等待阶段不动）
+            self._server.stop_server(graceful=False)
         if hasattr(self, "_lag_timer") and self._lag_timer:
             self._lag_timer.stop()
 
