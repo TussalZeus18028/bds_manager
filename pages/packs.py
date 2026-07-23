@@ -340,7 +340,7 @@ class PacksPage(QWidget):
         table.horizontalHeader().setSectionResizeMode(3, QHeaderView.Fixed)
         table.setColumnWidth(3, 90)
         table.horizontalHeader().setSectionResizeMode(4, QHeaderView.Fixed)
-        table.setColumnWidth(4, 200)
+        table.setColumnWidth(4, 260)  # v3.02.01: 加宽容纳 详情+启用/禁用+移除 三按钮
         table.verticalHeader().setVisible(False)
         table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         table.setSelectionBehavior(QAbstractItemView.SelectRows)
