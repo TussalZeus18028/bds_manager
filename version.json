@@ -2,8 +2,8 @@
     "version": "3.01.03",
     "release_date": "2026-07-23",
     "download_url": "https://github.com/TussalZeus18028/bds_manager/releases/download/v3.01.03/bds_manager_v3.01.03.zip",
-    "sha256": "pending-build",
-    "file_size": 0,
+    "sha256": "acb5dbcbfb71bfd0030b2adb495efc7c839a840b3493c92d6c25de50105a4824",
+    "file_size": 105053,
     "min_compatible_version": "2.00.00",
     "changelog": "## v3.01.03 (2026-07-23)\n\n### 关键 bug 修复\n- **跨主版本升级后实际启动的是旧版**（用户反馈）\n  - **根因**：旧版 Manager/ 的 `_restart_app` 写死了 `subprocess.Popen(['python', 'bds_manager.py'])`\n  - 旧版下载并解压新版 zip 后（main.py / pages/ / backend/ / run.bat 全部就位），\n    重启时仍启动的是 `bds_manager.py` → 用户看到旧版 UI\n  - **修复**：新版 `InstallUpdateWorker` 解压完成后，自动把 `bds_manager.py` 覆盖为一个小 stub（~7 行）\n    ```python\n    import os, sys\n    _SD = os.path.dirname(os.path.abspath(__file__))\n    os.chdir(_SD)\n    sys.path.insert(0, _SD)\n    import main  # 触发 main.py 执行\n    ```\n  - 旧版本 `subprocess.Popen('bds_manager.py')` 现在会通过 stub 自动转发到 main.py\n\n### 改进\n- 无需修改旧版 bds_manager.py 代码 — 用 zip 内置 stub 修复跨版本升级\n- 不影响 v3.x → v3.y 升级（v3 已经是模块化，没有 bds_manager.py）\n- v2.x 升级后即可享受新版 UI（资源曲线、控制台过滤、备份预览等）\n\n### 验证\n- subprocess.Popen('bds_manager.py') → stub → import main → main.py 启动 ✅\n- 27 个 .py 文件 py_compile 通过 ✅\n- 4 场景 messagebox 引导测试通过（v3.01.02 验证）✅"
 }
