@@ -2,8 +2,8 @@
     "version": "3.01.02",
     "release_date": "2026-07-23",
     "download_url": "https://github.com/TussalZeus18028/bds_manager/releases/download/v3.01.02/bds_manager_v3.01.02.zip",
-    "sha256": "pending-build",
-    "file_size": 0,
-    "min_compatible_version": "2.00.00",
-    "changelog": "## v3.01.02 (2026-07-23)\n\n### 改进\n- **跨主版本升级体验升级**：旧版 Manager/ 的「版本过低 → 直接拒绝」改为新版「**主动引导 + 用户选择**」\n  - 检测到跨主版本升级时（如 v1.x / 早期 v2.x → v3.x），弹 MessageBox 让用户选择：\n    - **打开下载页（推荐）**：浏览器打开 GitHub Releases，手动下载 zip 升级（更稳妥）\n    - **继续自动升级**：风险自担，但 InstallUpdateWorker 会自动迁移旧版特征文件\n    - **取消**：什么都不做\n  - 旧版的被动拒绝体验被替换，新版给用户完整控制权\n- **步骤说明内置到弹窗**：1) 打开下载页 2) 下载 zip 3) 解压覆盖 4) 重启 — 用户不用猜\n\n### 兼容性逻辑\n- min_compatible_version 仍为 2.00.00（v2.x 可直接升级，不需要引导）\n- 仅当 v_local < 2.00.00 时（如 v1.99.99）才弹引导框\n- 「继续自动升级」仍会走 InstallUpdateWorker 的 v2.x 迁移清理路径\n\n### 修复\n- 之前 v3.01.01 的「too_old 拒绝」过于被动，已替换为引导式选择"
+    "sha256": "3306c23c6ec5f52667440fcaaf1be0ecf43c37db6ad8270dfced1bafd6d555ea",
+    "file_size": 104512,
+    "min_compatible_version": "3.01.02",
+    "changelog": "v3.01.02: 跨主版本升级改为主动引导（MessageBox 三选项：打开下载页/继续自动升级/取消）"
 }
