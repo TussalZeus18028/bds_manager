@@ -28,6 +28,8 @@ from qfluentwidgets import (
 from shared.config import config_mgr, SCRIPT_DIR, CONFIG_FILE
 from shared.toast import toast_success, toast_warning, toast_error
 from pages.dashboard import wrap_scrollable
+from backend.shortcuts import ShortcutManager
+from components.key_capture import KeyCaptureButton
 
 logger = logging.getLogger("bds_manager")
 
@@ -330,6 +332,9 @@ class SettingsPage(QWidget):
         ol.addLayout(_row("崩溃自动重启次数(0=禁用)", self._crash_restart, other))
         layout.addWidget(other)
 
+        # ═══ 快捷键 (v3.02.00) ═══
+        self._build_shortcut_card(inner, layout)
+
         # ═══ 导入/导出 + 保存 ═══
         io_row = QHBoxLayout()
         export_btn = PushButton("导出配置", inner, FluentIcon.SHARE)
@@ -347,6 +352,126 @@ class SettingsPage(QWidget):
         sr.addWidget(save_btn)
         layout.addLayout(sr)
         layout.addStretch()
+
+    # ── 快捷键 (v3.02.00) ──
+    def _build_shortcut_card(self, inner, layout):
+        """构造快捷键编辑卡片：分组表格 + 双击录制 + 冲突检测。"""
+        sc_card = CardWidget(inner)
+        sc = QVBoxLayout(sc_card)
+        sc.setContentsMargins(16, 12, 16, 16); sc.setSpacing(8)
+        sc.addWidget(SubtitleLabel("快捷键", sc_card))
+        sc.addWidget(CaptionLabel("双击键位单元格录制新快捷键。Esc 取消录制。", sc_card))
+
+        mgr = ShortcutManager.get_instance()
+        # 顶部按钮：恢复默认
+        top_row = QHBoxLayout()
+        top_row.addStretch()
+        reset_btn = PushButton("全部恢复默认", sc_card, FluentIcon.UNDO)
+        reset_btn.clicked.connect(self._on_shortcuts_reset_all)
+        top_row.addWidget(reset_btn)
+        sc.addLayout(top_row)
+
+        # 按作用域分组
+        scopes = [
+            ("全局",   "global"),
+            ("控制台", "console"),
+            ("仪表盘", "dashboard"),
+        ]
+        self._capture_buttons: dict[str, KeyCaptureButton] = {}
+        for scope_label, scope_key in scopes:
+            sc.addWidget(StrongBodyLabel(scope_label, sc_card))
+            records = mgr.list_records(scope_key)
+            if not records:
+                sc.addWidget(CaptionLabel("（无）", sc_card))
+                continue
+            for rec in records:
+                row = QHBoxLayout()
+                row.setSpacing(8)
+                lbl = BodyLabel(rec.label, sc_card)
+                lbl.setMinimumWidth(160)
+                row.addWidget(lbl)
+                btn = KeyCaptureButton(rec.current_key, sc_card)
+                btn.set_text(rec.current_key)
+                btn.capture_completed.connect(
+                    lambda new_key, aid=rec.action_id: self._on_shortcut_captured(aid, new_key)
+                )
+                self._capture_buttons[rec.action_id] = btn
+                row.addWidget(btn)
+                # 重置单个
+                rb = PushButton("重置", sc_card)
+                rb.clicked.connect(lambda _checked=False, aid=rec.action_id: self._on_shortcut_reset_one(aid))
+                row.addWidget(rb)
+                row.addStretch()
+                sc.addLayout(row)
+        layout.addWidget(sc_card)
+
+    def _on_shortcut_captured(self, action_id: str, new_key: str):
+        """用户完成录制：检测冲突，弹三选项 MessageBox。"""
+        mgr = ShortcutManager.get_instance()
+        rec = mgr.get_record(action_id)
+        if rec is None:
+            return
+        if new_key == rec.current_key:
+            return  # 未变
+        conflicts = mgr.detect_conflicts(new_key, rec.scope, action_id)
+        if not conflicts:
+            mgr.force_remap(action_id, new_key)
+            mgr.save_user_overrides()
+            self._capture_buttons[action_id].set_text(new_key)
+            toast_success("已更新", f"{rec.label} → {new_key}", self.window())
+            return
+        # 有冲突 → 弹 MessageBox
+        from qfluentwidgets import MessageBox
+        conflict_labels = ", ".join(mgr.get_record(c).label for c in conflicts if mgr.get_record(c))
+        box = MessageBox(
+            "快捷键冲突",
+            f"\"{new_key}\" 已被以下动作占用：\n  • {conflict_labels}\n\n"
+            f"选择处理方式：",
+            self.window(),
+        )
+        btn_overwrite = box.yesButton
+        btn_overwrite.setText("强制覆盖")
+        btn_cancel = box.cancelButton
+        btn_cancel.setText("重新设置")
+        # 加一个 "改成 Esc+某" 的第三选项（先简化为两选项：覆盖 / 取消）
+        if box.exec():
+            mgr.force_remap(action_id, new_key)
+            mgr.save_user_overrides()
+            self._capture_buttons[action_id].set_text(new_key)
+            toast_warning("已强制覆盖", f"{rec.label} → {new_key}", self.window())
+        else:
+            self._capture_buttons[action_id].set_text(rec.current_key)
+
+    def _on_shortcut_reset_one(self, action_id: str):
+        mgr = ShortcutManager.get_instance()
+        mgr.reset_to_default(action_id)
+        mgr.save_user_overrides()
+        rec = mgr.get_record(action_id)
+        if rec and action_id in self._capture_buttons:
+            self._capture_buttons[action_id].set_text(rec.current_key)
+            toast_info = None
+            try:
+                from shared.toast import toast_info
+                toast_info("已重置", f"{rec.label} → {rec.default_key}", self.window())
+            except Exception:
+                pass
+
+    def _on_shortcuts_reset_all(self):
+        from qfluentwidgets import MessageBox
+        if not MessageBox("恢复全部默认", "确定要恢复所有快捷键为默认键位吗？", self.window()).exec():
+            return
+        mgr = ShortcutManager.get_instance()
+        mgr.reset_to_default()
+        mgr.save_user_overrides()
+        for aid, btn in self._capture_buttons.items():
+            rec = mgr.get_record(aid)
+            if rec:
+                btn.set_text(rec.current_key)
+        try:
+            from shared.toast import toast_success
+            toast_success("已恢复", "所有快捷键已恢复为默认值", self.window())
+        except Exception:
+            pass
 
     # ── 主题 ──
     def _on_theme_changed(self, text: str):

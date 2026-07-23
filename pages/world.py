@@ -427,10 +427,17 @@ class WorldPage(QWidget):
         if success:
             toast_success("备份完成", message, self.window())
             send_webhook("backup", "备份完成", message)
+            # v3.02.00 通知中心：备份成功由 main._on_backup_completed 统一发（携带文件名跳转）
             self._cleanup_backups()
             self.backup_completed.emit()
         else:
             toast_error("备份失败", message, self.window())
+            # v3.02.00 通知中心：备份失败单独通知
+            try:
+                from backend.notifications import notify
+                notify("error", "backup", "备份失败", message, "page:world")
+            except Exception:
+                pass
         self._refresh_list()
 
     def _cleanup_backups(self):
@@ -492,8 +499,18 @@ class WorldPage(QWidget):
             pass
         if success:
             toast_success("还原完成", message, self.window())
+            try:
+                from backend.notifications import notify
+                notify("success", "backup", "世界已还原", message, "page:world")
+            except Exception:
+                pass
         else:
             toast_error("还原失败", message, self.window())
+            try:
+                from backend.notifications import notify
+                notify("error", "backup", "还原失败", message, "page:world")
+            except Exception:
+                pass
 
     def _on_delete_selected(self):
         sel = self._table.selectionModel().selectedRows()

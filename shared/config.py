@@ -174,6 +174,9 @@ DEFAULT_CONFIG = {
     "enable_bds_process_monitor": True,  # 监控 BDS 进程 CPU/内存
     "graceful_shutdown": True,           # 优雅停服
     "shutdown_grace_seconds": 10,        # stop 等待秒数
+    # v3.02.00 新增
+    "show_command_palette_tip": True,    # 首次启动提示「Ctrl+K 试试」
+    "shortcuts": {},                     # 快捷键用户自定义覆盖 {action_id: key_string}
 }
 
 # 类型 schema（用于校验和自动修正）
@@ -294,6 +297,8 @@ class ConfigManager:
             "font_size", "follow_system_theme",
             "console_show_timestamps", "console_max_lines", "console_auto_scroll",
             "enable_bds_process_monitor", "graceful_shutdown", "shutdown_grace_seconds",
+            # v3.02.00 新增
+            "show_command_palette_tip", "shortcuts",
         ]
         data = {k: self.values.get(k, DEFAULT_CONFIG.get(k)) for k in keys}
         os.makedirs(SCRIPT_DIR, exist_ok=True)

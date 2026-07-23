@@ -117,3 +117,9 @@ def send_webhook(event: str, title: str, message: str, extra: dict | None = None
         _post_webhook(url, payload)
     except Exception as e:
         logger.warning("Webhook 通知失败 (%s): %s", event, e)
+        # v3.02.00：webhook 失败时同步到通知中心（仅 warn 级，避免每次失败都吵）
+        try:
+            from backend.notifications import notify
+            notify("warning", "webhook", "Webhook 发送失败", f"[{event}] {e}")
+        except Exception:
+            pass

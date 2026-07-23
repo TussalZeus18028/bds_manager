@@ -43,6 +43,9 @@ from backend.server import ServerProcess
 from backend.monitor import SystemResourceMonitor, SystemStatsSnapshot
 from backend.webhook import send_webhook
 from backend.self_update import CheckUpdateWorker, DownloadUpdateWorker, InstallUpdateWorker, verify_sha256, is_valid_zip, restart_app
+from backend.notifications import notify  # v3.02.00 通知中心
+from backend.notifications import get_bus as _notify_bus, get_unread_count as _notify_unread
+from components.notification_panel import BellButton, NotificationDrawer
 from backend.log_handler import make_rotating_file_handler
 from pages.dashboard import DashboardPage
 from pages.console import ConsolePage
@@ -72,13 +75,13 @@ logging.basicConfig(
 )
 logger = logging.getLogger("bds_manager")
 
-__version__ = "3.01.04"
+__version__ = "3.02.00"
 # ⚠️ 工具版本固定写在这里，不在 bds_manager_config.json / bds_version_cache.json 等任何配置文件中。
 # 如果需要做配置兼容性检查，读取远端 version.json（自更新流程用）即可。
 # 格式规范：x.xx.xx —— Major 1 位、Minor 2 位（补零）、Patch 2 位（补零）
 # 例：3.1.0 → 3.01.00；3.10.5 → 3.10.05
 # 注意：旧项目（v2.x，Manager/）版本格式是 x.xx.xx.xx (4段)，compare_versions 已兼容任意段数。
-__version_info__ = (3, 1, 4)
+__version_info__ = (3, 2, 0)
 __release_date__ = "2026-07-23"
 
 
@@ -118,9 +121,12 @@ class BDSFluentWindow(FluentWindow):
         self._server: ServerProcess | None = None
         self._monitor: SystemResourceMonitor | None = None
         self._tray = None
+        self._bell = None
+        self._notif_drawer = None
         self._current_color = config_mgr.get("theme_color", "#0DC5D4")
         self._setup_window()
         self._init_pages()
+        self._setup_notification_panel()  # v3.02.00 通知中心
         self._restore_window_state()
         self._init_shortcuts()
         # 把窗口引用暴露给 errors handler
@@ -217,6 +223,67 @@ class BDSFluentWindow(FluentWindow):
             position=NavigationItemPosition.BOTTOM,
         )
 
+    def _setup_notification_panel(self):
+        """v3.02.00 通知中心：顶部铃铛 + 右侧抽屉。"""
+        self._bell = BellButton(self)
+        self._bell.move(self.width() - 56, 12)
+        self._bell.clicked.connect(self._toggle_notification_drawer)
+        # 初始未读数
+        self._bell.set_unread(_notify_unread())
+        # 监听未读数变化
+        _notify_bus().unread_count_changed.connect(self._bell.set_unread)
+        # 抽屉
+        self._notif_drawer = NotificationDrawer(self)
+        self._notif_drawer.hide()
+        self._notif_drawer.navigate_requested.connect(self._on_notif_navigate)
+        # 首启气泡（v3.02.00 起开始提示，可关闭）
+        if config_mgr.get("show_command_palette_tip", True):
+            QTimer.singleShot(2000, self._show_command_palette_tip)
+
+    def _toggle_notification_drawer(self):
+        if self._notif_drawer and self._notif_drawer.isVisible():
+            self._notif_drawer.hide_drawer()
+        else:
+            self._notif_drawer and self._notif_drawer.show_drawer()
+
+    def _on_notif_navigate(self, page_name: str, params: dict):
+        """通知点击跳转：切到对应页 + 高亮目标（参数由 page 自己解析）。"""
+        # 找到对应的 subInterface
+        target = getattr(self, f"{page_name}_page", None)
+        if target is None:
+            return
+        self.switchTo(target)
+        # 高亮目标（params 由各页处理）
+        if params and hasattr(target, "highlight_target"):
+            try:
+                target.highlight_target(params)
+            except Exception as e:
+                logger.debug("通知高亮失败: %s", e)
+
+    def _show_command_palette_tip(self):
+        """首次启动提示气泡：按 Ctrl+K 试试命令面板。"""
+        if not self._bell:
+            return
+        from qfluentwidgets import TeachingTip, InfoBarPosition, FluentIcon
+        tip = TeachingTip(
+            title="试试命令面板",
+            content="随时按 Ctrl+K 打开命令面板，搜索任何动作（重启、备份、跳转页面…）",
+            icon=FluentIcon.HEART,
+            target=self._bell,
+            parent=self,
+            isClosable=True,
+            duration=8000,
+        )
+        # 用户关闭后不再提示
+        tip.closed.connect(lambda: config_mgr.set("show_command_palette_tip", False))
+
+    def resizeEvent(self, event):
+        """窗口尺寸变化时重新定位铃铛（抽屉宽度已固定）。"""
+        super().resizeEvent(event)
+        if self._bell:
+            self._bell.move(self.width() - 56, 12)
+
+    # ---------- 服务初始化（资源监控 + 启动 toast + 自更新） ----------
     def _init_services(self):
         self._monitor = SystemResourceMonitor(self)
         self._monitor.stats_updated.connect(self._on_stats_updated)
@@ -267,6 +334,8 @@ class BDSFluentWindow(FluentWindow):
                 elif delta < 86400: text = f"{delta // 3600} 小时前"
                 else: text = f"{delta // 86400} 天前"
                 self.dashboard_page.set_backup_time(text)
+                notify("success", "backup", "备份完成", latest,
+                       f"page:world?backup={latest}")
         except Exception as e:
             logger.debug("更新最近备份时间失败: %s", e)
 
@@ -347,15 +416,121 @@ class BDSFluentWindow(FluentWindow):
 
     # ---------- 快捷键 ----------
     def _init_shortcuts(self):
-        # Ctrl+K 命令面板
-        QShortcut(QKeySequence("Ctrl+K"), self, activated=self._open_command_palette)
-        # Ctrl+Shift+R 重启工具
-        QShortcut(QKeySequence("Ctrl+Shift+R"), self, activated=self._restart_app)
-        # Ctrl+1..9 切换页面
+        """v3.02.00：通过 ShortcutManager 注册所有快捷键，支持用户自定义。"""
+        from backend.shortcuts import ShortcutManager, DEFAULT_SHORTCUTS
+
+        mgr = ShortcutManager.get_instance()
+        mgr.set_main_window(self)
+
+        # 注册默认快捷键（12 个）
+        for action_id, label, scope, default_key in DEFAULT_SHORTCUTS:
+            mgr.register(
+                action_id=action_id,
+                label=label,
+                scope=scope,
+                default_key=default_key,
+                callback=self._get_shortcut_callback(action_id),
+            )
+
+        # 应用用户自定义（如果 config 里有覆盖）
+        mgr.apply_user_overrides()
+
+        # Ctrl+1..7 切页（特殊处理：保持原有行为，不进 ShortcutManager）
         for i, key in enumerate(["dashboard", "console", "world", "packs",
                                   "config", "upgrade", "tunnel"]):
             QShortcut(QKeySequence(f"Ctrl+{i+1}"), self,
                       activated=lambda k=key: self.navigationInterface.setCurrentItem(k))
+
+        # 监听页面切换 → 更新快捷键作用域
+        try:
+            self.stackedWidget.currentChanged.connect(self._on_page_changed_for_shortcuts)
+            # 初始作用域
+            self._on_page_changed_for_shortcuts(0)
+        except Exception:
+            pass
+
+    def _get_shortcut_callback(self, action_id: str):
+        """返回 action_id 对应的回调函数。"""
+        from backend.shortcuts import ShortcutManager
+        cb_map = {
+            "command_palette":   self._open_command_palette,
+            "restart_tool":      self._restart_app,
+            "restart_server":    self._shortcut_restart_server,
+            "manual_backup":     self._shortcut_manual_backup,
+            "save_world":        self._shortcut_save_world,
+            "stop_server":       self._shortcut_stop_server,
+            "open_settings":     self._shortcut_open_settings,
+            "toggle_theme":      self._shortcut_toggle_theme,
+            "open_world":        self._shortcut_open_world,
+            "clear_console":     self._shortcut_clear_console,
+            "search_console":    self._shortcut_search_console,
+            "refresh_dashboard": self._shortcut_refresh_dashboard,
+        }
+        return cb_map.get(action_id, lambda: None)
+
+    # ---------- 快捷键回调 ----------
+    def _shortcut_restart_server(self):
+        if self.is_server_running():
+            self.stop_server()
+            QTimer.singleShot(3000, self.start_server)
+        else:
+            self.start_server()
+
+    def _shortcut_manual_backup(self):
+        if hasattr(self, "world_page") and self.world_page:
+            self.world_page.do_backup_now()
+
+    def _shortcut_save_world(self):
+        if self.is_server_running():
+            self._server and self._server.send_save_all()
+            from shared.toast import toast_success
+            toast_success("已发送", "save-all + save-on", self)
+
+    def _shortcut_stop_server(self):
+        if self.is_server_running():
+            self.stop_server()
+
+    def _shortcut_open_settings(self):
+        if hasattr(self, "settings_page"):
+            self.switchTo(self.settings_page)
+
+    def _shortcut_toggle_theme(self):
+        cur = config_mgr.get("theme", "dark")
+        new = "light" if cur == "dark" else "dark"
+        config_mgr.set("theme", new)
+        self.apply_theme(new, self._current_color)
+
+    def _shortcut_open_world(self):
+        if hasattr(self, "world_page"):
+            self.switchTo(self.world_page)
+
+    def _shortcut_clear_console(self):
+        if hasattr(self, "console_page"):
+            self.console_page.clear_output()
+
+    def _shortcut_search_console(self):
+        if hasattr(self, "console_page"):
+            self.switchTo(self.console_page)
+            if hasattr(self.console_page, "_search_edit"):
+                self.console_page._search_edit.setFocus()
+
+    def _shortcut_refresh_dashboard(self):
+        # 仪表盘自带 QTimer 自动刷新，这里强制刷新一次状态
+        if hasattr(self, "dashboard_page"):
+            try:
+                self.dashboard_page.status_card.refresh_status()
+            except Exception:
+                pass
+
+    def _on_page_changed_for_shortcuts(self, idx):
+        """主窗口 stackedWidget 切页时通知 ShortcutManager 更新作用域。"""
+        from backend.shortcuts import ShortcutManager
+        # idx → page name
+        widget = self.stackedWidget.widget(idx) if hasattr(self, "stackedWidget") else None
+        scope = "global"
+        if widget is not None:
+            scope = widget.objectName() or "global"
+        ShortcutManager.get_instance().set_scope(scope)
 
     def _open_command_palette(self):
         cmds = build_default_commands(self)
@@ -447,13 +622,18 @@ class BDSFluentWindow(FluentWindow):
         ctx = get_context()
         exe_path = os.path.join(ctx.server_dir, config_mgr.get("server_exe", "bedrock_server.exe"))
         if not os.path.exists(exe_path):
-            return f"未找到服务器可执行文件: {exe_path}"
+            err = f"未找到服务器可执行文件: {exe_path}"
+            notify("error", "server", "服务器启动失败", err, "page:dashboard")
+            return err
 
         self._server = ServerProcess(exe_path, ctx.server_dir)
         self._server.output_received.connect(self._on_server_output)
         self._server.process_stopped.connect(self._on_server_stopped)
         self._server.error_occurred.connect(
-            lambda msg: self.console_page._append_output(f"[ERROR] {msg}", "#ff5555")
+            lambda msg: (
+                self.console_page._append_output(f"[ERROR] {msg}", "#ff5555"),
+                notify("error", "server", "服务器错误", msg, "page:console"),
+            )
         )
         self._server.status_changed.connect(self._on_status_changed)
         # 进程级资源（如果启用）
@@ -463,6 +643,7 @@ class BDSFluentWindow(FluentWindow):
 
         self.dashboard_page._on_server_started()
         self.console_page._on_server_started()
+        notify("success", "server", "服务器已启动", os.path.basename(exe_path), "page:dashboard")
 
         self._restart_count = 0
         self._lag_samples: list[float] = []
@@ -491,6 +672,7 @@ class BDSFluentWindow(FluentWindow):
         send_webhook("crash", "服务器停止", "BDS 服务器进程已退出")
         self.dashboard_page._on_server_stopped()
         self.console_page._on_server_stopped()
+        notify("warning", "server", "服务器已停止", "", "page:console")
 
         max_retries = config_mgr.get("max_restart_retries", 5)
         if max_retries > 0 and self._restart_count < max_retries:
@@ -575,6 +757,7 @@ class BDSFluentWindow(FluentWindow):
         from shared.toast import toast_success, toast_error, toast_warning, toast_info
         if status == "error":
             toast_error("版本检查失败", remote_ver or "网络错误", self, duration=5000)
+            notify("warning", "update", "版本检查失败", remote_ver or "网络错误")
             return
         if status == "latest":
             toast_success("已是最新版本", f"v{__version__}（远程: v{remote_ver}）", self)
@@ -588,6 +771,7 @@ class BDSFluentWindow(FluentWindow):
             toast_warning("更新源缺失", "version.json 未提供下载链接", self, duration=6000)
             return
         toast_info("发现新版本", f"v{__version__} → v{remote_ver}，正在后台下载...", self)
+        notify("info", "update", "发现新版本", f"v{__version__} → v{remote_ver}", "page:upgrade")
         self._dl_updater = DownloadUpdateWorker(dl_url, remote_ver, self)
         self._dl_updater.finished.connect(lambda s, m, p: self._on_update_downloaded(s, m, p, sha256))
         self._dl_updater.start()
@@ -639,9 +823,12 @@ class BDSFluentWindow(FluentWindow):
     def _on_update_downloaded(self, success, msg, path, sha256):
         from shared.toast import toast_success, toast_error
         if not success:
-            toast_error("下载失败", msg, self, duration=5000); return
+            toast_error("下载失败", msg, self, duration=5000)
+            notify("error", "update", "更新下载失败", msg, "page:upgrade")
+            return
         if not is_valid_zip(path):
             toast_error("下载无效", "Release 资产未上传？请用 release_gui.py 发布", self)
+            notify("error", "update", "下载文件无效", "Release 资产缺失或上传失败", "page:upgrade")
             try:
                 os.remove(path)
             except OSError:
@@ -650,6 +837,7 @@ class BDSFluentWindow(FluentWindow):
         ok, sha_msg = verify_sha256(path, sha256)
         if not ok:
             toast_error("SHA256 校验失败", sha_msg, self)
+            notify("error", "update", "SHA256 校验失败", sha_msg, "page:upgrade")
             try:
                 os.remove(path)
             except OSError:
@@ -664,11 +852,13 @@ class BDSFluentWindow(FluentWindow):
         from PySide6.QtWidgets import QMessageBox
         from shared.toast import toast_error
         if success:
+            notify("success", "update", "工具已更新", f"即将自动重启到新版本", "page:upgrade")
             QMessageBox.information(self, "更新完成",
                 "BDS Manager 已更新！\n旧文件已备份到 backups/upgrade_backup_*/\n程序即将自动重启。")
             restart_app("main.py")
         else:
             toast_error("安装失败", msg, self, duration=6000)
+            notify("error", "update", "安装失败", msg, "page:upgrade")
 
 
 # ---------- 启动闪屏（可动画进度条）----------
