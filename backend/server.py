@@ -218,7 +218,6 @@ class ServerProcess(QThread):
         """
         if not self.process:
             return
-        self._stop_event.set()
         if graceful:
             try:
                 logger.info("优雅停服: save-all → stop")
@@ -227,6 +226,7 @@ class ServerProcess(QThread):
                 self.send_command("stop")
             except Exception:
                 pass
+            self._stop_event.set()
             # 等待 grace 秒让 BDS 自行退出
             for _ in range(grace_seconds * 10):
                 if self.process.poll() is not None:
@@ -237,6 +237,7 @@ class ServerProcess(QThread):
                 self.send_command("stop")
             except Exception:
                 pass
+            self._stop_event.set()
             # v3.02.01: 等 3 秒让 BDS 处理 stop 命令并自行退出
             for _ in range(30):  # 3 秒 / 0.1 秒步进
                 if self.process.poll() is not None:
