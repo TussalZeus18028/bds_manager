@@ -9,6 +9,7 @@ v3.02.01 重写（对齐旧版正确逻辑）：
 - 新添加的包默认不激活（用户手动点启用）
 """
 import os, json, shutil
+import json5  # v3.02.01: BDS manifest.json 常含注释/trailing commas
 
 from PySide6.QtCore import Qt, QThread, Signal
 from PySide6.QtGui import QColor
@@ -30,13 +31,18 @@ from pages.dashboard import wrap_scrollable
 
 # ── manifest 读取 ──
 def _read_manifest(pack_dir: str) -> dict:
+    """读取 manifest.json，优先 json5（容注释/trailing commas），回退标准 json。"""
     fp = os.path.join(pack_dir, "manifest.json")
     if os.path.exists(fp):
         try:
-            with open(fp, "r", encoding="utf-8") as f:
-                return json.load(f)
+            with open(fp, "r", encoding="utf-8-sig") as f:
+                return json5.load(f)
         except Exception:
-            pass
+            try:
+                with open(fp, "r", encoding="utf-8-sig") as f:
+                    return json.load(f)
+            except Exception:
+                pass
     return {}
 
 
@@ -71,13 +77,19 @@ def _write_world_json(world_path: str, pack_type: str, data: list) -> bool:
 
 
 def register_pack_to_world(world_path: str, pack_uuid: str, pack_version: str, pack_type: str) -> bool:
-    """注册包到世界（写入 world_resource_packs.json 或 world_behavior_packs.json）。"""
+    """注册包到世界。"""
     data = _read_world_json(world_path, pack_type)
     for entry in data:
         if entry.get("pack_id") == pack_uuid:
-            return False  # 已存在
-    data.append({"pack_id": pack_uuid, "version": list(map(int, str(pack_version).split(".")))
-                if isinstance(pack_version, str) else pack_version})
+            return False
+    # 版本号转 int 数组（如 "1.0.0" → [1,0,0]；空/无效 → [1,0,0]）
+    try:
+        ver_parts = [int(x) for x in str(pack_version).split(".") if x]
+    except (ValueError, TypeError):
+        ver_parts = [1, 0, 0]
+    if not ver_parts:
+        ver_parts = [1, 0, 0]
+    data.append({"pack_id": pack_uuid, "version": ver_parts})
     return _write_world_json(world_path, pack_type, data)
 
 
@@ -180,10 +192,18 @@ class PackInfoDialog(QDialog):
         self._pack = pack_info
         self._pack_type = pack_type
         self._is_active = is_active
+        # v3.02.01 fix: QDialog 不跟随 qfluentwidgets 主题，手动设背景 + 文字色
+        if isDarkTheme():
+            bg, fg, sub, dim = "#202225", "#ccc", "#888", "#666"
+        else:
+            bg, fg, sub, dim = "#fafafa", "#1a1a1a", "#666", "#999"
+        self.setStyleSheet(f"QDialog {{ background: {bg}; }}")
         layout = QVBoxLayout(self)
         scroll = ScrollArea(self)
         scroll.setWidgetResizable(True)
-        frame = Frame(scroll)
+        scroll.setStyleSheet(f"QScrollArea {{ background: transparent; border: none; }}")
+        frame = Frame()
+        frame.setStyleSheet("QFrame { background: transparent; }")
         fl = QVBoxLayout(frame)
         fl.setContentsMargins(20, 16, 20, 16)
         fl.setSpacing(10)
@@ -192,7 +212,7 @@ class PackInfoDialog(QDialog):
             row = QHBoxLayout()
             lbl = BodyLabel(label, frame)
             lbl.setMinimumWidth(120)
-            lbl.setStyleSheet("color: #888;")
+            lbl.setStyleSheet(f"color: {sub};")
             row.addWidget(lbl)
             val_lbl = BodyLabel(str(value) if value else "—", frame)
             val_lbl.setWordWrap(True)
@@ -207,7 +227,7 @@ class PackInfoDialog(QDialog):
         if pack_info["desc"]:
             desc = CaptionLabel(pack_info["desc"], frame)
             desc.setWordWrap(True)
-            desc.setStyleSheet("color: #aaa;")
+            desc.setStyleSheet(f"color: {dim};")
             fl.addWidget(desc)
 
         add_field("路径", pack_info["dirname"])

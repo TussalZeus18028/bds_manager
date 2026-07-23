@@ -27,7 +27,7 @@ from PySide6.QtGui import QTextCursor, QTextCharFormat, QColor
 from qfluentwidgets import (
     CardWidget, SubtitleLabel, StrongBodyLabel, BodyLabel, CaptionLabel,
     PrimaryPushButton, PushButton, LineEdit, FluentIcon,
-    ToggleButton, CheckBox,
+    ToggleButton, CheckBox, isDarkTheme,
 )
 
 from pages.dashboard import wrap_scrollable
@@ -88,15 +88,27 @@ def make_console_log(parent=None, min_height=200):
         log.setMinimumHeight(min_height)
     max_lines = config_mgr.get("console_max_lines", 5000)
     log.setMaximumBlockCount(max_lines)
-    log.setStyleSheet("""
-        QPlainTextEdit {
-            background: #1e1e1e; color: #ccc;
-            border: 1px solid #3a3a3a; border-radius: 6px;
-            padding: 6px;
-            font-family: Consolas, "Microsoft YaHei", monospace;
-            font-size: 12px;
-        }
-    """)
+    # v3.02.01: 主题感知
+    if isDarkTheme():
+        log.setStyleSheet("""
+            QPlainTextEdit {
+                background: #1e1e1e; color: #ccc;
+                border: 1px solid #3a3a3a; border-radius: 6px;
+                padding: 6px;
+                font-family: Consolas, "Microsoft YaHei", monospace;
+                font-size: 12px;
+            }
+        """)
+    else:
+        log.setStyleSheet("""
+            QPlainTextEdit {
+                background: #fafafa; color: #1a1a1a;
+                border: 1px solid #d0d0d0; border-radius: 6px;
+                padding: 6px;
+                font-family: Consolas, "Microsoft YaHei", monospace;
+                font-size: 12px;
+            }
+        """)
     return log
 
 

@@ -13,7 +13,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtGui import QTextCursor
 from qfluentwidgets import (
     CardWidget, SubtitleLabel, StrongBodyLabel, BodyLabel, CaptionLabel,
-    PrimaryPushButton, PushButton, LineEdit, FluentIcon, ToggleButton,
+    PrimaryPushButton, PushButton, LineEdit, FluentIcon, ToggleButton, isDarkTheme,
 )
 
 from shared.config import config_mgr
@@ -21,6 +21,25 @@ from shared.toast import toast_success, toast_error, toast_warning
 from pages.dashboard import wrap_scrollable
 
 import html as _hmod
+
+
+def _plaintext_style() -> str:
+    """v3.02.01: QPlainTextEdit 主题感知样式。"""
+    if isDarkTheme():
+        return """
+            QPlainTextEdit {
+                background: #1e1e1e; color: #ccc;
+                border: 1px solid #3a3a3a; border-radius: 6px;
+                padding: 6px; font-family: Consolas, monospace; font-size: 12px;
+            }
+        """
+    return """
+        QPlainTextEdit {
+            background: #fafafa; color: #1a1a1a;
+            border: 1px solid #d0d0d0; border-radius: 6px;
+            padding: 6px; font-family: Consolas, monospace; font-size: 12px;
+        }
+    """
 
 
 def _esc(text: str) -> str:
@@ -120,10 +139,7 @@ class TunnelPage(QWidget):
         self._log.setReadOnly(True)
         self._log.setMaximumBlockCount(5000)
         self._log.setMinimumHeight(250)
-        self._log.setStyleSheet("""
-            QPlainTextEdit { background: #1e1e1e; color: #ccc; border: 1px solid #3a3a3a; border-radius: 6px;
-                             padding: 6px; font-family: Consolas, monospace; font-size: 12px; }
-        """)
+        self._log.setStyleSheet(_plaintext_style())
         cl.addWidget(self._log)
         layout.addWidget(ctrl_card)
 
@@ -134,13 +150,10 @@ class TunnelPage(QWidget):
         cfl.setSpacing(8)
         cfl.addWidget(SubtitleLabel("frpc.ini 配置", cfg_card))
         self._cfg_edit = QPlainTextEdit(cfg_card)
-        self._cfg_edit.setPlaceholderText("[common]\nserver_addr = example.com\nserver_port = 7000\ntoken = your_token\n\n[your_service]\ntype = udp\nlocal_ip = 127.0.0.1\nlocal_port = 19132\nremote_port = 19132")
-        self._cfg_edit.setReadOnly(True)  # 默认锁定防误触
+        self._cfg_edit.setPlaceholderText("...")
+        self._cfg_edit.setReadOnly(True)
         self._cfg_edit.setMinimumHeight(120)
-        self._cfg_edit.setStyleSheet("""
-            QPlainTextEdit { background: #1e1e1e; color: #ccc; border: 1px solid #3a3a3a; border-radius: 6px;
-                             padding: 6px; font-family: Consolas, monospace; font-size: 12px; }
-        """)
+        self._cfg_edit.setStyleSheet(_plaintext_style())
         cfl.addWidget(self._cfg_edit)
 
         # 按钮行（对齐旧版：锁定/保存/加载/打开目录/模板）
