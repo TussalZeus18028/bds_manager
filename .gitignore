@@ -1,29 +1,44 @@
 # BDS Manager Fluent - .gitignore
+
+# ── Python ──
 __pycache__/
 *.pyc
+*.pyo
+
+# ── 日志 ──
 logs/
 *.log
 
-# Backups
+# ── 备份 ──
 backups/pre_refactor_*
 backups/upgrade_backup_*
 
-# Temp
+# ── 临时文件 ──
 _update_*.zip
 bds_manager_v*.zip
-*.bak_*
+*.bak_
+*.tmp
 
-# IDE
+# ── IDE ──
 .vscode/
 .idea/
 
-# OS
+# ── OS ──
 .DS_Store
 Thumbs.db
-bds_manager_config.json
-bds_version_cache.json
-dist/
-archives/
-.workbuddy/
-release/
-logs/
+
+# ── 本地开发工具（不应推送到仓库）──
+# 这两个脚本只供本地开发者使用：
+#   - release.py: 发布到 GitHub Release（仅开发者需要）
+#   - archive.py: 打包代码快照到 archives/（仅开发者需要）
+# 用户从 GitHub 下载源码后不需要这两个文件
+release.py
+archive.py
+
+# ── 运行时生成的文件 ──
+bds_manager_config.json       # 用户配置（含 GitHub token，不入库）
+bds_version_cache.json        # 升级页缓存
+dist/                         # release.py 产出（GitHub Release）
+archives/                     # archive.py 产出（本地代码快照）
+.workbuddy/                   # WorkBuddy 会话数据
+release/                      # 旧 release 残留目录
