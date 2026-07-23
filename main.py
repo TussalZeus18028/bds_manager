@@ -72,13 +72,13 @@ logging.basicConfig(
 )
 logger = logging.getLogger("bds_manager")
 
-__version__ = "3.01.01"
+__version__ = "3.01.02"
 # ⚠️ 工具版本固定写在这里，不在 bds_manager_config.json / bds_version_cache.json 等任何配置文件中。
 # 如果需要做配置兼容性检查，读取远端 version.json（自更新流程用）即可。
 # 格式规范：x.xx.xx —— Major 1 位、Minor 2 位（补零）、Patch 2 位（补零）
 # 例：3.1.0 → 3.01.00；3.10.5 → 3.10.05
 # 注意：旧项目（v2.x，Manager/）版本格式是 x.xx.xx.xx (4段)，compare_versions 已兼容任意段数。
-__version_info__ = (3, 1, 1)
+__version_info__ = (3, 1, 2)
 __release_date__ = "2026-07-23"
 
 
@@ -580,8 +580,9 @@ class BDSFluentWindow(FluentWindow):
             toast_success("已是最新版本", f"v{__version__}（远程: v{remote_ver}）", self)
             return
         if status == "too_old":
-            # 与旧版 Manager/ 行为一致：版本过低，无法自动升级
-            toast_warning("版本过低", msg or f"当前 v{__version__} 无法升级到 v{remote_ver}", self, duration=8000)
+            # 跨主版本升级（如 v1.x / 早期 v2.x → v3.x）：不直接拒绝，
+            # 而是弹引导框让用户选择「打开下载页」或「继续自动升级」。
+            self._prompt_cross_version_upgrade(remote_ver, dl_url, sha256, msg)
             return
         if not dl_url:
             toast_warning("更新源缺失", "version.json 未提供下载链接", self, duration=6000)
@@ -590,6 +591,50 @@ class BDSFluentWindow(FluentWindow):
         self._dl_updater = DownloadUpdateWorker(dl_url, remote_ver, self)
         self._dl_updater.finished.connect(lambda s, m, p: self._on_update_downloaded(s, m, p, sha256))
         self._dl_updater.start()
+
+    def _prompt_cross_version_upgrade(self, remote_ver, dl_url, sha256, msg):
+        """跨主版本升级引导：弹 MessageBox 让用户选择「打开下载页」或「继续自动升级」。"""
+        from PySide6.QtWidgets import QMessageBox
+        from shared.toast import toast_info
+        from backend.self_update import GITHUB_REPO_OWNER, GITHUB_REPO_NAME
+        import webbrowser
+
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Information)
+        box.setWindowTitle("发现新版本（建议手动下载）")
+        body = (
+            f"检测到新版本 v{remote_ver}（当前 v{__version__}）。\n\n"
+            f"您的版本与新版差异较大，{msg or '自动升级可能需要手动调整'}。\n\n"
+            f"建议手动下载完整包升级（更稳妥）：\n"
+            f"1. 点击「打开下载页」前往 GitHub Releases\n"
+            f"2. 下载 bds_manager_v{remote_ver}.zip\n"
+            f"3. 解压覆盖到当前目录（自动迁移旧版特征文件）\n"
+            f"4. 重启程序\n\n"
+            f"如果您想继续体验一键自动升级，也可选择「继续自动升级」。"
+        )
+        box.setText(body)
+        box.setTextFormat(0)  # PlainText 让换行符生效
+        btn_manual = box.addButton("打开下载页（推荐）", QMessageBox.AcceptRole)
+        btn_auto = box.addButton("继续自动升级", QMessageBox.ActionRole)
+        box.addButton("取消", QMessageBox.RejectRole)
+        box.setDefaultButton(btn_manual)
+        box.exec()
+        clicked = box.clickedButton()
+        if clicked is btn_manual:
+            url = f"https://github.com/{GITHUB_REPO_OWNER}/{GITHUB_REPO_NAME}/releases/tag/v{remote_ver}"
+            webbrowser.open(url)
+            toast_info("已打开下载页", f"请手动下载 v{remote_ver} 并解压到工具目录", self, duration=5000)
+            return
+        if clicked is btn_auto:
+            if not dl_url:
+                toast_warning("无法自动升级", "version.json 未提供下载链接", self, duration=5000)
+                return
+            toast_info("开始下载升级包", f"v{__version__} → v{remote_ver}", self)
+            self._dl_updater = DownloadUpdateWorker(dl_url, remote_ver, self)
+            self._dl_updater.finished.connect(lambda s, m, p: self._on_update_downloaded(s, m, p, sha256))
+            self._dl_updater.start()
+            return
+        # 取消：什么都不做
 
     def _on_update_downloaded(self, success, msg, path, sha256):
         from shared.toast import toast_success, toast_error

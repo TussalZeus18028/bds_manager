@@ -136,15 +136,15 @@ class CheckUpdateWorker(QThread):
                 return
             import main
             if compare_versions(remote, main.__version__) > 0:
-                # 最低兼容版本检查（与旧版 Manager/ 一致，让 v2.x 用户也能升级）
-                if min_ver and compare_versions(main.__version__, min_ver) < 0:
-                    self.result.emit(
-                        "too_old", remote, "", "",
-                        f"当前版本 v{main.__version__} 过低，无法自动升级到 v{remote}（最低要求 v{min_ver}）",
-                    )
-                    return
                 dl = data.get("download_url", "")
                 sha = data.get("sha256", "")
+                if min_ver and compare_versions(main.__version__, min_ver) < 0:
+                    # 跨主版本升级：通知上层「需要引导」，仍带 dl_url 让用户可选继续
+                    self.result.emit(
+                        "too_old", remote, dl, sha,
+                        f"当前 v{main.__version__} < 最低 v{min_ver}（建议手动下载升级）",
+                    )
+                    return
                 self.result.emit("update", remote, dl, sha, "")
             else:
                 self.result.emit("latest", remote, "", "", "")

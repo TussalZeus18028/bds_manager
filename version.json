@@ -1,9 +1,9 @@
 {
-    "version": "3.01.01",
+    "version": "3.01.02",
     "release_date": "2026-07-23",
-    "download_url": "https://github.com/TussalZeus18028/bds_manager/releases/download/v3.01.01/bds_manager_v3.01.01.zip",
-    "sha256": "67fe3610c4cec6571b08d0c2d662d0d5cfe11c73da763596e5108aa2a8f041bd",
-    "file_size": 105337,
-    "min_compatible_version": "3.01.01",
-    "changelog": "## v3.01.01 (2026-07-23)\n\n### 兼容\n- **支持从 v2.x 旧版（Manager/）升级到 v3.x**：min_compatible_version 从 3.01.00 降为 2.00.00\n- **v2.x → v3.x 自动迁移**：安装时检测到旧版特征文件（`bds_manager.py` / `release_gui.py` / `web_ui/` 等）自动移动到 `backups/legacy_v2/`，避免污染\n- 新版 `run.bat` 已改为 `python main.py`，覆盖旧版 `python bds_manager.py`\n\n### 修复\n- `backend/self_update.py` 缺少 `min_compatible_version` 检查（与旧版 Manager/ 一致）\n- `release.py` 不打包 `archive.py` / `release.py` / `.gitignore`（本地开发工具不应发给最终用户）\n- `release.py` 加入 `version.json`（用户升级页需要远端版本列表）\n- `release.py` 的 `check_clean_workspace()` 加 `-uno`，避免 .gitignore 文件阻塞发布\n- `release.py` 和 `archive.py` 已从 git 仓库移除（`git rm --cached`），改为本地开发工具，仅开发者保留\n\n### 行为变化\n- 当本地版本低于 `min_compatible_version` 时，弹 Toast「版本过低」，与旧版 Manager/ 行为一致"
+    "download_url": "https://github.com/TussalZeus18028/bds_manager/releases/download/v3.01.02/bds_manager_v3.01.02.zip",
+    "sha256": "pending-build",
+    "file_size": 0,
+    "min_compatible_version": "2.00.00",
+    "changelog": "## v3.01.02 (2026-07-23)\n\n### 改进\n- **跨主版本升级体验升级**：旧版 Manager/ 的「版本过低 → 直接拒绝」改为新版「**主动引导 + 用户选择**」\n  - 检测到跨主版本升级时（如 v1.x / 早期 v2.x → v3.x），弹 MessageBox 让用户选择：\n    - **打开下载页（推荐）**：浏览器打开 GitHub Releases，手动下载 zip 升级（更稳妥）\n    - **继续自动升级**：风险自担，但 InstallUpdateWorker 会自动迁移旧版特征文件\n    - **取消**：什么都不做\n  - 旧版的被动拒绝体验被替换，新版给用户完整控制权\n- **步骤说明内置到弹窗**：1) 打开下载页 2) 下载 zip 3) 解压覆盖 4) 重启 — 用户不用猜\n\n### 兼容性逻辑\n- min_compatible_version 仍为 2.00.00（v2.x 可直接升级，不需要引导）\n- 仅当 v_local < 2.00.00 时（如 v1.99.99）才弹引导框\n- 「继续自动升级」仍会走 InstallUpdateWorker 的 v2.x 迁移清理路径\n\n### 修复\n- 之前 v3.01.01 的「too_old 拒绝」过于被动，已替换为引导式选择"
 }
