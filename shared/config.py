@@ -251,7 +251,11 @@ class ConfigManager:
         self._history: deque = deque(maxlen=CONFIG_MAX_BACKUPS)
 
     def load(self) -> dict:
-        """加载配置，缺失键用 DEFAULT_CONFIG 补全。"""
+        """加载配置，缺失键用 DEFAULT_CONFIG 补全。
+
+        v3.02.01：DEFAULT_CONFIG 迭代后，也把不在白名单中的非标准键（如 window_geometry）
+        合并到 config 中，否则 save 能写但 load 读不到。
+        """
         config = dict(DEFAULT_CONFIG)
         if os.path.exists(CONFIG_FILE):
             try:
@@ -263,6 +267,10 @@ class ConfigManager:
                 for k in DEFAULT_CONFIG:
                     raw = loaded.get(k, DEFAULT_CONFIG[k])
                     config[k] = _validate_value(k, raw)
+                # v3.02.01: 合并不在 DEFAULT_CONFIG 但 save 会写出的非标准键
+                for k, v in loaded.items():
+                    if k not in config:
+                        config[k] = v
             except (json.JSONDecodeError, FileNotFoundError, UnicodeDecodeError) as e:
                 logger.error("加载配置文件失败: %s", e)
                 # 尝试恢复最近一次备份
@@ -299,6 +307,8 @@ class ConfigManager:
             "enable_bds_process_monitor", "graceful_shutdown", "shutdown_grace_seconds",
             # v3.02.00 新增
             "show_command_palette_tip", "shortcuts",
+            # v3.02.01 新增
+            "window_geometry",
         ]
         data = {k: self.values.get(k, DEFAULT_CONFIG.get(k)) for k in keys}
         os.makedirs(SCRIPT_DIR, exist_ok=True)

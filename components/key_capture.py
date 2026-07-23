@@ -9,9 +9,10 @@ Esc 取消录制。
     capture_completed(str)  —— 捕获完成，参数为人类可读键位字符串（如 "Ctrl+R"）
 """
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, Signal, QKeyCombination
 from PySide6.QtGui import QKeyEvent, QKeySequence
 from PySide6.QtWidgets import QPushButton
+from qfluentwidgets import isDarkTheme
 
 
 class KeyCaptureButton(QPushButton):
@@ -25,7 +26,7 @@ class KeyCaptureButton(QPushButton):
         self._recording = False
         self.setCursor(Qt.PointingHandCursor)
         self.setFixedHeight(28)
-        self.setMinimumWidth(120)
+        self.setMinimumWidth(130)  # v3.02.01: 加宽以容纳 "Ctrl+Shift+L" 等长键位
         self._apply_style()
         # 双击进入录制
         self.mouseDoubleClickEvent = lambda e: self._start_recording()
@@ -37,14 +38,19 @@ class KeyCaptureButton(QPushButton):
             self.setText(key or "(未设置)")
 
     def _apply_style(self):
-        self.setStyleSheet("""
-            QPushButton {
-                background: #2a2a2a; color: #ccddee;
-                border: 1px solid #444; border-radius: 4px;
+        # v3.02.01 fix: 主题感知颜色（之前硬编码暗色，浅色主题下字看不见）
+        if isDarkTheme():
+            bg, hover, border, fg = "#2a2a2a", "#353535", "#444", "#ccddee"
+        else:
+            bg, hover, border, fg = "#fafafa", "#f0f0f0", "#bbb", "#1a1a1a"
+        self.setStyleSheet(f"""
+            QPushButton {{
+                background: {bg}; color: {fg};
+                border: 1px solid {border}; border-radius: 4px;
                 padding: 2px 12px; font-family: "Consolas", "Microsoft YaHei";
                 font-size: 11px;
-            }
-            QPushButton:hover { background: #353535; }
+            }}
+            QPushButton:hover {{ background: {hover}; }}
         """)
 
     def _apply_recording_style(self):
@@ -83,7 +89,12 @@ class KeyCaptureButton(QPushButton):
         if event.key() in (Qt.Key_Control, Qt.Key_Shift, Qt.Key_Alt, Qt.Key_Meta):
             return
         # 构造 QKeySequence 并发射
-        seq = QKeySequence(event.modifiers() | event.key())
+        # v3.02.01 fix: PySide6 中 Qt.KeyboardModifier 是 Flag（非 IntFlag），
+        # `event.modifiers() | event.key()` 结果是 KeyboardModifier 类型，传给
+        # QKeySequence(int) 会报"called with wrong argument types"。
+        # 正确做法是用 QKeyCombination 显式组合 mod + key
+        kc = QKeyCombination(event.modifiers(), Qt.Key(event.key()))
+        seq = QKeySequence(kc)
         key_str = seq.toString()
         if key_str:
             self.capture_completed.emit(key_str)

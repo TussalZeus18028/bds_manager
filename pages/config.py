@@ -22,11 +22,12 @@ from PySide6.QtWidgets import (
 from qfluentwidgets import (
     CardWidget, SubtitleLabel, StrongBodyLabel, BodyLabel, CaptionLabel,
     PrimaryPushButton, PushButton, LineEdit, ComboBox,
-    FluentIcon, ToggleButton, SpinBox, InfoBar, MessageBox,
+    FluentIcon, ToggleButton, InfoBar, MessageBox,
 )
 
 from shared.config import get_context
 from shared.toast import toast_success, toast_error, toast_info, toast_warning
+from components.widgets import NoScrollSpinBox  # v3.02.01: 滚轮防护
 
 # 默认 server.properties 模板
 _DEFAULT_PROPERTIES = """#server.properties
@@ -210,7 +211,7 @@ class ConfigPage(QWidget):
                 w = LineEdit(prop_card)
                 w.setText(str(default))
             elif typ == "int":
-                w = SpinBox(prop_card)
+                w = NoScrollSpinBox(prop_card)
                 lo, hi = _INT_RANGES.get(key, (0, 65535))
                 w.setRange(lo, hi)
                 w.setValue(int(default))

@@ -38,7 +38,8 @@ MAX_AGE_SECONDS = 30 * 86400     # 30 天强制过期
 
 # 允许的 level / category 取值（用于校验 + UI 颜色映射）
 LEVELS = ("error", "warning", "success", "info")
-CATEGORIES = ("server", "backup", "update", "player", "webhook", "system")
+# v3.02.01: 新增 toast 分类（所有 toast 通知都进通知中心）
+CATEGORIES = ("server", "backup", "update", "player", "webhook", "system", "toast")
 
 
 # ---------- 数据模型 ----------

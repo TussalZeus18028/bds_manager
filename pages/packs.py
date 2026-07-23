@@ -19,7 +19,7 @@ from PySide6.QtWidgets import (
 from qfluentwidgets import (
     CardWidget, SubtitleLabel, StrongBodyLabel, BodyLabel, CaptionLabel,
     PrimaryPushButton, PushButton, FluentIcon, ProgressBar, MessageBox,
-    ToggleButton, ScrollArea,
+    ToggleButton, ScrollArea, isDarkTheme,
 )
 from PySide6.QtWidgets import QFrame as Frame
 
@@ -189,7 +189,7 @@ class PacksPage(QWidget):
         layout.addStretch()
 
     def showEvent(self, event):
-        """首次显示时扫描磁盘上的包。"""
+        """首次显示时扫描磁盘上的包；同时刷新表格主题（应对运行时切换主题）。"""
         if not self._initialized:
             self._initialized = True
             for key in self._sections:
@@ -200,7 +200,55 @@ class PacksPage(QWidget):
                         refresh_fn()
                     except Exception:
                         pass
+        else:
+            # v3.02.01 fix: 主题切换后重新应用表格样式（之前只在 __init__ 时设一次）
+            self._refresh_all_themes()
         super().showEvent(event)
+
+    def _refresh_all_themes(self):
+        """主题切换后调用：重新设表格 + 状态文字 + hint 颜色。"""
+        sub_color = "#888" if isDarkTheme() else "#666"
+        for sec in self._sections.values():
+            self._apply_table_theme(sec["table"])
+            sec["status_label"].setStyleSheet(f"color: {sub_color};")
+            sec["hint"].setStyleSheet(f"color: {sub_color}; padding: 12px;")
+
+    def refresh_theme(self):
+        """v3.02.01：主题切换后由 main.apply_theme() 调用，重设表格 + 文字色。"""
+        self._refresh_all_themes()
+
+    def _apply_table_theme(self, table: QTableWidget):
+        """v3.02.01：主题感知表格样式（深/浅主题各一套）。"""
+        if isDarkTheme():
+            table.setStyleSheet("""
+                QTableWidget {
+                    background: #1e1e1e; color: #ccc;
+                    border: 1px solid #3a3a3a; border-radius: 6px;
+                    gridline-color: #3a3a3a;
+                    selection-background-color: #2d4a5e;
+                    selection-color: #ffffff;
+                }
+                QTableWidget::item { padding: 4px 8px; }
+                QHeaderView::section {
+                    background: #2a2a2a; color: #aaa;
+                    border: none; padding: 6px 8px; font-weight: bold;
+                }
+            """)
+        else:
+            table.setStyleSheet("""
+                QTableWidget {
+                    background: #ffffff; color: #1a1a1a;
+                    border: 1px solid #d0d0d0; border-radius: 6px;
+                    gridline-color: #e8e8e8;
+                    selection-background-color: #d8eef5;
+                    selection-color: #1a1a1a;
+                }
+                QTableWidget::item { padding: 4px 8px; }
+                QHeaderView::section {
+                    background: #f5f5f5; color: #555;
+                    border: none; padding: 6px 8px; font-weight: bold;
+                }
+            """)
 
     def _build_section(self, inner, key: str, title: str) -> CardWidget:
         card = CardWidget(inner)
@@ -211,8 +259,10 @@ class PacksPage(QWidget):
         hdr = QHBoxLayout()
         hdr.addWidget(SubtitleLabel(title, card))
         hdr.addStretch()
+        # v3.02.01 fix: 主题感知的次要文字色（之前 #888 写死，浅色主题下看不见）
+        sub_color = "#888" if isDarkTheme() else "#666"
         self._status_label = CaptionLabel("", card)
-        self._status_label.setStyleSheet("color: #888;")
+        self._status_label.setStyleSheet(f"color: {sub_color};")
         hdr.addWidget(self._status_label)
         add_btn = PrimaryPushButton(f"添加{title}", card, FluentIcon.ADD)
         refresh_btn = PushButton("刷新", card, FluentIcon.SYNC)
@@ -225,23 +275,24 @@ class PacksPage(QWidget):
         table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
         table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
         table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        # v3.02.01：启用列加宽到 90px，确保 ToggleButton 文字完整显示（"启用/禁用"）
         table.horizontalHeader().setSectionResizeMode(3, QHeaderView.Fixed)
-        table.setColumnWidth(3, 60)
+        table.setColumnWidth(3, 90)
+        # 操作列加宽到 200px，容纳「详情」「移除」两个按钮
         table.horizontalHeader().setSectionResizeMode(4, QHeaderView.Fixed)
-        table.setColumnWidth(4, 160)
+        table.setColumnWidth(4, 200)
         table.verticalHeader().setVisible(False)
         table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         table.setSelectionBehavior(QAbstractItemView.SelectRows)
         table.doubleClicked.connect(lambda idx, k=key: self._show_info_for(k, idx))
-        table.setStyleSheet("""
-            QTableWidget { background: #1e1e1e; color: #ccc; border: 1px solid #3a3a3a; border-radius: 6px; gridline-color: #3a3a3a; }
-            QTableWidget::item { padding: 4px 8px; }
-            QHeaderView::section { background: #2a2a2a; color: #aaa; border: none; padding: 6px 8px; font-weight: bold; }
-        """)
+        # v3.02.01 fix: 主题感知表格样式（之前硬编码暗色，浅色主题下整张表是深色的）
+        self._apply_table_theme(table)
+        # 行高适应 ToggleButton（默认 30 太矮，ToggleButton 需要 32+）
+        table.verticalHeader().setDefaultSectionSize(36)
         cl.addWidget(table)
 
         hint = CaptionLabel(f"暂无已安装的{title}，点击「添加{title}」导入。提示：双击行查看详情。", card)
-        hint.setStyleSheet("color: #888; padding: 12px;")
+        hint.setStyleSheet(f"color: {sub_color}; padding: 12px;")
         cl.addWidget(hint)
 
         self._sections[key] = {
@@ -264,11 +315,12 @@ class PacksPage(QWidget):
 
             table.setRowCount(len(packs))
             for i, p in enumerate(packs):
-                table.setItem(i, 0, QTableWidgetItem(p["name"] + ("  ❌" if p["is_disabled"] else "")))
+                # v3.02.01 fix: 去掉行末 "❌" 字符（与 toggle 文字"禁用"视觉冗余）
+                table.setItem(i, 0, QTableWidgetItem(p["name"]))
                 table.setItem(i, 1, QTableWidgetItem(p["version"] or "—"))
                 table.setItem(i, 2, QTableWidgetItem(p["uuid"][:12] + "..." if p["uuid"] else "—"))
-                # 启用/禁用 Toggle
-                toggle = ToggleButton("启" if not p["is_disabled"] else "禁", table)
+                # 启用/禁用 Toggle —— v3.02.01：改用「启用/禁用」完整文字
+                toggle = ToggleButton("启用" if not p["is_disabled"] else "禁用", table)
                 toggle.setChecked(not p["is_disabled"])
                 toggle.toggled.connect(lambda chk, pp=p, t=toggle: self._toggle_pack(pp, chk, t, _refresh))
                 table.setCellWidget(i, 3, toggle)
@@ -363,7 +415,7 @@ class PacksPage(QWidget):
             return
         try:
             shutil.move(pack["path"], new_path)
-            btn.setText("启" if enabled else "禁")
+            btn.setText("启用" if enabled else "禁用")
             toast_success(
                 "已切换",
                 f"{pack['name']} → {'启用' if enabled else '禁用'}",

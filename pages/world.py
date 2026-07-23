@@ -23,7 +23,7 @@ from PySide6.QtWidgets import (
 from qfluentwidgets import (
     CardWidget, SubtitleLabel, StrongBodyLabel, BodyLabel, CaptionLabel,
     PrimaryPushButton, PushButton, FluentIcon,
-    ToggleButton, ProgressBar, SpinBox, MessageBox,
+    ToggleButton, ProgressBar, MessageBox,
 )
 
 from shared.config import config_mgr, get_context

@@ -96,16 +96,23 @@ class TunnelPage(QWidget):
         hdr = QHBoxLayout()
         hdr.addWidget(SubtitleLabel("隧道控制", ctrl_card))
         hdr.addStretch()
-        self._start_btn = PrimaryPushButton("启动隧道", ctrl_card, FluentIcon.PLAY)
+        # v3.02.01 fix: 给按钮显式 min_w（之前 ToggleButton 的文字被 check indicator
+        # 挤压，「自动滚动」显示成「自动滚」+ 图标；PrimaryPushButton 也需要 padding buffer）
+        self._start_btn = PrimaryPushButton("启动", ctrl_card, FluentIcon.PLAY)
+        self._start_btn.setMinimumWidth(96)
         self._start_btn.clicked.connect(self._start)
         self._stop_btn = PushButton("停止", ctrl_card, FluentIcon.CANCEL)
+        self._stop_btn.setMinimumWidth(80)
         self._stop_btn.setEnabled(False)
         self._stop_btn.clicked.connect(self._stop)
         self._auto_btn = ToggleButton("自动滚动", ctrl_card)
+        self._auto_btn.setMinimumWidth(108)  # ← 关键：ToggleButton 默认宽度让 4 字被截断
         self._auto_btn.setChecked(True)
         self._auto_btn.toggled.connect(lambda v: setattr(self, "_auto_scroll", v))
         hdr.addWidget(self._start_btn)
+        hdr.addSpacing(6)
         hdr.addWidget(self._stop_btn)
+        hdr.addSpacing(6)
         hdr.addWidget(self._auto_btn)
         cl.addLayout(hdr)
 
@@ -137,32 +144,34 @@ class TunnelPage(QWidget):
         cfl.addWidget(self._cfg_edit)
 
         # 按钮行（对齐旧版：锁定/保存/加载/打开目录/模板）
+        # v3.02.01 fix: 移除 setMaximumWidth（之前 max_w 太窄导致 "打开目录" → "打开目"、
+        # "模板" → "模" 等被截断）。改用 setMinimumWidth 保证最小可读宽度
         btn_row = QHBoxLayout()
         btn_row.setSpacing(6)
         self._edit_lock_btn = PushButton("点击编辑", cfg_card, FluentIcon.EDIT)
         self._edit_lock_btn.setCheckable(True)
         self._edit_lock_btn.toggled.connect(self._toggle_ini_edit)
-        self._edit_lock_btn.setMaximumWidth(130)
+        self._edit_lock_btn.setMinimumWidth(96)
         btn_row.addWidget(self._edit_lock_btn)
 
         save_btn = PrimaryPushButton("保存", cfg_card, FluentIcon.SAVE)
         save_btn.clicked.connect(self._save_config)
-        save_btn.setMaximumWidth(70)
+        save_btn.setMinimumWidth(72)
         btn_row.addWidget(save_btn)
 
         load_btn = PushButton("加载", cfg_card, FluentIcon.FOLDER)
         load_btn.clicked.connect(self._load_ini_from_file)
-        load_btn.setMaximumWidth(60)
+        load_btn.setMinimumWidth(72)
         btn_row.addWidget(load_btn)
 
         open_dir_btn = PushButton("打开目录", cfg_card, FluentIcon.FOLDER)
         open_dir_btn.clicked.connect(self._open_frpc_dir)
-        open_dir_btn.setMaximumWidth(80)
+        open_dir_btn.setMinimumWidth(88)
         btn_row.addWidget(open_dir_btn)
 
         template_btn = PushButton("模板", cfg_card, FluentIcon.HELP)
         template_btn.clicked.connect(self._load_template)
-        template_btn.setMaximumWidth(60)
+        template_btn.setMinimumWidth(72)
         btn_row.addWidget(template_btn)
 
         btn_row.addStretch()

@@ -30,7 +30,7 @@ sys.stdout = _real_stdout
 
 from PySide6.QtWidgets import QApplication, QSystemTrayIcon, QMenu, QSplashScreen
 from PySide6.QtGui import QColor, QIcon, QAction, QShortcut, QKeySequence
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import Qt, QTimer, QByteArray
 from qfluentwidgets import (
     FluentWindow, FluentIcon, setTheme, setThemeColor, Theme, SystemTrayMenu,
 )
@@ -75,13 +75,13 @@ logging.basicConfig(
 )
 logger = logging.getLogger("bds_manager")
 
-__version__ = "3.02.00"
+__version__ = "3.02.01"
 # ⚠️ 工具版本固定写在这里，不在 bds_manager_config.json / bds_version_cache.json 等任何配置文件中。
 # 如果需要做配置兼容性检查，读取远端 version.json（自更新流程用）即可。
 # 格式规范：x.xx.xx —— Major 1 位、Minor 2 位（补零）、Patch 2 位（补零）
 # 例：3.1.0 → 3.01.00；3.10.5 → 3.10.05
 # 注意：旧项目（v2.x，Manager/）版本格式是 x.xx.xx.xx (4段)，compare_versions 已兼容任意段数。
-__version_info__ = (3, 2, 0)
+__version_info__ = (3, 2, 1)
 __release_date__ = "2026-07-23"
 
 
@@ -127,7 +127,8 @@ class BDSFluentWindow(FluentWindow):
         self._setup_window()
         self._init_pages()
         self._setup_notification_panel()  # v3.02.00 通知中心
-        self._restore_window_state()
+        # v3.02.01: _restore_window_state 移到了 showEvent（等 window system 就绪）
+        self._geom_restored = False
         self._init_shortcuts()
         # 把窗口引用暴露给 errors handler
         _MAIN_WINDOW_REF[0] = self
@@ -137,15 +138,60 @@ class BDSFluentWindow(FluentWindow):
         QTimer.singleShot(300, self._setup_tray)        # 系统托盘：Win 创建慢
         QTimer.singleShot(500, self._init_services)     # 资源监控 + 启动 Toast + 升级 + 自更新
 
+    def showEvent(self, event):
+        """v3.02.01：首次 show 时恢复窗口状态。
+
+        restoreGeometry 在 window.show() 前调用不生效——window system 还没 attach。
+        移到 showEvent 确保在 QMainWindow 完成所有初始化后恢复状态。
+        """
+        super().showEvent(event)
+        if not self._geom_restored:
+            self._geom_restored = True
+            self._restore_window_state()
+
     # ---------- 窗口 ----------
     def _setup_window(self):
         self.setWindowTitle(f"BDS Manager Fluent v{__version__}")
-        self.resize(
-            config_mgr.get("window_width", 1200),
-            config_mgr.get("window_height", 800),
-        )
         self.setMinimumSize(960, 620)
         self.navigationInterface.setExpandWidth(280)
+
+    def _save_geometry(self):
+        """v3.02.01：保存窗口几何，同时存 width/height 做可靠 fallback。
+
+        用 QMainWindow.saveGeometry() 保存 base64 格式（含 maximized/normal 状态），
+        同时存 width/height 确保即使 restoreGeometry 在启动时机不工作也有降级方案。
+        """
+        try:
+            geom_b64 = bytes(self.saveGeometry().toBase64()).decode("ascii")
+            config_mgr.set("window_geometry", geom_b64)
+            # 冗余保存 width/height，让 _restore_window_state 的 fallback 总能生效
+            config_mgr.set("window_width", self.width())
+            config_mgr.set("window_height", self.height())
+        except Exception:
+            pass
+
+    def _restore_window_state(self):
+        """v3.02.01：恢复窗口状态。
+
+        分两层：
+        1. restoreGeometry(base64) — 优先，能还原 maximized/fullscreen + 位置
+        2. resize(width, height) — 降级，简单但可靠（永远生效）
+        """
+        geom_b64 = config_mgr.get("window_geometry", "")
+        if geom_b64:
+            try:
+                ba = QByteArray.fromBase64(geom_b64.encode("ascii"))
+                if not ba.isEmpty() and self.restoreGeometry(ba):
+                    return
+            except Exception:
+                pass
+        w = config_mgr.get("window_width", 1200)
+        h = config_mgr.get("window_height", 800)
+        self.resize(w, h)
+        # fallback：旧 config 或无配置 → 用默认尺寸
+        w = config_mgr.get("window_width", 1200)
+        h = config_mgr.get("window_height", 800)
+        self.resize(w, h)
 
     def _setup_tray(self):
         self._tray = QSystemTrayIcon(self)
@@ -224,9 +270,19 @@ class BDSFluentWindow(FluentWindow):
         )
 
     def _setup_notification_panel(self):
-        """v3.02.00 通知中心：顶部铃铛 + 右侧抽屉。"""
-        self._bell = BellButton(self)
-        self._bell.move(self.width() - 56, 12)
+        """v3.02.00 通知中心：顶部铃铛 + 右侧抽屉。
+
+        v3.02.01：bell 不再放在 self.width()-56（会与 titleBar 右上角的最小化/最大化/关闭按钮重叠），
+        而是塞进 titleBar.buttonLayout，排在 minBtn 之前。这样：
+        - bell 永远在 titleBar 内，不会与 stackedWidget 内容重叠
+        - 与系统按钮有间距（buttonLayout 自动处理）
+        - 窗口缩放时 bell 自动跟随
+        """
+        self._bell = BellButton(self.titleBar)
+        # 插入到 buttonLayout 的最前面（在 minBtn/maxBtn/closeBtn 之前）
+        self.titleBar.buttonLayout.insertWidget(0, self._bell)
+        # 让 buttonLayout 排版生效
+        self.titleBar.buttonLayout.insertSpacing(1, 8)
         self._bell.clicked.connect(self._toggle_notification_drawer)
         # 初始未读数
         self._bell.set_unread(_notify_unread())
@@ -264,24 +320,27 @@ class BDSFluentWindow(FluentWindow):
         """首次启动提示气泡：按 Ctrl+K 试试命令面板。"""
         if not self._bell:
             return
-        from qfluentwidgets import TeachingTip, InfoBarPosition, FluentIcon
-        tip = TeachingTip(
+        # qfluentwidgets 的 TeachingTip 需要 FlyoutView 作为内容承载
+        from qfluentwidgets import TeachingTip, FlyoutView, FluentIcon
+        view = FlyoutView(
             title="试试命令面板",
             content="随时按 Ctrl+K 打开命令面板，搜索任何动作（重启、备份、跳转页面…）",
             icon=FluentIcon.HEART,
+            isClosable=True,
+        )
+        tip = TeachingTip(
+            view=view,
             target=self._bell,
             parent=self,
-            isClosable=True,
             duration=8000,
         )
-        # 用户关闭后不再提示
-        tip.closed.connect(lambda: config_mgr.set("show_command_palette_tip", False))
+        # v3.02.01 fix: TeachingTip 没有 closed 信号，只有 destroyed（widget 销毁时触发）
+        # isDeleteOnClose=True 时，duration 到期或用户关闭都会 deleteLater → destroyed 触发
+        tip.destroyed.connect(lambda: config_mgr.set("show_command_palette_tip", False))
 
     def resizeEvent(self, event):
-        """窗口尺寸变化时重新定位铃铛（抽屉宽度已固定）。"""
+        """窗口尺寸变化 —— bell 已放进 titleBar.buttonLayout，无需手动定位。"""
         super().resizeEvent(event)
-        if self._bell:
-            self._bell.move(self.width() - 56, 12)
 
     # ---------- 服务初始化（资源监控 + 启动 toast + 自更新） ----------
     def _init_services(self):
@@ -392,9 +451,13 @@ class BDSFluentWindow(FluentWindow):
         self.resize(w, h)
 
     def resizeEvent(self, event):
+        """v3.02.01：实时保存窗口几何（含 maximized 状态）。
+        
+        之前保存 width/height，最大化时存的是最大化后的尺寸（错），下次启动恢复成大窗口
+        而不是最大化。改用 saveGeometry 始终保存 normalGeometry + windowState flag。
+        """
         super().resizeEvent(event)
-        config_mgr.set("window_width", self.width())
-        config_mgr.set("window_height", self.height())
+        self._save_geometry()
 
     def closeEvent(self, event):
         if self._tray and self._tray.isVisible() and config_mgr.get("close_to_tray", True):
@@ -411,6 +474,8 @@ class BDSFluentWindow(FluentWindow):
         if hasattr(self, "upgrade_page"):
             self.upgrade_page._stop_scan()
         self._tray.hide()
+        # v3.02.01：正常关闭时显式保存几何（resizeEvent 已实时保存，这里再保证一次）
+        self._save_geometry()
         config_mgr.save()
         super().closeEvent(event)
 
@@ -436,10 +501,14 @@ class BDSFluentWindow(FluentWindow):
         mgr.apply_user_overrides()
 
         # Ctrl+1..7 切页（特殊处理：保持原有行为，不进 ShortcutManager）
+        # v3.02.01 fix: navigationInterface.setCurrentItem 只亮导航不切页面（qfluentwidgets bug），
+        # 改用 switchTo(page) — 同时更新导航高亮和 stackedWidget
         for i, key in enumerate(["dashboard", "console", "world", "packs",
                                   "config", "upgrade", "tunnel"]):
-            QShortcut(QKeySequence(f"Ctrl+{i+1}"), self,
-                      activated=lambda k=key: self.navigationInterface.setCurrentItem(k))
+            page = getattr(self, f"{key}_page", None)
+            if page is not None:
+                QShortcut(QKeySequence(f"Ctrl+{i+1}"), self,
+                          activated=lambda p=page: self.switchTo(p))
 
         # 监听页面切换 → 更新快捷键作用域
         try:
@@ -448,6 +517,10 @@ class BDSFluentWindow(FluentWindow):
             self._on_page_changed_for_shortcuts(0)
         except Exception:
             pass
+
+        # v3.02.00 fix: 刷新设置页的快捷键列表（init 时 ShortcutManager 才有内容）
+        if hasattr(self, "settings_page") and hasattr(self.settings_page, "refresh_shortcut_card"):
+            self.settings_page.refresh_shortcut_card()
 
     def _get_shortcut_callback(self, action_id: str):
         """返回 action_id 对应的回调函数。"""
@@ -557,6 +630,26 @@ class BDSFluentWindow(FluentWindow):
             setThemeColor(QColor(accent_color))
         except Exception:
             setThemeColor(QColor("#0DC5D4"))
+
+        # v3.02.01 fix：主题切换后通知抽屉刷新（背景色 + chip 样式）
+        # 抽屉在 _build_ui 时一次性读取 isDarkTheme()，主题切换后不会自动更新。
+        # 这里手动调用 refresh()，使其按当前主题重建 chip 和 list 样式。
+        try:
+            if hasattr(self, "_notif_drawer") and self._notif_drawer is not None:
+                self._notif_drawer.refresh_theme()
+        except Exception:
+            pass
+
+        # v3.02.01：同步刷新各页面里主题感知的硬编码颜色（status_badge/bds_card/tasks_card 等）
+        for page_attr in ("dashboard_page", "packs_page", "settings_page",
+                          "console_page", "world_page", "config_page",
+                          "upgrade_page", "tunnel_page", "about_page"):
+            page = getattr(self, page_attr, None)
+            if page is not None and hasattr(page, "refresh_theme"):
+                try:
+                    page.refresh_theme()
+                except Exception:
+                    pass
 
         is_dark = theme_map.get(theme, Theme.DARK) != Theme.LIGHT
         handle = "#555" if is_dark else "#bbb"
@@ -926,7 +1019,10 @@ class AnimatedSplashScreen(QSplashScreen):
 
 def _animate_progress(splash: AnimatedSplashScreen, app: QApplication,
                       target: int, duration_ms: int = 250):
-    """从当前进度平滑过渡到 target（ease-out 曲线）。"""
+    """从当前进度平滑过渡到 target（ease-out 曲线）。
+
+    v3.02.01 优化：sleep 从 16ms 减到 5ms，动画更快。
+    """
     start = splash._progress
     steps = max(1, duration_ms // 16)  # ~60fps
     for i in range(1, steps + 1):
@@ -935,7 +1031,7 @@ def _animate_progress(splash: AnimatedSplashScreen, app: QApplication,
         pct = int(start + (target - start) * eased)
         splash.set_progress(pct)
         app.processEvents()
-        time.sleep(0.016)
+        time.sleep(0.008)  # v3.02.01: 从 0.016 → 0.008，动画仍平滑但快一倍
 
 
 # ---------- 入口 ----------
@@ -953,13 +1049,13 @@ def main():
     # 3. 全局错误处理
     set_error_handler(_toast_error_handler)
     install_excepthook()
-    _animate_progress(splash, app, 10, 150)
+    _animate_progress(splash, app, 10, 60)
 
     # 4. 加载配置
     config_mgr.load()
     init_context(config_mgr.get("server_dir"))
     splash.set_status("配置已加载")
-    _animate_progress(splash, app, 25, 200)
+    _animate_progress(splash, app, 25, 60)
 
     # 5. 字体
     font_size = config_mgr.get("font_size", 12)
@@ -967,13 +1063,13 @@ def main():
     f.setPointSize(font_size)
     app.setFont(f)
     splash.set_status("字体已设置")
-    _animate_progress(splash, app, 35, 150)
+    _animate_progress(splash, app, 35, 50)
 
     # 6. 主窗口（最耗时的一步，1.5+ 秒）
     splash.set_status("正在构造主窗口...")
-    _animate_progress(splash, app, 45, 150)
+    _animate_progress(splash, app, 45, 50)
     window = BDSFluentWindow()
-    _animate_progress(splash, app, 80, 300)
+    _animate_progress(splash, app, 80, 100)
 
     # 7. 主题
     splash.set_status("正在应用主题...")
@@ -981,11 +1077,11 @@ def main():
         config_mgr.get("theme", "dark"),
         config_mgr.get("theme_color", "#0DC5D4"),
     )
-    _animate_progress(splash, app, 95, 200)
+    _animate_progress(splash, app, 95, 60)
 
     # 8. 进度条到达 100% 时主窗口登场
     splash.set_status("准备就绪")
-    _animate_progress(splash, app, 100, 200)
+    _animate_progress(splash, app, 100, 60)
     window.show()
     splash.finish(window)
     app.processEvents()

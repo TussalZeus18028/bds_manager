@@ -11,9 +11,11 @@ v3.1 改进：
 import os
 from datetime import datetime
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QTextCharFormat, QColor, QTextCursor
-from PySide6.QtWidgets import QHBoxLayout, QLineEdit, QPushButton, QFileDialog, QCheckBox
-from qfluentwidgets import FluentIcon, InfoBar
+from PySide6.QtGui import QTextCharFormat, QColor, QTextCursor, QTextDocument
+from PySide6.QtWidgets import QHBoxLayout, QFileDialog, QTextEdit
+from qfluentwidgets import (
+    FluentIcon, InfoBar, LineEdit, PushButton, CheckBox,
+)
 
 from shared.config import LOG_DIR
 
@@ -27,40 +29,42 @@ class ConsoleSearchBar(QHBoxLayout):
         self._log = log_widget
         self._parent = parent_widget
 
-        self._input = QLineEdit(parent_widget)
+        # v3.02.01：换用 qfluentwidgets 控件，主题感知（暗色背景下不再发黑）
+        self._input = LineEdit(parent_widget)
         self._input.setPlaceholderText("搜索日志...")
         self._input.setMaximumWidth(180)
         self._input.textChanged.connect(self._on_text_changed)
         self._input.returnPressed.connect(self._search_next)
         self.addWidget(self._input)
 
-        prev_btn = QPushButton("▲", parent_widget)
+        prev_btn = PushButton("▲", parent_widget)
         prev_btn.setMaximumWidth(30)
         prev_btn.setToolTip("上一个匹配")
         prev_btn.clicked.connect(self._search_prev)
         self.addWidget(prev_btn)
 
-        next_btn = QPushButton("▼", parent_widget)
+        next_btn = PushButton("▼", parent_widget)
         next_btn.setMaximumWidth(30)
         next_btn.setToolTip("下一个匹配")
         next_btn.clicked.connect(self._search_next)
         self.addWidget(next_btn)
 
-        self._highlight_all_btn = QCheckBox("全部高亮", parent_widget)
+        # 主题感知��� CheckBox（暗色下文字不再发黑）
+        self._highlight_all_btn = CheckBox("全部高亮", parent_widget)
         self._highlight_all_btn.toggled.connect(self._refresh_highlight)
         self.addWidget(self._highlight_all_btn)
 
-        self._case_sensitive = QCheckBox("Aa", parent_widget)
+        self._case_sensitive = CheckBox("Aa", parent_widget)
         self._case_sensitive.setMaximumWidth(40)
         self._case_sensitive.setToolTip("区分大小写")
         self._case_sensitive.toggled.connect(self._refresh_highlight)
         self.addWidget(self._case_sensitive)
 
-        export_btn = QPushButton("导出", parent_widget)
+        export_btn = PushButton("导出", parent_widget)
         export_btn.clicked.connect(self._export)
         self.addWidget(export_btn)
 
-        clear_btn = QPushButton("清屏", parent_widget)
+        clear_btn = PushButton("清屏", parent_widget)
         clear_btn.clicked.connect(self._log.clear)
         self.addWidget(clear_btn)
 
@@ -80,9 +84,9 @@ class ConsoleSearchBar(QHBoxLayout):
         text = self._input.text()
         selections = []
         if text and self._highlight_all_btn.isChecked():
-            flags = QTextDocument.FindFlag(0)
-            if self._case_sensitive.isChecked():
-                flags = QTextDocument.FindFlag(0)  # 0=case sensitive 在 PySide6 是默认行为
+            # v3.02.01 fix: 区分大小写用 FindCaseSensitively（之前用 FindFlag(0) 逻辑反了，
+            # 勾选时反而变成不区分大小写）
+            flags = QTextDocument.FindFlag.FindCaseSensitively if self._case_sensitive.isChecked() else QTextDocument.FindFlag(0)
             cursor = self._log.document().find(text, 0, flags)
             while not cursor.isNull():
                 sel = QTextEdit.ExtraSelection()
@@ -99,12 +103,8 @@ class ConsoleSearchBar(QHBoxLayout):
         text = self._input.text()
         if not text:
             return
-        flags = QTextDocument.FindFlag(0)
-        if self._case_sensitive.isChecked():
-            flags = QTextDocument.FindFlag(0)
-        else:
-            from PySide6.QtGui import QTextDocument as _TD
-            flags = _TD.FindFlag(0)  # 0
+        # v3.02.01 fix: 同上
+        flags = QTextDocument.FindFlag.FindCaseSensitively if self._case_sensitive.isChecked() else QTextDocument.FindFlag(0)
         # 用 QTextDocument.find 替代手写 rfind
         if backward:
             start = max(0, self._last_pos - 1)
@@ -141,8 +141,3 @@ class ConsoleSearchBar(QHBoxLayout):
                 InfoBar.success(title="导出完成", content=os.path.basename(path), parent=self._parent, duration=3000)
             except Exception as e:
                 InfoBar.error(title="导出失败", content=str(e), parent=self._parent, duration=3000)
-
-
-# PySide6 imports at module level for type hints
-from PySide6.QtWidgets import QTextEdit
-from PySide6.QtGui import QTextDocument

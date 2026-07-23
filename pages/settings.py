@@ -21,8 +21,8 @@ from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QFileDialog, QA
 from qfluentwidgets import (
     CardWidget, SubtitleLabel, StrongBodyLabel, BodyLabel, CaptionLabel,
     PrimaryPushButton, PushButton, LineEdit, ComboBox,
-    FluentIcon, ToggleButton, Slider, SpinBox,
-    setTheme, setThemeColor, Theme, MessageBox,
+    FluentIcon, ToggleButton, Slider,
+    setTheme, setThemeColor, Theme, MessageBox, isDarkTheme,
 )
 
 from shared.config import config_mgr, SCRIPT_DIR, CONFIG_FILE
@@ -30,6 +30,7 @@ from shared.toast import toast_success, toast_warning, toast_error
 from pages.dashboard import wrap_scrollable
 from backend.shortcuts import ShortcutManager
 from components.key_capture import KeyCaptureButton
+from components.widgets import NoScrollSpinBox  # v3.02.01: 滚轮防护
 
 logger = logging.getLogger("bds_manager")
 
@@ -47,6 +48,11 @@ PRESET_COLORS = [
 ]
 
 
+def _hint_color() -> str:
+    """v3.02.01：主题感知的次要文字色（之前 #888 写死，浅色主题下看不见）。"""
+    return "#888" if isDarkTheme() else "#666"
+
+
 def _row(label_text: str, widget: QWidget, parent: QWidget, hint: str = "") -> QHBoxLayout:
     row = QHBoxLayout()
     row.setSpacing(8)
@@ -57,7 +63,8 @@ def _row(label_text: str, widget: QWidget, parent: QWidget, hint: str = "") -> Q
     row.addWidget(widget, 1)
     if hint:
         h = BodyLabel(hint, parent)
-        h.setStyleSheet("color: #888; font-size: 11px;")
+        h.setObjectName("_hint_label")  # v3.02.01: 标记以便 refresh_theme 重新应用样式
+        h.setStyleSheet(f"color: {_hint_color()}; font-size: 11px;")
         h.setMaximumWidth(180)
         row.addWidget(h)
     return row
@@ -73,8 +80,10 @@ class ColorSwatch(QWidget):
         self._settings = parent_settings
         self.setToolTip(f"{label} ({hex_color})")
         self.setFixedSize(36, 36)
+        # v3.02.01 fix: 边框颜色主题感知（浅色主题下 #444 太深，与白底融合差）
+        border_color = "#444" if isDarkTheme() else "#bbb"
         self.setStyleSheet(
-            f"background:{hex_color}; border:2px solid #444; border-radius:6px;"
+            f"background:{hex_color}; border:2px solid {border_color}; border-radius:6px;"
         )
         self.setCursor(Qt.PointingHandCursor)
 
@@ -108,7 +117,7 @@ class SettingsPage(QWidget):
         tc.addWidget(self._follow_system, alignment=Qt.AlignLeft)
 
         # 字体大小
-        self._font_size = SpinBox(theme_card)
+        self._font_size = NoScrollSpinBox(theme_card)
         self._font_size.setRange(9, 20)
         self._font_size.setValue(config_mgr.get("font_size", 12))
         self._font_size.valueChanged.connect(self._on_font_size_changed)
@@ -158,7 +167,7 @@ class SettingsPage(QWidget):
         self._graceful = ToggleButton("启用优雅停服（先 save-all 再 stop）", svr)
         self._graceful.setChecked(config_mgr.get("graceful_shutdown", True))
         sl.addWidget(self._graceful, alignment=Qt.AlignLeft)
-        self._grace_seconds = SpinBox(svr)
+        self._grace_seconds = NoScrollSpinBox(svr)
         self._grace_seconds.setRange(1, 60)
         self._grace_seconds.setValue(config_mgr.get("shutdown_grace_seconds", 10))
         sl.addLayout(_row("停服宽限(秒)", self._grace_seconds, svr, "stop 后等待秒数"))
@@ -180,12 +189,12 @@ class SettingsPage(QWidget):
         self._backup_toggle.setChecked(config_mgr.get("auto_backup_enabled", True))
         bl.addWidget(self._backup_toggle)
 
-        self._backup_interval = SpinBox(backup)
+        self._backup_interval = NoScrollSpinBox(backup)
         self._backup_interval.setRange(5, 1440)
         self._backup_interval.setValue(config_mgr.get("backup_interval", 60))
         bl.addLayout(_row("备份间隔(分钟)", self._backup_interval, backup))
 
-        self._backup_keep = SpinBox(backup)
+        self._backup_keep = NoScrollSpinBox(backup)
         self._backup_keep.setRange(1, 100)
         self._backup_keep.setValue(config_mgr.get("backup_keep", 20))
         bl.addLayout(_row("保留备份数", self._backup_keep, backup, "仅 auto_ 前缀"))
@@ -209,7 +218,7 @@ class SettingsPage(QWidget):
                                  ("警告", "toast_duration_warning", 4000),
                                  ("成功", "toast_duration_success", 3500),
                                  ("信息", "toast_duration_info", 3000)]:
-            sp = SpinBox(toast)
+            sp = NoScrollSpinBox(toast)
             sp.setRange(500, 60000); sp.setValue(config_mgr.get(key, dflt))
             setattr(self, f"_toast_{key}", sp)
             tl.addLayout(_row(f"Toast {name}时长(ms)", sp, toast))
@@ -225,7 +234,7 @@ class SettingsPage(QWidget):
         self._toast_style.setCurrentText("原版滑动排队" if current_style == "original" else "现代 InfoBar")
         tl.addLayout(_row("Toast 风格", self._toast_style, toast))
 
-        self._queue_delay = SpinBox(toast)
+        self._queue_delay = NoScrollSpinBox(toast)
         self._queue_delay.setRange(50, 5000)
         self._queue_delay.setValue(config_mgr.get("toast_queue_delay") or 200)
         tl.addLayout(_row("Toast 排队延迟(ms)", self._queue_delay, toast))
@@ -242,7 +251,7 @@ class SettingsPage(QWidget):
         self._console_timestamps.setChecked(config_mgr.get("console_show_timestamps", True))
         ccl.addWidget(self._console_timestamps, alignment=Qt.AlignLeft)
 
-        self._console_max = SpinBox(console_card)
+        self._console_max = NoScrollSpinBox(console_card)
         self._console_max.setRange(100, 100000)
         self._console_max.setSingleStep(500)
         self._console_max.setValue(config_mgr.get("console_max_lines", 5000))
@@ -317,7 +326,7 @@ class SettingsPage(QWidget):
         self._multi_dl.setChecked(config_mgr.get("multi_dl_enabled", True))
         ol.addWidget(self._multi_dl, alignment=Qt.AlignLeft)
 
-        self._mem_warn = SpinBox(other)
+        self._mem_warn = NoScrollSpinBox(other)
         self._mem_warn.setRange(50, 99)
         self._mem_warn.setValue(config_mgr.get("mem_warn_threshold", 80))
         ol.addLayout(_row("内存告警阈值(%)", self._mem_warn, other))
@@ -326,7 +335,7 @@ class SettingsPage(QWidget):
         self._close_tray.setChecked(config_mgr.get("close_to_tray", True))
         ol.addWidget(self._close_tray, alignment=Qt.AlignLeft)
 
-        self._crash_restart = SpinBox(other)
+        self._crash_restart = NoScrollSpinBox(other)
         self._crash_restart.setRange(0, 20)
         self._crash_restart.setValue(config_mgr.get("max_restart_retries", 5))
         ol.addLayout(_row("崩溃自动重启次数(0=禁用)", self._crash_restart, other))
@@ -355,55 +364,87 @@ class SettingsPage(QWidget):
 
     # ── 快捷键 (v3.02.00) ──
     def _build_shortcut_card(self, inner, layout):
-        """构造快捷键编辑卡片：分组表格 + 双击录制 + 冲突检测。"""
-        sc_card = CardWidget(inner)
-        sc = QVBoxLayout(sc_card)
-        sc.setContentsMargins(16, 12, 16, 16); sc.setSpacing(8)
-        sc.addWidget(SubtitleLabel("快捷键", sc_card))
-        sc.addWidget(CaptionLabel("双击键位单元格录制新快捷键。Esc 取消录制。", sc_card))
+        """构造快捷键编辑卡片框架；具体行填充由 refresh_shortcut_card() 完成。
+
+        调用顺序：SettingsPage.__init__ → _build_shortcut_card（卡框） →
+                  main._init_shortcuts（注册 12 个） → settings_page.refresh_shortcut_card（填行）
+        这样确保 ShortcutManager 注册后再渲染行，避免出现「设置页里快捷键 0 行」。
+        """
+        from PySide6.QtWidgets import QFrame
+        self._sc_card = CardWidget(inner)
+        self._sc_layout_outer = QVBoxLayout(self._sc_card)
+        self._sc_layout_outer.setContentsMargins(16, 12, 16, 16)
+        self._sc_layout_outer.setSpacing(8)
+        self._sc_layout_outer.addWidget(SubtitleLabel("快捷键", self._sc_card))
+        self._sc_layout_outer.addWidget(CaptionLabel("双击键位单元格录制新快捷键。Esc 取消录制。", self._sc_card))
 
         mgr = ShortcutManager.get_instance()
         # 顶部按钮：恢复默认
         top_row = QHBoxLayout()
         top_row.addStretch()
-        reset_btn = PushButton("全部恢复默认", sc_card, FluentIcon.UNDO)
-        reset_btn.clicked.connect(self._on_shortcuts_reset_all)
-        top_row.addWidget(reset_btn)
-        sc.addLayout(top_row)
+        self._sc_reset_all_btn = PushButton("全部恢复默认", self._sc_card, FluentIcon.SYNC)
+        self._sc_reset_all_btn.clicked.connect(self._on_shortcuts_reset_all)
+        top_row.addWidget(self._sc_reset_all_btn)
+        self._sc_layout_outer.addLayout(top_row)
 
-        # 按作用域分组
+        # 行容器（会被 refresh_shortcut_card 重建）
+        self._sc_rows_container = QWidget(self._sc_card)
+        self._sc_rows_layout = QVBoxLayout(self._sc_rows_container)
+        self._sc_rows_layout.setContentsMargins(0, 0, 0, 0)
+        self._sc_rows_layout.setSpacing(4)
+        self._sc_layout_outer.addWidget(self._sc_rows_container)
+
+        self._capture_buttons: dict[str, KeyCaptureButton] = {}
+        layout.addWidget(self._sc_card)
+        # 首次填充（如果 ShortcutManager 已经有内容）
+        self.refresh_shortcut_card()
+
+    def refresh_shortcut_card(self):
+        """从 ShortcutManager 重新填充快捷键列表行。Idempotent —— 重复调用安全。"""
+        # 清空现有行
+        if not hasattr(self, "_sc_rows_layout"):
+            return
+        while self._sc_rows_layout.count():
+            item = self._sc_rows_layout.takeAt(0)
+            w = item.widget()
+            if w:
+                w.setParent(None)
+                w.deleteLater()
+        self._capture_buttons = {}
+
+        mgr = ShortcutManager.get_instance()
         scopes = [
             ("全局",   "global"),
             ("控制台", "console"),
             ("仪表盘", "dashboard"),
         ]
-        self._capture_buttons: dict[str, KeyCaptureButton] = {}
         for scope_label, scope_key in scopes:
-            sc.addWidget(StrongBodyLabel(scope_label, sc_card))
+            self._sc_rows_layout.addWidget(StrongBodyLabel(scope_label, self._sc_rows_container))
             records = mgr.list_records(scope_key)
             if not records:
-                sc.addWidget(CaptionLabel("（无）", sc_card))
+                self._sc_rows_layout.addWidget(CaptionLabel("（无）", self._sc_rows_container))
                 continue
             for rec in records:
                 row = QHBoxLayout()
                 row.setSpacing(8)
-                lbl = BodyLabel(rec.label, sc_card)
+                lbl = BodyLabel(rec.label, self._sc_rows_container)
                 lbl.setMinimumWidth(160)
                 row.addWidget(lbl)
-                btn = KeyCaptureButton(rec.current_key, sc_card)
+                btn = KeyCaptureButton(rec.current_key, self._sc_rows_container)
                 btn.set_text(rec.current_key)
                 btn.capture_completed.connect(
                     lambda new_key, aid=rec.action_id: self._on_shortcut_captured(aid, new_key)
                 )
                 self._capture_buttons[rec.action_id] = btn
                 row.addWidget(btn)
-                # 重置单个
-                rb = PushButton("重置", sc_card)
+                rb = PushButton("重置", self._sc_rows_container)
                 rb.clicked.connect(lambda _checked=False, aid=rec.action_id: self._on_shortcut_reset_one(aid))
                 row.addWidget(rb)
                 row.addStretch()
-                sc.addLayout(row)
-        layout.addWidget(sc_card)
+                # 用容器包一层让 addLayout 不被忽略
+                wrap = QWidget(self._sc_rows_container)
+                wrap.setLayout(row)
+                self._sc_rows_layout.addWidget(wrap)
 
     def _on_shortcut_captured(self, action_id: str, new_key: str):
         """用户完成录制：检测冲突，弹三选项 MessageBox。"""
@@ -472,6 +513,21 @@ class SettingsPage(QWidget):
             toast_success("已恢复", "所有快捷键已恢复为默认值", self.window())
         except Exception:
             pass
+
+    def refresh_theme(self):
+        """v3.02.01：主题切换后调用，重设 hint 文字色 + ColorSwatch 边框。"""
+        color = _hint_color()
+        # 重新设所有 hint label
+        for lbl in self.findChildren(BodyLabel, "_hint_label"):
+            lbl.setStyleSheet(f"color: {color}; font-size: 11px;")
+        # ColorSwatch 边框
+        border_color = "#444" if isDarkTheme() else "#bbb"
+        for sw in self.findChildren(ColorSwatch):
+            sw.setStyleSheet(
+                f"background:{sw._hex}; border:2px solid {border_color}; border-radius:6px;"
+            )
+        # 当前色预览保持原样（color:#fff + hex bg，任何主题都清晰）
+        # webhook / 字体等 ToggleButton 由 qfluentwidgets 自动处理
 
     # ── 主题 ──
     def _on_theme_changed(self, text: str):

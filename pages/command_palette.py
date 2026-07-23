@@ -157,10 +157,12 @@ def build_default_commands(window) -> list[CommandItem]:
     """构造主窗口的命令列表。"""
     cmds: list[CommandItem] = []
 
+    # v3.02.01 fix: navigationInterface.setCurrentItem 只亮导航不切页面
     def nav_to(key: str):
         def f():
-            if hasattr(window, "navigationInterface"):
-                window.navigationInterface.setCurrentItem(key)
+            page = getattr(window, f"{key}_page", None)
+            if page is not None:
+                window.switchTo(page)
         return f
 
     # 页面跳转

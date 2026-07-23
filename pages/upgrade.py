@@ -22,12 +22,13 @@ from PySide6.QtGui import QTextCursor
 from qfluentwidgets import (
     CardWidget, SubtitleLabel, StrongBodyLabel, BodyLabel, CaptionLabel,
     PrimaryPushButton, PushButton, LineEdit, FluentIcon,
-    ProgressBar, SpinBox, MessageBox,
+    ProgressBar, MessageBox,
 )
 
 from shared.config import config_mgr, get_context, SCRIPT_DIR
 from shared.toast import toast_success, toast_error, toast_info
 from pages.dashboard import wrap_scrollable
+from components.widgets import NoScrollSpinBox  # v3.02.01: 滚轮防护
 
 import requests
 
@@ -375,9 +376,9 @@ class UpgradePage(QWidget):
         self._fetch_btn = PrimaryPushButton("浏览可用版本", ver_card, FluentIcon.SYNC)
         self._stop_btn = PushButton("停止", ver_card, FluentIcon.CANCEL)
         self._stop_btn.setEnabled(False)
-        self._patch_spin = SpinBox(ver_card)
+        self._patch_spin = NoScrollSpinBox(ver_card)
         self._patch_spin.setRange(10, 200); self._patch_spin.setValue(40)
-        self._build_spin = SpinBox(ver_card)
+        self._build_spin = NoScrollSpinBox(ver_card)
         self._build_spin.setRange(5, 60); self._build_spin.setValue(30)
         hdr.addWidget(self._fetch_btn)
         hdr.addWidget(self._stop_btn)

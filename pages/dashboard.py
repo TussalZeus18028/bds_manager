@@ -26,7 +26,7 @@ from PySide6.QtGui import QPainter, QPen, QColor, QBrush, QLinearGradient, QFont
 from qfluentwidgets import (
     CardWidget, SubtitleLabel, StrongBodyLabel, BodyLabel,
     CaptionLabel, PrimaryPushButton, PushButton,
-    FluentIcon, ProgressBar, InfoBar, InfoBarPosition,
+    FluentIcon, ProgressBar, InfoBar, InfoBarPosition, isDarkTheme,
 )
 
 from backend.monitor import SystemStatsSnapshot
@@ -83,17 +83,27 @@ class ResourceCurveWidget(QWidget):
         p = QPainter(self)
         p.setRenderHint(QPainter.Antialiasing)
         w, h = self.width(), self.height()
-        # 背景（暗色）
-        p.fillRect(self.rect(), QColor("#1e1e1e"))
+        # v3.02.01 fix: 主题感知 —— 浅色主题用浅灰底，深色用深灰底
+        if isDarkTheme():
+            bg_c = QColor("#1e1e1e")
+            grid_c = QColor("#2a2a2a")
+            empty_c = QColor("#666")
+            text_c = QColor("#fff")
+        else:
+            bg_c = QColor("#f5f5f5")
+            grid_c = QColor("#e0e0e0")
+            empty_c = QColor("#aaa")
+            text_c = QColor("#1a1a1a")
+        p.fillRect(self.rect(), bg_c)
         # 网格线（4 条）
-        p.setPen(QPen(QColor("#2a2a2a"), 1, Qt.DashLine))
+        p.setPen(QPen(grid_c, 1, Qt.DashLine))
         for i in range(1, 4):
             y = int(h * i / 4)
             p.drawLine(0, y, w, y)
         # 折线
         if not self._values:
             # 空状态
-            p.setPen(QPen(QColor("#666"), 1))
+            p.setPen(QPen(empty_c, 1))
             p.drawText(self.rect(), Qt.AlignCenter, "(等待数据...)")
         else:
             n = len(self._values)
@@ -118,7 +128,7 @@ class ResourceCurveWidget(QWidget):
             p.setPen(QPen(color, 2))
             p.drawPolyline(QPolygonF(points))
         # 当前值（大字显示在右上）
-        p.setPen(QPen(QColor("#fff"), 1))
+        p.setPen(QPen(text_c, 1))
         font = QFont()
         font.setPointSize(11)
         font.setBold(True)
@@ -153,14 +163,16 @@ class StatusCard(CardWidget):
         title = SubtitleLabel("服务器状态", self)
         header.addWidget(title)
         header.addStretch()
+        # v3.02.01 fix: 主题感知的次要文字色（之前 #888 写死，浅色主题下看不见）
+        sub_color = "#888" if isDarkTheme() else "#666"
         self._status_badge = BodyLabel("● 未运行", self)
-        self._status_badge.setStyleSheet("color: #888;")
+        self._status_badge.setStyleSheet(f"color: {sub_color};")
         header.addWidget(self._status_badge)
         layout.addLayout(header)
 
-        # 信息行
+        # 信息行（v3.02.01：拆成两行，避免窗口窄时挤压/截断）
         info_row = QHBoxLayout()
-        info_row.setSpacing(16)
+        info_row.setSpacing(12)
         self._cpu_label = CaptionLabel("CPU: —%", self)
         self._mem_label = CaptionLabel("内存: —%", self)
         self._disk_label = CaptionLabel("磁盘: —%", self)
@@ -172,11 +184,20 @@ class StatusCard(CardWidget):
         info_row.addWidget(self._rtt_label)
         info_row.addWidget(self._uptime_label)
         info_row.addStretch()
-        self._backup_label = CaptionLabel("备份: —", self)
-        info_row.addWidget(self._backup_label)
-        ctx = get_context()
-        info_row.addWidget(CaptionLabel(f"目录: {os.path.basename(ctx.server_dir)}", self))
         layout.addLayout(info_row)
+        # 第二行：备份 + 目录（次要信息，单独一行不会被挤压）
+        sub_row = QHBoxLayout()
+        sub_row.setSpacing(12)
+        self._backup_label = CaptionLabel("备份: —", self)
+        ctx = get_context()
+        self._dir_label = CaptionLabel(f"目录: {os.path.basename(ctx.server_dir)}", self)
+        # 目录标签太宽时会省略，避免挤压其他控件
+        self._dir_label.setMaximumWidth(280)
+        self._dir_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        sub_row.addWidget(self._backup_label)
+        sub_row.addWidget(self._dir_label)
+        sub_row.addStretch()
+        layout.addLayout(sub_row)
 
         # 假死徽章
         self._stale_label = CaptionLabel("", self)
@@ -238,7 +259,9 @@ class StatusCard(CardWidget):
             self._last_output_time = time.time()
         else:
             self._status_badge.setText("● 未运行")
-            self._status_badge.setStyleSheet("color: #888;")
+            # v3.02.01 fix: 主题感知次要色
+            sub_color = "#888" if isDarkTheme() else "#666"
+            self._status_badge.setStyleSheet(f"color: {sub_color};")
             self._start_btn.setEnabled(True)
             self._stop_btn.setEnabled(False)
             self._restart_btn.setEnabled(False)
@@ -325,17 +348,21 @@ class BDSProcessCard(CardWidget):
         layout.setContentsMargins(16, 12, 16, 16)
         layout.setSpacing(8)
         layout.addWidget(SubtitleLabel("BDS 进程", self))
+        # v3.02.01 fix: 主题感知次要色
+        sub_color = "#888" if isDarkTheme() else "#666"
         self._info = BodyLabel("(未运行)", self)
-        self._info.setStyleSheet("color: #888;")
+        self._info.setStyleSheet(f"color: {sub_color};")
         layout.addWidget(self._info)
         self._bar = ProgressBar(self)
         self._bar.setVisible(False)
         layout.addWidget(self._bar)
 
     def update_proc_stats(self, stats: dict):
+        sub_color = "#888" if isDarkTheme() else "#666"
+        main_color = "#ccc" if isDarkTheme() else "#1a1a1a"
         if not stats:
             self._info.setText("(未运行)")
-            self._info.setStyleSheet("color: #888;")
+            self._info.setStyleSheet(f"color: {sub_color};")
             self._bar.setVisible(False)
             return
         cpu = stats.get("cpu", 0)
@@ -346,7 +373,8 @@ class BDSProcessCard(CardWidget):
         self._info.setText(
             f"CPU: <b>{cpu:.1f}%</b>  ·  内存: <b>{mem:.1f} MB</b>  ·  线程: <b>{threads}</b>  {ofiles_text}"
         )
-        self._info.setStyleSheet("color: #ccc;")
+        # v3.02.01 fix: 主题感知主色
+        self._info.setStyleSheet(f"color: {main_color};")
         self._bar.setVisible(True)
         self._bar.setValue(min(int(cpu), 100))
 
@@ -393,10 +421,13 @@ class QuickActionsCard(CardWidget):
         row3.addStretch()
         layout.addLayout(row3)
 
+        # v3.02.01 fix: navigationInterface.setCurrentItem 只亮导航不切页面，
+        # 改用 switchTo(page) — 同时更新导航高亮和 stackedWidget
         def _nav(page_key):
             win = self.window()
-            if hasattr(win, "navigationInterface"):
-                win.navigationInterface.setCurrentItem(page_key)
+            page = getattr(win, f"{page_key}_page", None)
+            if page is not None:
+                win.switchTo(page)
 
         btn_backup.clicked.connect(lambda: _nav("world"))
         btn_console.clicked.connect(lambda: _nav("console"))
@@ -426,12 +457,14 @@ class BackgroundTasksCard(CardWidget):
         header = QHBoxLayout()
         header.addWidget(SubtitleLabel("后台任务", self))
         header.addStretch()
+        # v3.02.01 fix: 主题感知次要色
+        sub_color = "#888" if isDarkTheme() else "#666"
         self._count_label = CaptionLabel("0 个运行中", self)
-        self._count_label.setStyleSheet("color: #888;")
+        self._count_label.setStyleSheet(f"color: {sub_color};")
         header.addWidget(self._count_label)
         layout.addLayout(header)
         self._list_label = BodyLabel("(无)", self)
-        self._list_label.setStyleSheet("color: #888;")
+        self._list_label.setStyleSheet(f"color: {sub_color};")
         self._list_label.setWordWrap(True)
         layout.addWidget(self._list_label)
 
@@ -453,16 +486,19 @@ class BackgroundTasksCard(CardWidget):
 
     def _refresh(self):
         self._count_label.setText(f"{len(self._tasks)} 个运行中")
+        # v3.02.01 fix: 主题感知次要色 / 主色
+        sub_color = "#888" if isDarkTheme() else "#666"
+        main_color = "#ccc" if isDarkTheme() else "#1a1a1a"
         if not self._tasks:
             self._list_label.setText("(无)")
-            self._list_label.setStyleSheet("color: #888;")
+            self._list_label.setStyleSheet(f"color: {sub_color};")
         else:
             lines = []
             for v in self._tasks.values():
                 elapsed = int(time.time() - v["started_at"])
                 lines.append(f"⏳ {v['name']}（{elapsed}s）")
             self._list_label.setText("\n".join(lines))
-            self._list_label.setStyleSheet("color: #ccc;")
+            self._list_label.setStyleSheet(f"color: {main_color};")
 
 
 # ---------- 仪表盘页面 ----------
@@ -514,6 +550,49 @@ class DashboardPage(QWidget):
     def on_output(self):
         """主窗口在收到服务器输出时调用，用于假死检测。"""
         self.status_card.mark_output()
+
+    def refresh_theme(self):
+        """v3.02.01：主题切换后调用，重新设 status_badge/bds_card/tasks_card 的文字色，
+        并强制重绘资源曲线（paintEvent 中读 isDarkTheme()）。"""
+        sub_color = "#888" if isDarkTheme() else "#666"
+        main_color = "#ccc" if isDarkTheme() else "#1a1a1a"
+        # status_badge：恢复"未运行"颜色（如果当前不是运行中）
+        if not self._server_running_cached():
+            self.status_card._status_badge.setStyleSheet(f"color: {sub_color};")
+        # bds_card / tasks_card：重画
+        self.bds_card._info.setStyleSheet(f"color: {sub_color};")
+        self.tasks_card._count_label.setStyleSheet(f"color: {sub_color};")
+        self.tasks_card._list_label.setStyleSheet(f"color: {sub_color};")
+        # resource curve：强制 repaint（paintEvent 会读 isDarkTheme）
+        for key in ("cpu", "mem", "disk"):
+            curve = getattr(self.resource_card, f"_{key}_curve", None)
+            if curve is not None:
+                curve.update()
+
+    def _server_running_cached(self) -> bool:
+        """简化的运行状态探测（仅用于 refresh_theme 时判断 status_badge 颜色）。"""
+        try:
+            win = self.window()
+            return bool(win and getattr(win, "is_server_running", False))
+        except Exception:
+            return False
+
+    # ---------- v3.02.01 fix: 与 ConsolePage 对齐的服务器状态回调 ----------
+    # main.py 启动/停止服务器时会调用这些方法（dashboard_page._on_server_started 等），
+    # 但 dashboard.py 之前没有实现 → 启动服务器直接崩 'object has no attribute'。
+    # 这里转发到 status_card.set_running_ui()（已存在的核心逻辑）
+    def _on_server_started(self):
+        """服务器启动时由 main.start_server() 调用。"""
+        self.status_card.set_running_ui(True)
+        self.status_card.mark_output()
+
+    def _on_server_stopped(self):
+        """服务器停止时由 main._on_server_stopped() 调用。"""
+        self.status_card.set_running_ui(False)
+
+    def _on_status_changed(self, running: bool):
+        """ServerProcess.status_changed 信号回调（与 console.py 接口一致）。"""
+        self.status_card.set_running_ui(running)
 
     def _on_start(self):
         win = self.window()
