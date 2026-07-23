@@ -124,26 +124,34 @@ def common_top_dir(names: list[str]) -> str:
 
 # ── 检查 Worker ──
 class CheckUpdateWorker(QThread):
-    result = Signal(str, str, str, str)  # status, remote_ver, dl_url, sha256
+    result = Signal(str, str, str, str, str)  # status, remote_ver, dl_url, sha256, msg
 
     def run(self):
         try:
             data = fetch_remote_version_json()
             remote = data.get("version", "")
+            min_ver = data.get("min_compatible_version", "")
             if not remote:
-                self.result.emit("error", "", "", "")
+                self.result.emit("error", "", "", "", "version.json 缺少 version 字段")
                 return
             import main
             if compare_versions(remote, main.__version__) > 0:
+                # 最低兼容版本检查（与旧版 Manager/ 一致，让 v2.x 用户也能升级）
+                if min_ver and compare_versions(main.__version__, min_ver) < 0:
+                    self.result.emit(
+                        "too_old", remote, "", "",
+                        f"当前版本 v{main.__version__} 过低，无法自动升级到 v{remote}（最低要求 v{min_ver}）",
+                    )
+                    return
                 dl = data.get("download_url", "")
                 sha = data.get("sha256", "")
-                self.result.emit("update", remote, dl, sha)
+                self.result.emit("update", remote, dl, sha, "")
             else:
-                self.result.emit("latest", remote, "", "")
+                self.result.emit("latest", remote, "", "", "")
         except Exception as e:
             from backend.network import network_error_text
             _, _, msg = network_error_text(e)
-            self.result.emit("error", msg, "", "")
+            self.result.emit("error", "", "", "", msg)
 
 
 # ── 下载 Worker ──
@@ -197,6 +205,27 @@ class InstallUpdateWorker(QThread):
             for f in os.listdir(SCRIPT_DIR):
                 if f.endswith((".py", ".json", ".txt", ".md")) and os.path.isfile(os.path.join(SCRIPT_DIR, f)):
                     shutil.copy2(os.path.join(SCRIPT_DIR, f), os.path.join(backup_dir, f))
+
+            # v2.x → v3.x 迁移：检测到旧版特征文件时移到 backups/legacy_v2/
+            legacy_files = {"bds_manager.py", "bds_manager.py.bak_174752", "release_gui.py"}
+            legacy_dirs = {"web_ui", "tests"}
+            legacy_detected = [n for n in legacy_files if os.path.exists(os.path.join(SCRIPT_DIR, n))]
+            legacy_detected += [n for n in legacy_dirs if os.path.isdir(os.path.join(SCRIPT_DIR, n))]
+            if legacy_detected:
+                self.log.emit(f"检测到 v2.x 旧版文件: {', '.join(legacy_detected)}")
+                legacy_dir = os.path.join(SCRIPT_DIR, "backups", "legacy_v2")
+                os.makedirs(legacy_dir, exist_ok=True)
+                moved = []
+                for n in legacy_detected:
+                    src = os.path.join(SCRIPT_DIR, n)
+                    dst = os.path.join(legacy_dir, n)
+                    try:
+                        shutil.move(src, dst)
+                        moved.append(n)
+                    except OSError as e:
+                        self.log.emit(f"迁移失败 {n}: {e}")
+                if moved:
+                    self.log.emit(f"已将 {len(moved)} 个 v2.x 旧文件移动到 backups/legacy_v2/（可手动删除）")
 
             # 解压
             skip_files = {"bds_manager_config.json", "bds_version_cache.json"}

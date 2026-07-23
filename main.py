@@ -72,13 +72,14 @@ logging.basicConfig(
 )
 logger = logging.getLogger("bds_manager")
 
-__version__ = "3.01.00"
+__version__ = "3.01.01"
 # ⚠️ 工具版本固定写在这里，不在 bds_manager_config.json / bds_version_cache.json 等任何配置文件中。
 # 如果需要做配置兼容性检查，读取远端 version.json（自更新流程用）即可。
 # 格式规范：x.xx.xx —— Major 1 位、Minor 2 位（补零）、Patch 2 位（补零）
 # 例：3.1.0 → 3.01.00；3.10.5 → 3.10.05
-__version_info__ = (3, 1, 0)
-__release_date__ = "2026-07-22"
+# 注意：旧项目（v2.x，Manager/）版本格式是 x.xx.xx.xx (4段)，compare_versions 已兼容任意段数。
+__version_info__ = (3, 1, 1)
+__release_date__ = "2026-07-23"
 
 
 def format_version(major: int, minor: int, patch: int) -> str:
@@ -570,13 +571,17 @@ class BDSFluentWindow(FluentWindow):
         self._update_checker.result.connect(self._on_self_update_found)
         self._update_checker.start()
 
-    def _on_self_update_found(self, status, remote_ver, dl_url, sha256):
+    def _on_self_update_found(self, status, remote_ver, dl_url, sha256, msg=""):
         from shared.toast import toast_success, toast_error, toast_warning, toast_info
         if status == "error":
             toast_error("版本检查失败", remote_ver or "网络错误", self, duration=5000)
             return
         if status == "latest":
             toast_success("已是最新版本", f"v{__version__}（远程: v{remote_ver}）", self)
+            return
+        if status == "too_old":
+            # 与旧版 Manager/ 行为一致：版本过低，无法自动升级
+            toast_warning("版本过低", msg or f"当前 v{__version__} 无法升级到 v{remote_ver}", self, duration=8000)
             return
         if not dl_url:
             toast_warning("更新源缺失", "version.json 未提供下载链接", self, duration=6000)
