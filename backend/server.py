@@ -238,7 +238,10 @@ class ServerProcess(QThread):
             except Exception:
                 pass
         if self.process.poll() is None:
-            logger.warning("BDS 未在 %ds 内退出，强制 terminate", grace_seconds if graceful else 0)
+            if graceful:
+                logger.warning("BDS 未在 %ds 内退出，强制 terminate", grace_seconds)
+            else:
+                logger.info("BDS 未立即退出，强制 terminate")
             try:
                 self.process.terminate()
             except Exception:

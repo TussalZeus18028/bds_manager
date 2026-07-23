@@ -123,6 +123,8 @@ class BDSFluentWindow(FluentWindow):
         self._tray = None
         self._bell = None
         self._notif_drawer = None
+        self._restart_count = 0
+        self._lag_samples: list[float] = []
         self._current_color = config_mgr.get("theme_color", "#0DC5D4")
         self._setup_window()
         self._init_pages()
@@ -738,8 +740,6 @@ class BDSFluentWindow(FluentWindow):
         self.console_page._on_server_started()
         notify("success", "server", "服务器已启动", os.path.basename(exe_path), "page:dashboard")
 
-        self._restart_count = 0
-        self._lag_samples: list[float] = []
         if not hasattr(self, "_lag_timer") or not self._lag_timer:
             self._lag_timer = QTimer(self)
             self._lag_timer.timeout.connect(self._lag_ping)
@@ -749,8 +749,9 @@ class BDSFluentWindow(FluentWindow):
     def stop_server(self):
         if self._server and self._server.is_running:
             self.console_page._append_output("[系统] 正在停止服务器...", "#ffaa00")
-            # v3.02.01: 直接 stop，不经过 save-all + 10s 等待（BDS 经常卡在等待阶段不动）
+            # v3.02.01: 直接 stop，不经过 save-all + 10s 等待
             self._server.stop_server(graceful=False)
+        self._restart_count = 0  # 用户手动停服时重置自动重启计数
         if hasattr(self, "_lag_timer") and self._lag_timer:
             self._lag_timer.stop()
 
