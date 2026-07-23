@@ -327,7 +327,15 @@ class PacksPage(QWidget):
         hdr.addWidget(self._status_label)
         add_btn = PrimaryPushButton(f"添加{title}", card, FluentIcon.ADD)
         refresh_btn = PushButton("刷新", card, FluentIcon.SYNC)
-        open_dir_btn = PushButton("文件夹", card, FluentIcon.FOLDER)
+        hdr.addWidget(add_btn)
+        hdr.addWidget(refresh_btn)
+        cl.addLayout(hdr)
+
+        # 打开目录按钮（单独一行，靠右，不和 header 按钮挤在一起）
+        dir_row = QHBoxLayout()
+        dir_row.addStretch()
+        open_dir_btn = PushButton("📂 打开目录", card)
+        open_dir_btn.setMaximumWidth(130)
         def _open_dir(d):
             if os.path.isdir(d):
                 os.startfile(d)
@@ -335,10 +343,8 @@ class PacksPage(QWidget):
             lambda _, pt=pack_type: _open_dir(
                 get_context().resource_packs_dir if pt == "resource"
                 else get_context().behavior_packs_dir))
-        hdr.addWidget(add_btn)
-        hdr.addWidget(refresh_btn)
-        hdr.addWidget(open_dir_btn)
-        cl.addLayout(hdr)
+        dir_row.addWidget(open_dir_btn)
+        cl.addLayout(dir_row)
 
         # 表格：名称 / 版本 / UUID / 状态 / 操作
         table = QTableWidget(0, 5, card)
