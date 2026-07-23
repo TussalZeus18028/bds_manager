@@ -1,9 +1,9 @@
 {
-    "version": "3.01.03",
+    "version": "3.01.04",
     "release_date": "2026-07-23",
-    "download_url": "https://github.com/TussalZeus18028/bds_manager/releases/download/v3.01.03/bds_manager_v3.01.03.zip",
-    "sha256": "acb5dbcbfb71bfd0030b2adb495efc7c839a840b3493c92d6c25de50105a4824",
-    "file_size": 105053,
+    "download_url": "https://github.com/TussalZeus18028/bds_manager/releases/download/v3.01.04/bds_manager_v3.01.04.zip",
+    "sha256": "pending-build",
+    "file_size": 0,
     "min_compatible_version": "2.00.00",
-    "changelog": "## v3.01.03 (2026-07-23)\n\n### 关键 bug 修复\n- **跨主版本升级后实际启动的是旧版**（用户反馈）\n  - **根因**：旧版 Manager/ 的 `_restart_app` 写死了 `subprocess.Popen(['python', 'bds_manager.py'])`\n  - 旧版下载并解压新版 zip 后（main.py / pages/ / backend/ / run.bat 全部就位），\n    重启时仍启动的是 `bds_manager.py` → 用户看到旧版 UI\n  - **修复**：新版 `InstallUpdateWorker` 解压完成后，自动把 `bds_manager.py` 覆盖为一个小 stub（~7 行）\n    ```python\n    import os, sys\n    _SD = os.path.dirname(os.path.abspath(__file__))\n    os.chdir(_SD)\n    sys.path.insert(0, _SD)\n    import main  # 触发 main.py 执行\n    ```\n  - 旧版本 `subprocess.Popen('bds_manager.py')` 现在会通过 stub 自动转发到 main.py\n\n### 改进\n- 无需修改旧版 bds_manager.py 代码 — 用 zip 内置 stub 修复跨版本升级\n- 不影响 v3.x → v3.y 升级（v3 已经是模块化，没有 bds_manager.py）\n- v2.x 升级后即可享受新版 UI（资源曲线、控制台过滤、备份预览等）\n\n### 验证\n- subprocess.Popen('bds_manager.py') → stub → import main → main.py 启动 ✅\n- 27 个 .py 文件 py_compile 通过 ✅\n- 4 场景 messagebox 引导测试通过（v3.01.02 验证）✅"
+    "changelog": "## v3.01.04 (2026-07-23)\n\n### 智能伪装脚本（用户方案）\n- **新增 `bds_manager.py`（~9 KB 伪装脚本）**：文件名伪装为旧版入口名，专为跨主版本升级设计\n  - 旧版 `Manager/` 的 `_restart_app` 写死 `subprocess.Popen('bds_manager.py')`\n  - 当 zip 解压时 `bds_manager.py` 被覆盖到旧版目录\n  - 旧版下次重启调 `subprocess.Popen('bds_manager.py')` 实际执行新版的伪装脚本\n  - 伪装脚本流程：\n    1. 自动调用 GitHub API 拉 version.json\n    2. 比较本地与远端版本号（智能判断）\n    3. 如果有更新：下载 zip → SHA256 校验 → 解压（跳过用户配置和 `bds_manager.py` 自身）\n    4. detached 启动真正的 main.py（独立进程组）\n  - **无需修改旧版 bds_manager.py 代码**，用 zip 内的伪装脚本反向修复跨版本升级\n\n### 与之前修复的关系\n- v3.01.03 是在 `InstallUpdateWorker.run` 里写 stub（短代码）\n- v3.01.04 直接把 `bds_manager.py` 打进 zip（更智能：可独立运行，含自动更新逻辑）\n- v3.01.04 完全替代 v3.01.03 的方案\n\n### 端到端验证（真实下载）\n```\n[bds_manager-stub] 本地版本: 1.0.0\n[bds_manager-stub] 📥 发现新版本: 3.1.3（当前 1.0.0）\n[bds_manager-stub] ⬇️  下载: https://github.com/.../v3.01.03/...\n[bds_manager-stub]   ✅ SHA256 校验通过\n[bds_manager-stub] 📦 解压: _update_v3.01.03.zip\n[bds_manager-stub]   ✅ 解压完成\n[bds_manager-stub] 🎉 自动更新完成\n[bds_manager-stub] 🚀 启动主程序: main.py\n```\n\n### 改进\n- 28 个 .py 文件（新增 bds_manager.py）py_compile 通过\n- release.py SKIP_FILES 不包含 bds_manager.py，自动打包进 zip\n- zip 包含 34 个文件，伪装脚本 9161 字符\n\n### 注意事项\n- 旧版用户升级到 v3.01.04 后，下次 `_restart_app` 会触发智能更新+启动流程\n- 任何 Manager/ 旧版本（v1.x / v2.x）都能受益"
 }
