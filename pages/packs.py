@@ -327,8 +327,17 @@ class PacksPage(QWidget):
         hdr.addWidget(self._status_label)
         add_btn = PrimaryPushButton(f"添加{title}", card, FluentIcon.ADD)
         refresh_btn = PushButton("刷新", card, FluentIcon.SYNC)
+        open_dir_btn = PushButton("文件夹", card, FluentIcon.FOLDER)
+        def _open_dir(d):
+            if os.path.isdir(d):
+                os.startfile(d)
+        open_dir_btn.clicked.connect(
+            lambda _, pt=pack_type: _open_dir(
+                get_context().resource_packs_dir if pt == "resource"
+                else get_context().behavior_packs_dir))
         hdr.addWidget(add_btn)
         hdr.addWidget(refresh_btn)
+        hdr.addWidget(open_dir_btn)
         cl.addLayout(hdr)
 
         # 表格：名称 / 版本 / UUID / 状态 / 操作
