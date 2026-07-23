@@ -257,6 +257,30 @@ class InstallUpdateWorker(QThread):
                     with zf.open(name) as src, open(target, "wb") as dst:
                         dst.write(src.read())
 
+            # ── 跨主版本兼容：写入 bds_manager.py 转发 stub ──
+            # 旧版 Manager/ 的 _restart_app 写死了 subprocess.Popen(["python", "bds_manager.py"])，
+            # 即使解压后 main.py 已就位，重启起的还是 bds_manager.py → 用户看到旧 UI。
+            # 这里把 bds_manager.py 覆盖为一个转发到 main.py 的小脚本，
+            # 让旧版本 subprocess.Popen("bds_manager.py") 自动跳转到新版。
+            self.log.emit("写入 bds_manager.py 转发 stub...")
+            try:
+                stub = (
+                    "# -*- coding: utf-8 -*-\n"
+                    "# 由新版安装器自动生成，转发到 main.py（已废弃 v2.x 单文件架构）\n"
+                    "import os, sys\n"
+                    "_SD = os.path.dirname(os.path.abspath(__file__))\n"
+                    "os.chdir(_SD)\n"
+                    f"sys.path.insert(0, _SD)\n"
+                    f"import main\n"
+                    f"main.main()\n"
+                )
+                stub_path = os.path.join(SCRIPT_DIR, "bds_manager.py")
+                with open(stub_path, "w", encoding="utf-8") as f:
+                    f.write(stub)
+                self.log.emit("✅ bds_manager.py 转发 stub 已写入")
+            except OSError as e:
+                self.log.emit(f"⚠️ 写 bds_manager.py stub 失败（可忽略）: {e}")
+
             try:
                 os.remove(self._zip)
             except OSError:
