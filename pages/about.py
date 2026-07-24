@@ -10,7 +10,7 @@ from PySide6.QtWidgets import (
 )
 from qfluentwidgets import (
     CardWidget, SubtitleLabel, BodyLabel, HyperlinkButton,
-    FluentIcon, setTheme, setThemeColor, Theme,
+    FluentIcon, isDarkTheme,
 )
 
 from pages.dashboard import wrap_scrollable
@@ -31,7 +31,7 @@ class AboutPage(QWidget):
         tl.setSpacing(8)
 
         ver = SubtitleLabel(f"BDS Manager v{main.__version__}", title_card)
-        ver.setStyleSheet("font-size: 24px; font-weight: bold; color: #4CAF50;")
+        ver.setStyleSheet("font-size: 24px; font-weight: bold;")
         tl.addWidget(ver)
 
         desc = BodyLabel(
@@ -43,7 +43,7 @@ class AboutPage(QWidget):
             title_card,
         )
         desc.setWordWrap(True)
-        desc.setStyleSheet("color: #aaa; font-size: 13px; line-height: 1.6;")
+        desc.setStyleSheet(f"color: {'#aaa' if isDarkTheme() else '#666'}; font-size: 13px; line-height: 1.6;")
         tl.addWidget(desc)
         layout.addWidget(title_card)
 

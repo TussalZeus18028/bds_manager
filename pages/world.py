@@ -23,7 +23,7 @@ from PySide6.QtWidgets import (
 from qfluentwidgets import (
     CardWidget, SubtitleLabel, StrongBodyLabel, BodyLabel, CaptionLabel,
     PrimaryPushButton, PushButton, FluentIcon,
-    ToggleButton, ProgressBar, MessageBox,
+    ToggleButton, ProgressBar, MessageBox, isDarkTheme,
 )
 
 from shared.config import config_mgr, get_context
@@ -102,12 +102,14 @@ class WorldPage(QWidget):
         dl = QVBoxLayout(self._detail_card)
         dl.setContentsMargins(16, 12, 16, 16); dl.setSpacing(4)
         dl.addWidget(SubtitleLabel("世界详情", self._detail_card))
+        main_c = "#ccc" if isDarkTheme() else "#1a1a1a"
+        sub_c = "#888" if isDarkTheme() else "#666"
         self._world_info = BodyLabel("", self._detail_card)
-        self._world_info.setStyleSheet("color: #ccc; line-height: 1.6;")
+        self._world_info.setStyleSheet(f"color: {main_c}; line-height: 1.6;")
         dl.addWidget(self._world_info)
         # 摘要：备份数 / 占用空间 / 最近备份
         self._summary_label = CaptionLabel("", self._detail_card)
-        self._summary_label.setStyleSheet("color: #888; margin-top: 6px;")
+        self._summary_label.setStyleSheet(f"color: {sub_c}; margin-top: 6px;")
         dl.addWidget(self._summary_label)
         layout.addWidget(self._detail_card)
 
@@ -165,37 +167,14 @@ class WorldPage(QWidget):
         self._table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self._table.setSelectionMode(QAbstractItemView.SingleSelection)
         self._table.itemSelectionChanged.connect(self._on_table_selection_changed)
-        self._table.setStyleSheet("""
-            QTableWidget {
-                background: #1e1e1e; color: #ccc;
-                border: 1px solid #3a3a3a; border-radius: 6px;
-                gridline-color: #3a3a3a;
-            }
-            QTableWidget::item { padding: 4px 8px; }
-            QTableWidget::item:selected { background: rgba(13, 197, 212, 0.25); }
-            QHeaderView::section {
-                background: #2a2a2a; color: #aaa;
-                border: none; padding: 6px 8px; font-weight: bold;
-            }
-        """)
+        self._apply_table_theme()
         splitter.addWidget(self._table)
 
         # 右：内容预览
         self._preview_tree = QTreeWidget(splitter)
         self._preview_tree.setHeaderLabels(["名称", "大小"])
         self._preview_tree.setColumnWidth(0, 220)
-        self._preview_tree.setStyleSheet("""
-            QTreeWidget {
-                background: #1e1e1e; color: #ccc;
-                border: 1px solid #3a3a3a; border-radius: 6px;
-            }
-            QTreeWidget::item { padding: 3px 4px; }
-            QTreeWidget::item:selected { background: rgba(13, 197, 212, 0.25); }
-            QHeaderView::section {
-                background: #2a2a2a; color: #aaa;
-                border: none; padding: 6px 8px; font-weight: bold;
-            }
-        """)
+        self._apply_tree_theme()
         self._preview_tree.setMinimumWidth(280)
         splitter.addWidget(self._preview_tree)
         splitter.setStretchFactor(0, 3)
@@ -206,7 +185,7 @@ class WorldPage(QWidget):
 
         refresh_row = QHBoxLayout()
         self._status_label = CaptionLabel("", list_card)
-        self._status_label.setStyleSheet("color: #888;")
+        self._status_label.setStyleSheet(f"color: {sub_c};")
         refresh_row.addWidget(self._status_label)
         refresh_row.addStretch()
         refresh_btn = PushButton("刷新", list_card, FluentIcon.SYNC)
@@ -561,6 +540,48 @@ class WorldPage(QWidget):
     def _on_auto_backup_tick(self):
         if self._auto_toggle.isChecked():
             self._on_backup()
+
+    def refresh_theme(self):
+        """v3.02.01: 主题切换后重新设置所有硬编码样式。"""
+        main_c = "#ccc" if isDarkTheme() else "#1a1a1a"
+        sub_c = "#888" if isDarkTheme() else "#666"
+        self._world_info.setStyleSheet(f"color: {main_c}; line-height: 1.6;")
+        self._summary_label.setStyleSheet(f"color: {sub_c}; margin-top: 6px;")
+        self._status_label.setStyleSheet(f"color: {sub_c};")
+        self._apply_table_theme()
+        self._apply_tree_theme()
+
+    def _apply_table_theme(self):
+        if isDarkTheme():
+            self._table.setStyleSheet("""
+                QTableWidget { background:#1e1e1e; color:#ccc; border:1px solid #3a3a3a; border-radius:6px; gridline-color:#3a3a3a; }
+                QTableWidget::item { padding:4px 8px; }
+                QTableWidget::item:selected { background:rgba(13,197,212,0.25); }
+                QHeaderView::section { background:#2a2a2a; color:#aaa; border:none; padding:6px 8px; font-weight:bold; }
+            """)
+        else:
+            self._table.setStyleSheet("""
+                QTableWidget { background:#fff; color:#1a1a1a; border:1px solid #d0d0d0; border-radius:6px; gridline-color:#e8e8e8; }
+                QTableWidget::item { padding:4px 8px; }
+                QTableWidget::item:selected { background:rgba(13,197,212,0.15); }
+                QHeaderView::section { background:#f5f5f5; color:#555; border:none; padding:6px 8px; font-weight:bold; }
+            """)
+
+    def _apply_tree_theme(self):
+        if isDarkTheme():
+            self._preview_tree.setStyleSheet("""
+                QTreeWidget { background:#1e1e1e; color:#ccc; border:1px solid #3a3a3a; border-radius:6px; }
+                QTreeWidget::item { padding:3px 4px; }
+                QTreeWidget::item:selected { background:rgba(13,197,212,0.25); }
+                QHeaderView::section { background:#2a2a2a; color:#aaa; border:none; padding:6px 8px; font-weight:bold; }
+            """)
+        else:
+            self._preview_tree.setStyleSheet("""
+                QTreeWidget { background:#fff; color:#1a1a1a; border:1px solid #d0d0d0; border-radius:6px; }
+                QTreeWidget::item { padding:3px 4px; }
+                QTreeWidget::item:selected { background:rgba(13,197,212,0.15); }
+                QHeaderView::section { background:#f5f5f5; color:#555; border:none; padding:6px 8px; font-weight:bold; }
+            """)
 
     # ---------- 清理 ----------
     def cleanup(self):

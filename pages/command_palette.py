@@ -19,7 +19,7 @@ from PySide6.QtWidgets import (
     QDialog, QApplication,
 )
 from qfluentwidgets import (
-    CardWidget, BodyLabel, CaptionLabel, FluentIcon, PrimaryPushButton,
+    CardWidget, BodyLabel, CaptionLabel, FluentIcon, PrimaryPushButton, isDarkTheme,
 )
 
 
@@ -43,13 +43,14 @@ class CommandPaletteDialog(QDialog):
         self.setWindowTitle("命令面板")
         self.setModal(True)
         self.resize(620, 460)
-        self.setStyleSheet("""
-            QDialog {
-                background: #1e1e1e;
-                border: 1px solid #3a3a3a;
-                border-radius: 8px;
-            }
-        """)
+        if isDarkTheme():
+            self.setStyleSheet("""
+                QDialog { background:#1e1e1e; border:1px solid #3a3a3a; border-radius:8px; }
+            """)
+        else:
+            self.setStyleSheet("""
+                QDialog { background:#fafafa; border:1px solid #d0d0d0; border-radius:8px; }
+            """)
         self._commands = commands
         self._filtered: list[CommandItem] = list(commands)
         self._build()
@@ -62,19 +63,20 @@ class CommandPaletteDialog(QDialog):
 
         # 标题
         title = BodyLabel("🔍 命令面板  输入关键词搜索页面或操作", self)
-        title.setStyleSheet("color: #888; font-size: 12px;")
+        title.setStyleSheet("color: #888; font-size: 12px;" if isDarkTheme() else "color: #666; font-size: 12px;")
         layout.addWidget(title)
 
         # 输入框
         self._input = QLineEdit(self)
         self._input.setPlaceholderText("搜索：备份、玩家、升级...")
-        self._input.setStyleSheet("""
-            QLineEdit {
-                background: #2a2a2a; color: #fff;
-                border: 1px solid #0DC5D4; border-radius: 6px;
-                padding: 8px 12px; font-size: 14px;
-            }
-        """)
+        if isDarkTheme():
+            self._input.setStyleSheet("""
+                QLineEdit { background:#2a2a2a; color:#fff; border:1px solid #0DC5D4; border-radius:6px; padding:8px 12px; font-size:14px; }
+            """)
+        else:
+            self._input.setStyleSheet("""
+                QLineEdit { background:#fff; color:#1a1a1a; border:1px solid #0DC5D4; border-radius:6px; padding:8px 12px; font-size:14px; }
+            """)
         self._input.textChanged.connect(self._on_search)
         self._input.installEventFilter(self)
         layout.addWidget(self._input)
@@ -83,20 +85,18 @@ class CommandPaletteDialog(QDialog):
         self._list = QListView(self)
         self._model = QStringListModel(self)
         self._list.setModel(self._model)
-        self._list.setStyleSheet("""
-            QListView {
-                background: #252525; color: #ccc;
-                border: 1px solid #3a3a3a; border-radius: 6px;
-                outline: 0;
-            }
-            QListView::item {
-                padding: 10px 12px; border-bottom: 1px solid #2a2a2a;
-            }
-            QListView::item:selected {
-                background: rgba(13, 197, 212, 0.25);
-                color: #fff;
-            }
-        """)
+        if isDarkTheme():
+            self._list.setStyleSheet("""
+                QListView { background:#252525; color:#ccc; border:1px solid #3a3a3a; border-radius:6px; outline:0; }
+                QListView::item { padding:10px 12px; border-bottom:1px solid #2a2a2a; }
+                QListView::item:selected { background:rgba(13,197,212,0.25); color:#fff; }
+            """)
+        else:
+            self._list.setStyleSheet("""
+                QListView { background:#fff; color:#1a1a1a; border:1px solid #d0d0d0; border-radius:6px; outline:0; }
+                QListView::item { padding:10px 12px; border-bottom:1px solid #e8e8e8; }
+                QListView::item:selected { background:rgba(13,197,212,0.15); color:#1a1a1a; }
+            """)
         self._list.setFont(QFont("Microsoft YaHei", 11))
         self._list.doubleClicked.connect(self._on_activate)
         self._list.activated.connect(self._on_activate)
@@ -104,7 +104,7 @@ class CommandPaletteDialog(QDialog):
 
         # 底部提示
         hint = CaptionLabel("↑↓ 选择  Enter 确认  Esc 关闭", self)
-        hint.setStyleSheet("color: #666;")
+        hint.setStyleSheet(f"color: {'#666' if isDarkTheme() else '#999'};")
         layout.addWidget(hint)
 
         self._refresh_model()
