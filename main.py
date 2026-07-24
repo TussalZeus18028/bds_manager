@@ -1064,6 +1064,12 @@ def main():
     splash.set_status("字体已设置")
     _animate_progress(splash, app, 35, 50)
 
+    # v3.02.01: 构造页面之前先设主题，否则 isDarkTheme() 在页面 __init__ 中返回 False，
+    # 导致 QPlainTextEdit/QTableWidget 等控件的硬编码样式走浅色分支。
+    theme_raw = config_mgr.get("theme", "dark")
+    theme_map = {"dark": Theme.DARK, "light": Theme.LIGHT, "auto": Theme.AUTO}
+    setTheme(theme_map.get(theme_raw, Theme.DARK))
+
     # 6. 主窗口（最耗时的一步，1.5+ 秒）
     splash.set_status("正在构造主窗口...")
     _animate_progress(splash, app, 45, 50)

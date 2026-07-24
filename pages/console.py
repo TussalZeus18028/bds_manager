@@ -80,7 +80,20 @@ def _close_log_file():
         _log_file = None
 
 
-# ---------- 暗色日志 ----------
+# ── 暗色日志 ──
+def _log_style() -> str:
+    """v3.02.01: 控制台日志 QPlainTextEdit 主题感知样式。"""
+    if isDarkTheme():
+        return """
+            QPlainTextEdit { background:#1e1e1e; color:#ccc; border:1px solid #3a3a3a;
+                border-radius:6px; padding:6px; font-family:Consolas,"Microsoft YaHei",monospace; font-size:12px; }
+        """
+    return """
+        QPlainTextEdit { background:#fafafa; color:#1a1a1a; border:1px solid #d0d0d0;
+            border-radius:6px; padding:6px; font-family:Consolas,"Microsoft YaHei",monospace; font-size:12px; }
+    """
+
+
 def make_console_log(parent=None, min_height=200):
     log = QPlainTextEdit(parent)
     log.setReadOnly(True)
@@ -88,27 +101,7 @@ def make_console_log(parent=None, min_height=200):
         log.setMinimumHeight(min_height)
     max_lines = config_mgr.get("console_max_lines", 5000)
     log.setMaximumBlockCount(max_lines)
-    # v3.02.01: 主题感知
-    if isDarkTheme():
-        log.setStyleSheet("""
-            QPlainTextEdit {
-                background: #1e1e1e; color: #ccc;
-                border: 1px solid #3a3a3a; border-radius: 6px;
-                padding: 6px;
-                font-family: Consolas, "Microsoft YaHei", monospace;
-                font-size: 12px;
-            }
-        """)
-    else:
-        log.setStyleSheet("""
-            QPlainTextEdit {
-                background: #fafafa; color: #1a1a1a;
-                border: 1px solid #d0d0d0; border-radius: 6px;
-                padding: 6px;
-                font-family: Consolas, "Microsoft YaHei", monospace;
-                font-size: 12px;
-            }
-        """)
+    log.setStyleSheet(_log_style())
     return log
 
 
@@ -292,6 +285,10 @@ class ConsolePage(QWidget):
         layout.addWidget(preset_card)
 
         layout.addStretch()
+
+    def refresh_theme(self):
+        """v3.02.01: 主题切换后重新设置输出区样式。"""
+        self._log.setStyleSheet(_log_style())
 
     # ---------- 补全 ----------
     def _refresh_completer(self):

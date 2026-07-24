@@ -22,7 +22,7 @@ from PySide6.QtGui import QTextCursor
 from qfluentwidgets import (
     CardWidget, SubtitleLabel, StrongBodyLabel, BodyLabel, CaptionLabel,
     PrimaryPushButton, PushButton, LineEdit, FluentIcon,
-    ProgressBar, MessageBox,
+    ProgressBar, MessageBox, isDarkTheme,
 )
 
 from shared.config import config_mgr, get_context, SCRIPT_DIR
@@ -31,6 +31,20 @@ from pages.dashboard import wrap_scrollable
 from components.widgets import NoScrollSpinBox  # v3.02.01: 滚轮防护
 
 import requests
+
+
+def _table_style() -> str:
+    """v3.02.01: QTableWidget 主题感知样式。"""
+    if isDarkTheme():
+        return "QTableWidget { background:#1e1e1e;color:#ccc;border:1px solid #3a3a3a;border-radius:6px;gridline-color:#3a3a3a; } QTableWidget::item{padding:4px 8px;} QHeaderView::section{background:#2a2a2a;color:#aaa;border:none;padding:6px 8px;font-weight:bold;}"
+    return "QTableWidget { background:#fff;color:#1a1a1a;border:1px solid #d0d0d0;border-radius:6px;gridline-color:#e8e8e8; } QTableWidget::item{padding:4px 8px;} QHeaderView::section{background:#f5f5f5;color:#555;border:none;padding:6px 8px;font-weight:bold;}"
+
+
+def _plaintext_style() -> str:
+    """v3.02.01: QPlainTextEdit 主题感知样式。"""
+    if isDarkTheme():
+        return "QPlainTextEdit{background:#1e1e1e;color:#ccc;border:1px solid #3a3a3a;border-radius:6px;padding:6px;font-family:Consolas,monospace;font-size:12px;}"
+    return "QPlainTextEdit{background:#fafafa;color:#1a1a1a;border:1px solid #d0d0d0;border-radius:6px;padding:6px;font-family:Consolas,monospace;font-size:12px;}"
 
 # ── 升级历史 ──
 UPGRADE_HISTORY_FILE = os.path.join(SCRIPT_DIR, ".upgrade_history.json")
@@ -399,12 +413,7 @@ class UpgradePage(QWidget):
         self._ver_table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self._ver_table.setSelectionMode(QAbstractItemView.ExtendedSelection)
         self._ver_table.setMinimumHeight(320)
-        self._ver_table.setStyleSheet("""
-            QTableWidget { background:#1e1e1e;color:#ccc;border:1px solid #3a3a3a;border-radius:6px;gridline-color:#3a3a3a; }
-            QTableWidget::item { padding: 2px 8px; }
-            QTableWidget::item:selected { background: rgba(13, 197, 212, 0.25); }
-            QHeaderView::section { background:#2a2a2a;color:#aaa;border:none;padding:6px 8px;font-weight:bold; }
-        """)
+        self._ver_table.setStyleSheet(_table_style())
         vl.addWidget(self._ver_table)
 
         # 工具行
@@ -422,7 +431,7 @@ class UpgradePage(QWidget):
         vl.addLayout(tools_row)
 
         self._scan_status = CaptionLabel("", ver_card)
-        self._scan_status.setStyleSheet("color:#888;")
+        self._scan_status.setStyleSheet(f"color: {'#888' if isDarkTheme() else '#666'};")
         vl.addWidget(self._scan_status)
 
         # 手动输入
@@ -453,11 +462,7 @@ class UpgradePage(QWidget):
         self._history_table.setColumnWidth(2, 80)
         self._history_table.verticalHeader().setVisible(False)
         self._history_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
-        self._history_table.setStyleSheet("""
-            QTableWidget { background:#1e1e1e;color:#ccc;border:1px solid #3a3a3a;border-radius:6px;gridline-color:#3a3a3a; }
-            QTableWidget::item { padding: 4px 8px; }
-            QHeaderView::section { background:#2a2a2a;color:#aaa;border:none;padding:6px 8px;font-weight:bold; }
-        """)
+        self._history_table.setStyleSheet(_table_style())
         hl.addWidget(self._history_table)
         layout.addWidget(history_card)
 
@@ -479,7 +484,7 @@ class UpgradePage(QWidget):
         self._log = QPlainTextEdit(log_card)
         self._log.setReadOnly(True); self._log.setMaximumBlockCount(2000)
         self._log.setMinimumHeight(100)
-        self._log.setStyleSheet("QPlainTextEdit{background:#1e1e1e;color:#ccc;border:1px solid #3a3a3a;border-radius:6px;padding:6px;font-family:Consolas,monospace;font-size:12px;}")
+        self._log.setStyleSheet(_plaintext_style())
         ll.addWidget(self._log)
         layout.addWidget(log_card)
 
@@ -534,6 +539,13 @@ class UpgradePage(QWidget):
 
         self._refresh_history()
         self._auto_refreshed = False  # 首次 showEvent 触发后台刷新
+
+    def refresh_theme(self):
+        """v3.02.01: 主题切换后重新设置表格/日志/标签样式。"""
+        self._ver_table.setStyleSheet(_table_style())
+        self._history_table.setStyleSheet(_table_style())
+        self._log.setStyleSheet(_plaintext_style())
+        self._scan_status.setStyleSheet(f"color: {'#888' if isDarkTheme() else '#666'};")
 
     def showEvent(self, event):
         """首次显示页面时，如果缓存过期则后台静默刷新（不打断用户）。"""

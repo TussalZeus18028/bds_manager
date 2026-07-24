@@ -195,6 +195,11 @@ class TunnelPage(QWidget):
 
         self._load_config()
 
+    def refresh_theme(self):
+        """v3.02.01: 主题切换后重新设置日志/配置编辑器样式。"""
+        self._log.setStyleSheet(_plaintext_style())
+        self._cfg_edit.setStyleSheet(_plaintext_style())
+
     def _browse(self):
         path, _ = QFileDialog.getOpenFileName(self, "选择 frpc.exe")
         if path:
