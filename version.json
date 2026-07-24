@@ -1,9 +1,9 @@
 {
-    "version": "3.02.01",
-    "release_date": "2026-07-23",
-    "download_url": "https://github.com/TussalZeus18028/bds_manager/releases/download/v3.02.01/bds_manager_v3.02.01.zip",
-    "sha256": "a35de349788087266a6efd12e6cacec3171e5cda4c3552ba837828607168b3be",
-    "file_size": 138776,
+    "version": "3.02.02",
+    "release_date": "2026-07-24",
+    "download_url": "",
+    "sha256": "",
+    "file_size": 0,
     "min_compatible_version": "2.00.00",
-    "changelog": "## v3.02.01 (2026-07-23)\n\n### Bug 修复（12 项热修复 + 用户反馈）\n\n**启动崩溃修复**\n- 修复 FluentIcon.UNDO 不存在导致 TeachingTip 崩溃（改为 SYNC）\n- 修复 TeachingTip API 不匹配：title/content/icon 需 FlyoutView 包装\n- 修复 TeachingTip.closed 信号不存在（只有 destroyed）\n- 修复 DashboardPage 缺 _on_server_started/_stopped/_on_status_changed 回调导致启动服务器崩溃\n- 修复 QKeySequence 构造方式在 PySide6 6.x 变化（KeyboardModifier 是 Flag 非 IntFlag）\n\n**UI 美观修复**\n- 铃铛重设计：QToolButton + FluentIcon.MESSAGE（矢量图 + 主题感知），替代 Unicode emoji\n- 通知面板全换 qfluentwidgets 控件（StrongBodyLabel/PushButton/CaptionLabel），之前原生 Qt 白色背景/黑字\n- 按钮文字截断修复：tunnel 页、packs 表格、chip 过滤行——用 min_w 替代 max_w\n- 抽屉 header 对齐优化：高度 50→44，按钮自适应文字\n- 通知项单击展开/双击跳转：动态高度 + accept 事件\n- 抽屉 y 起点修复：从 0 → titleBar.height()，避免 header 挡住系统按钮\n- Toast 位置修复：TOP_RIGHT → TOP（顶部居中）\n- 所有页面颜色主题感知：dashboard 资源曲线/status_badge、packs 表格、settings hint/ColorSwatch\n- 窗口大小恢复：QMainWindow.saveGeometry/restoreGeometry + showEvent 时机修复 + width/height 降级\n\n**体验优化**\n- 抽屉点击外部关闭：eventFilter 精准判断（mask widget 方案废弃——事件冒泡吃掉子控件点击）\n- SpinBox 滚轮误触防护：NoScrollSpinBox（event() 拦截，完全禁用滚轮，键盘/按钮仍可用）\n- 启动加速：闪屏动画 1.4s → 0.44s，总启动 ~2s\n- 导航修复：全部 setCurrentItem → switchTo(page)，导航亮了页面也跟着切\n- Toast 同步进通知中心（_enqueue/_show_modern 立即 notify）\n\n**架构改进**\n- RLock 替代 Lock（add() 内部调 _load() 死锁）\n- config 双路保存：window_geometry(base64) + width/height(降级)\n- config load 自动合并非标准键（不被 DEFAULT_CONFIG 过滤）\n- 主题切换联动 refresh_theme：drawer/packs/settings/dashboard 自动重设样式\n- 代码 DRY：NoScrollSpinBox 提取到 components/widgets.py\n\n### 文件改动\n- 修改 main.py / pages/settings.py / pages/config.py / pages/dashboard.py / pages/packs.py\n- 修改 pages/console_search.py / pages/tunnel.py / pages/upgrade.py / pages/world.py\n- 修改 pages/command_palette.py / pages/console.py\n- 修改 components/notification_panel.py / components/key_capture.py\n- 修改 shared/toast.py / shared/config.py\n- 修改 backend/notifications.py\n- 新增 components/widgets.py\n\n### 向后兼容\n- 不破坏任何 v3.02.00 配置\n- 窗口几何跨版本兼容（旧 width/height + 新 window_geometry 双存）\n- min_compatible_version 保持 2.00.00"
+    "changelog": "## v3.02.02 (2026-07-24)\n\n### Bug 修复\n- 停服不再触发自动重启：正常退出 (exit 0) 与崩溃 (exit !=0) 区分处理\n- 资源包管理重写：启用/禁用改为注册到 world JSON，不再移动文件\n- json5 解析 manifest：容错 BDS 自带的注释和尾部逗号\n- 控制台按钮防压缩：操作栏/命令预设加最小宽度\n\n### 主题适配（25+ 处）\n- 启动时先在页面构造前设主题，避免深色模式下走浅色分支\n- refresh_theme 覆盖所有页面：主题切换时 QPlainTextEdit/QTableWidget/QDialog 自动换色\n- PackInfoDialog、命令面板、控制台、隧道日志、世界页表格等全部跟随主题\n\n### 性能\n- 世界大小计算移到后台线程，进入世界页不再卡 UI\n- 备份压缩级别 6→1，打包提速 3-5 倍\n- 启动动画 1.4s→0.44s\n\n### 交互\n- SpinBox 滚轮误触防护：完全禁用滚轮修改\n- 导航修复：setCurrentItem→switchTo，导航亮页面跟着切\n- 资源包页加「打开目录」按钮\n\n### 稳定性\n- 重启计数不再每次重置为 0\n- 停服 stop→等 3 秒→terminate（不 save-all）\n- stop_event.set() 移到 send_command 之后，确保 stop 命令发到 BDS"
 }
