@@ -760,12 +760,21 @@ class BDSFluentWindow(FluentWindow):
         self.console_page._append_output(text)
         self.dashboard_page.on_output()
 
-    def _on_server_stopped(self):
+    def _on_server_stopped(self, retcode: int):
         send_webhook("crash", "服务器停止", "BDS 服务器进程已退出")
         self.dashboard_page._on_server_stopped()
         self.console_page._on_server_stopped()
-        notify("warning", "server", "服务器已停止", "", "page:console")
 
+        # v3.02.01 fix: 只有异常退出 (retcode != 0) 且非用户手动停止才自动重启
+        # retcode=0 表示 BDS 正常退出 (Quit correctly)，不应触发重启
+        if retcode == 0:
+            self.console_page._append_output("[系统] 服务器已正常退出", "#888")
+            self._restart_count = 0
+            if hasattr(self, "_lag_timer") and self._lag_timer:
+                self._lag_timer.stop()
+            return
+
+        notify("warning", "server", "服务器已停止", f"退出码 {retcode}", "page:console")
         max_retries = config_mgr.get("max_restart_retries", 5)
         if max_retries > 0 and self._restart_count < max_retries:
             self._restart_count += 1

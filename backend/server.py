@@ -56,7 +56,7 @@ class ServerProcess(QThread):
     """
 
     output_received = Signal(str)
-    process_stopped = Signal()
+    process_stopped = Signal(int)  # 退出码: 0=正常退出, !0=崩溃
     error_occurred = Signal(str)
     status_changed = Signal(bool)
     proc_stats = Signal(dict)
@@ -110,7 +110,7 @@ class ServerProcess(QThread):
             logger.error("启动服务器进程失败: %s", e)
             self.error_occurred.emit(f"启动失败: {e}")
             self.status_changed.emit(False)
-            self.process_stopped.emit()
+            self.process_stopped.emit(-1)  # 启动失败
             return
 
         # 绑定 psutil 进程对象
@@ -139,7 +139,7 @@ class ServerProcess(QThread):
             logger.error("服务器异常退出，返回码: %d", retcode)
             self.error_occurred.emit(f"服务器异常退出，返回码: {retcode}")
         self.status_changed.emit(False)
-        self.process_stopped.emit()
+        self.process_stopped.emit(retcode)  # 退出码: 0=正常, !0=崩溃
 
     # ---------- 进程级监控 ----------
     def _start_proc_monitor(self):

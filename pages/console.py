@@ -176,6 +176,7 @@ class ConsolePage(QWidget):
 
         self._start_btn = PrimaryPushButton("启动服务器", ctrl_card, FluentIcon.PLAY)
         self._start_btn.clicked.connect(self._on_start)
+        self._start_btn.setMinimumWidth(100)
         self._stop_btn = PushButton("停止", ctrl_card, FluentIcon.CANCEL)
         self._stop_btn.setEnabled(False)
         self._stop_btn.clicked.connect(self._on_stop)
@@ -185,6 +186,7 @@ class ConsolePage(QWidget):
         self._auto_btn = ToggleButton("自动滚动", ctrl_card)
         self._auto_btn.setChecked(self._auto_scroll)
         self._auto_btn.toggled.connect(self._on_auto_scroll_toggle)
+        self._auto_btn.setMinimumWidth(90)
 
         ctrl_layout.addWidget(self._start_btn)
         ctrl_layout.addWidget(self._stop_btn)
@@ -279,6 +281,7 @@ class ConsolePage(QWidget):
             ("白天", "time set day"),
         ]:
             b = PushButton(label, preset_card)
+            b.setMinimumWidth(70)
             b.clicked.connect(lambda checked, c=cmd: self._send_command(c))
             preset_layout.addWidget(b)
         preset_layout.addStretch()
