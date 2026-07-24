@@ -1,9 +1,9 @@
 {
     "version": "3.02.02",
     "release_date": "2026-07-24",
-    "download_url": "",
-    "sha256": "",
-    "file_size": 0,
+    "download_url": "https://github.com/TussalZeus18028/bds_manager/releases/download/v3.02.02/bds_manager_v3.02.02.zip",
+    "sha256": "3b80f2ee5c1ef55367b33d8f82293c5f7399f9f2d8af7c5fd7648b0c66a48488",
+    "file_size": 140018,
     "min_compatible_version": "2.00.00",
     "changelog": "## v3.02.02 (2026-07-24)\n\n### Bug 修复\n- 停服不再触发自动重启：正常退出 (exit 0) 与崩溃 (exit !=0) 区分处理\n- 资源包管理重写：启用/禁用改为注册到 world JSON，不再移动文件\n- json5 解析 manifest：容错 BDS 自带的注释和尾部逗号\n- 控制台按钮防压缩：操作栏/命令预设加最小宽度\n\n### 主题适配（25+ 处）\n- 启动时先在页面构造前设主题，避免深色模式下走浅色分支\n- refresh_theme 覆盖所有页面：主题切换时 QPlainTextEdit/QTableWidget/QDialog 自动换色\n- PackInfoDialog、命令面板、控制台、隧道日志、世界页表格等全部跟随主题\n\n### 性能\n- 世界大小计算移到后台线程，进入世界页不再卡 UI\n- 备份压缩级别 6→1，打包提速 3-5 倍\n- 启动动画 1.4s→0.44s\n\n### 交互\n- SpinBox 滚轮误触防护：完全禁用滚轮修改\n- 导航修复：setCurrentItem→switchTo，导航亮页面跟着切\n- 资源包页加「打开目录」按钮\n\n### 稳定性\n- 重启计数不再每次重置为 0\n- 停服 stop→等 3 秒→terminate（不 save-all）\n- stop_event.set() 移到 send_command 之后，确保 stop 命令发到 BDS"
 }
