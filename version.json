@@ -2,8 +2,8 @@
     "version": "3.03.00",
     "release_date": "2026-07-25",
     "download_url": "https://github.com/TussalZeus18028/bds_manager/releases/download/v3.03.00/bds_manager_v3.03.00.zip",
-    "sha256": "",
-    "file_size": 0,
+    "sha256": "d058af804a8232c86ce0cae8887a10155e783c3600cb4649643b4196ed452531",
+    "file_size": 145315,
     "min_compatible_version": "2.00.00",
     "changelog": "## v3.03.00 (2026-07-25)\n\n### 新功能\n- Ctrl+Shift+D 安全关闭：停服 + 停隧道 + 停监控后退出\n- Alt+F4 / 窗口x 按钮自动走安全关闭流程\n- 仪表盘新增「服务器目录」「存档目录」快捷按钮\n- 仪表盘显示「下次备份:N分钟后」实时倒计时\n- 窗口透明度可调节（设置页滑块 20%-100%），需重启生效\n- 窗口圆角（Win11 原生 DWM / Win10 QRegion mask 降级）\n- 控制台右键菜单：复制选中 / 全选 / 清屏\n- 控制台满 5000 行自动写快照到 logs/\n\n### 用户体验\n- 服务器启动/停止/下载等操作弹出视觉 Toast 通知\n- 升级页分支列颜色+图标区分：稳定版(绿) / 预览版(橙)\n- 资源包详情对话框重构：分区展示、状态徽章、极简几何图标\n- 设置页所有开关/滑块改为即时静默保存，仅点「保存」弹 toast\n\n### 代码质量\n- Toast 系统重构：全局变量 -> ToastQueue 类\n- _scan_packs 30秒缓存 + 注册/注销自动刷新\n- HeadScanWorker.run() 拆分 _generate_urls + _probe_head（复杂度降50%）\n- config 字段值设置提取 _set_editor_value，消除重复\n- 配置迁移 _migrate_config 实际执行 + 废弃键清理\n- 代码分析工具集成：fuck-u-code 评分 78.71 -> 79.35\n\n### Bug 修复\n- 修复 _restore_window_state/resizeEvent 重复定义\n- 修复 close_to_tray 不持久化\n- 修复通知面板绕过 Store RLock 写文件竞态\n- 修复 ServerProcess 信号未断开导致的泄漏\n- 修复备份失败/取消时 zip 半成品残留\n- 修复版本列表缓存未持久化（避免每次启动拉 GitHub）\n- 修复配置迁移版本号未写入（不再每次打印迁移日志）\n- 修复 notify() 仅写抽屉不弹 toast\n- 修复 ToastQueue _enqueue 命名残留"
 }
