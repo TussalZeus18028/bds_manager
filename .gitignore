@@ -18,6 +18,8 @@ _update_*.zip
 bds_manager_v*.zip
 *.bak_
 *.tmp
+*_cleanup.bat
+*_clean_archives.ps1
 
 # ── IDE ──
 .vscode/
@@ -28,19 +30,15 @@ bds_manager_v*.zip
 Thumbs.db
 
 # ── 本地开发工具（不应推送到仓库）──
-# 这两个脚本只供本地开发者使用：
-#   - release.py: 发布到 GitHub Release（仅开发者需要）
-#   - archive.py: 打包代码快照到 archives/（仅开发者需要）
-# 用户从 GitHub 下载源码后不需要这两个文件
 release.py
 archive.py
 
 # ── 运行时生成的文件 ──
-bds_manager_config.json       # 用户配置（含 GitHub token，不入库）
+bds_manager_config.json       # 用户配置
+bds_manager_notifications.json # 通知中心数据
 bds_version_cache.json        # 升级页缓存
-dist/                         # release.py 产出（GitHub Release）
-archives/                     # archive.py 产出（本地代码快照）
+dist/                         # release.py 产出
+archives/                     # archive.py 产出
 .workbuddy/                   # WorkBuddy 会话数据
-release/                      # 旧 release 残留目录
 
 PROJECT_SUMMARY.md

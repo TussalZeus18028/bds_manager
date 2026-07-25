@@ -396,7 +396,7 @@ class BDSFluentWindow(FluentWindow):
         )
         # v3.02.01 fix: TeachingTip 没有 closed 信号，只有 destroyed（widget 销毁时触发）
         # isDeleteOnClose=True 时，duration 到期或用户关闭都会 deleteLater → destroyed 触发
-        tip.destroyed.connect(lambda: config_mgr.set("show_command_palette_tip", False))
+        tip.destroyed.connect(lambda: (config_mgr.set("show_command_palette_tip", False), config_mgr.save()))
 
     # ---------- 服务初始化（资源监控 + 启动 toast + 自更新） ----------
     def _init_services(self):
@@ -429,6 +429,7 @@ class BDSFluentWindow(FluentWindow):
             theme = "dark" if is_dark else "light"
             self.apply_theme(theme, self._current_color)
             config_mgr.set("theme", theme)
+            config_mgr.save()
             logger.info("系统主题切换 → %s", theme)
         except Exception as e:
             logger.debug("系统主题切换异常: %s", e)
@@ -632,9 +633,10 @@ class BDSFluentWindow(FluentWindow):
             self.switchTo(self.settings_page)
 
     def _shortcut_toggle_theme(self):
-        cur = config_mgr.get("theme", "dark")
+        cur = config_mgr.get("theme", "light")
         new = "light" if cur == "dark" else "dark"
         config_mgr.set("theme", new)
+        config_mgr.save()
         self.apply_theme(new, self._current_color)
 
     def _shortcut_open_world(self):
@@ -730,11 +732,13 @@ class BDSFluentWindow(FluentWindow):
 
     def _restart_app(self):
         from shared.toast import toast_info
+        # v3.03.01: 重启前先保存配置（快捷键切换的主题/颜色等变更还未落盘）
+        config_mgr.save()
         toast_info("工具即将重启", "将在 1 秒后自动重启", self)
         QTimer.singleShot(1000, lambda: restart_app("main.py"))
 
     # ---------- 主题 ----------
-    def apply_theme(self, theme: str = "dark", accent_color: str = "#0DC5D4"):
+    def apply_theme(self, theme: str = "light", accent_color: str = "#0DC5D4"):
         self._current_color = accent_color
         theme_map = {"dark": Theme.DARK, "light": Theme.LIGHT, "auto": Theme.AUTO}
         setTheme(theme_map.get(theme, Theme.DARK))

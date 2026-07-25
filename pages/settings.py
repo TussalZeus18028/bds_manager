@@ -625,7 +625,7 @@ class SettingsPage(QWidget):
     def _on_theme_changed(self, text: str):
         theme = {"Dark":"dark","Light":"light","Auto":"auto"}.get(text, "dark")
         color = config_mgr.get("theme_color", "#0DC5D4")
-        config_mgr.set("theme", theme)
+        self._silent_save("theme", theme)
         if self._main_window:
             self._main_window.apply_theme(theme, color)
 
@@ -668,7 +668,7 @@ class SettingsPage(QWidget):
             self._set_theme_color(dlg.color.name())
 
     def _set_theme_color(self, hex_color: str):
-        config_mgr.set("theme_color", hex_color)
+        self._silent_save("theme_color", hex_color)
         self._update_color_preview(hex_color)
         if self._main_window:
             self._main_window.apply_theme(config_mgr.get("theme", "dark"), hex_color)

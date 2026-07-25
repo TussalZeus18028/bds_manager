@@ -241,9 +241,44 @@ def launch_main_py() -> None:
         )
 
 
+# ── 依赖自检 + 自动安装 ────────────────────────────────────────────────
+_REQUIRED_PACKAGES = {
+    "PySide6":         "PySide6",
+    "qfluentwidgets":  "qfluentwidgets",
+    "psutil":          "psutil",
+}
+
+
+def ensure_dependencies() -> None:
+    """检查核心依赖是否可用。缺失的自动 pip install（无 PySide6 也能跑）。"""
+    missing = []
+    for imp_name, pkg_name in _REQUIRED_PACKAGES.items():
+        try:
+            __import__(imp_name)
+        except ImportError:
+            missing.append(pkg_name)
+
+    if not missing:
+        return
+
+    log(f"📦 缺失依赖: {', '.join(missing)}，正在自动安装...")
+    import subprocess as _sp
+    try:
+        _sp.check_call(
+            [sys.executable, "-m", "pip", "install", "--upgrade"] + missing,
+            stdout=_sp.DEVNULL, stderr=_sp.STDOUT,
+        )
+        log("✅ 依赖安装完成")
+    except _sp.CalledProcessError as e:
+        log(f"❌ 依赖安装失败（退出码 {e.returncode}），请手动安装：\n"
+            f"   pip install {' '.join(missing)}")
+        sys.exit(1)
+
+
 # ── 主流程 ────────────────────────────────────────────────────────────
 def auto_update_then_launch() -> int:
-    """1) 自动检查更新  2) 启动 main.py。返回 main.py 进程退出码。"""
+    """1) 安装缺失依赖  2) 自动检查更新  3) 启动 main.py。返回 main.py 进程退出码。"""
+    ensure_dependencies()
     local = get_local_version()
     log(f"本地版本: {'.'.join(map(str, local)) or '(无 main.py)'}")
 
