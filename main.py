@@ -75,7 +75,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger("bds_manager")
 
-__version__ = "3.02.02"
+__version__ = "3.03.00"
 # ⚠️ 工具版本固定写在这里，不在 bds_manager_config.json / bds_version_cache.json 等任何配置文件中。
 # 如果需要做配置兼容性检查，读取远端 version.json（自更新流程用）即可。
 # 格式规范：x.xx.xx —— Major 1 位、Minor 2 位（补零）、Patch 2 位（补零）
