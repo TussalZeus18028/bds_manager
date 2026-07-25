@@ -8,8 +8,10 @@ v3.02.01 重写（对齐旧版正确逻辑）：
 - 所有包始终显示在列表中（✓已激活 / —未激活）
 - 新添加的包默认不激活（用户手动点启用）
 """
-import os, json, shutil, time, sys
+import os, json, shutil, time, sys, logging
 import json5  # v3.02.01: BDS manifest.json 常含注释/trailing commas
+
+logger = logging.getLogger("bds_manager")
 
 from PySide6.QtCore import Qt, QThread, Signal
 from PySide6.QtGui import QColor
@@ -37,12 +39,12 @@ def _read_manifest(pack_dir: str) -> dict:
         try:
             with open(fp, "r", encoding="utf-8-sig") as f:
                 return json5.load(f)
-        except Exception:
+        except Exception as e:
             try:
                 with open(fp, "r", encoding="utf-8-sig") as f:
                     return json.load(f)
-            except Exception:
-                pass
+            except Exception as e2:
+                logger.warning(f"无法解析 manifest: {pack_dir} (json5: {e}, json: {e2})")
     return {}
 
 
@@ -61,7 +63,8 @@ def _read_world_json(world_path: str, pack_type: str) -> list:
     try:
         with open(json_path, "r", encoding="utf-8") as f:
             return json.load(f)
-    except Exception:
+    except (json.JSONDecodeError, FileNotFoundError, OSError) as e:
+        logger.debug("读取世界 JSON 失败: %s (%s)", json_path, e)
         return []
 
 
@@ -72,7 +75,8 @@ def _write_world_json(world_path: str, pack_type: str, data: list) -> bool:
         with open(json_path, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=4)
         return True
-    except Exception:
+    except (OSError, TypeError) as e:
+        logger.warning("写入世界 JSON 失败: %s (%s)", json_path, e)
         return False
 
 

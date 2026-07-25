@@ -194,7 +194,7 @@ class ServerProcess(QThread):
                 enc = None
                 try:
                     enc = locale.getpreferredencoding(False)
-                except Exception:
+                except (locale.Error, ValueError):
                     pass
                 try:
                     data = line.encode(enc) if enc else line.encode("utf-8")

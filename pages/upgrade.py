@@ -10,8 +10,10 @@ v3.1 改进：
 - HEAD 扫描 memoize（已存在）
 """
 
-import os, re, time, json, shutil, tempfile, random, socket, ssl, urllib.request, urllib.error
+import os, re, time, json, shutil, tempfile, random, socket, ssl, urllib.request, urllib.error, logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
+
+logger = logging.getLogger("bds_manager")
 
 from PySide6.QtCore import Qt, QThread, QTimer, Signal
 from PySide6.QtWidgets import (
@@ -56,7 +58,7 @@ def _load_upgrade_history() -> list[dict]:
     try:
         with open(UPGRADE_HISTORY_FILE, "r", encoding="utf-8") as f:
             return json.load(f)
-    except Exception:
+    except (json.JSONDecodeError, FileNotFoundError, OSError):
         return []
 
 
@@ -64,7 +66,7 @@ def _save_upgrade_history(history: list[dict]):
     try:
         with open(UPGRADE_HISTORY_FILE, "w", encoding="utf-8") as f:
             json.dump(history[-50:], f, ensure_ascii=False, indent=2)
-    except Exception:
+    except OSError:
         pass
 
 
@@ -106,7 +108,9 @@ def _scrape_github_versions() -> list | None:
             if ver and url:
                 results.append((ver, branch, url))
         return results if results else None
-    except Exception:
+    except (urllib.error.URLError, urllib.error.HTTPError, json.JSONDecodeError,
+            socket.timeout, OSError) as e:
+        logger.debug("抓取 GitHub 版本列表失败: %s", e)
         return None
 
 
@@ -273,8 +277,8 @@ class InstallWorker(QThread):
                         try:
                             shutil.copytree(src, os.path.join(self.backup_dir, d))
                             self.log.emit(f"  已备份: {d}")
-                        except Exception:
-                            pass
+                        except OSError:
+                            self.log.emit(f"  跳过: {d}（无法读取）")
                 for fn in ["server.properties", "allowlist.json", "permissions.json"]:
                     src = os.path.join(self.server_dir, fn)
                     if os.path.exists(src):
@@ -883,8 +887,8 @@ class UpgradePage(QWidget):
         self._results = deduped
         try:
             deduped.sort(key=lambda x: [int(i) for i in x[0].split(".")], reverse=True)
-        except Exception:
-            pass
+        except (ValueError, IndexError):
+            pass  # 版本号格式异常，保持原顺序
 
         self._ver_table.setRowCount(len(deduped))
         # 默认占位 "—"，文件大小需要用户点「获取文件大小」按钮才请求（启动加速）
@@ -966,7 +970,7 @@ class UpgradePage(QWidget):
             # 用文件存在性粗略判断
             if os.path.exists(os.path.join(ctx.server_dir, "bedrock_server.exe")):
                 from_version = "current"
-        except Exception:
+        except OSError:
             pass
         self._install_worker = InstallWorker(
             zip_path, ctx.server_dir, True, version, from_version, self
@@ -980,8 +984,8 @@ class UpgradePage(QWidget):
         try:
             if os.path.exists(zip_path):
                 os.remove(zip_path)
-        except Exception:
-            pass
+        except OSError:
+            pass  # zip 可能已被工作线程清理
         if success:
             toast_success("安装完成", "BDS 已更新，请重新启动服务器", self.window())
             self._refresh_history()

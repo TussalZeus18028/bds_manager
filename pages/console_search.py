@@ -101,8 +101,8 @@ class ConsoleSearchBar(QHBoxLayout):
                 cursor = self._log.document().find(text, cursor, flags)
         try:
             self._log.setExtraSelections(selections)
-        except Exception:
-            pass
+        except (AttributeError, RuntimeError):
+            pass  # 日志控件可能已被销毁
 
     def _search(self, backward=False):
         text = self._input.text()

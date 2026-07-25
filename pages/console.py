@@ -53,7 +53,7 @@ def _init_log_file():
         os.makedirs(LOG_DIR, exist_ok=True)
         _log_file = open(new_path, "a", encoding="utf-8")
         _log_file_path = new_path
-    except Exception:
+    except OSError:
         _log_file = None
 
 
@@ -72,8 +72,8 @@ def _write_log(text: str):
             _log_write_count += 1
             if _log_write_count % 50 == 0:
                 _log_file.flush()
-    except Exception:
-        pass
+    except OSError:
+        pass  # 日志文件写入失败（磁盘满等）
 
 
 def _close_log_file():
@@ -82,8 +82,8 @@ def _close_log_file():
         try:
             _log_file.flush()
             _log_file.close()
-        except Exception:
-            pass
+        except OSError:
+            pass  # close 失败不影响
         _log_file = None
     _log_write_count = 0
 
@@ -151,8 +151,8 @@ def _dump_snapshot_if_full(log, new_count: int, limit: int):
             path = os.path.join(LOG_DIR, f"console_snapshot_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log")
             with open(path, "w", encoding="utf-8") as f:
                 f.write(log.toPlainText()[-100000:])
-        except Exception:
-            pass
+        except OSError:
+            pass  # 快照写入失败（磁盘满等）
 
 
 # ---------- 玩家列表 ----------
@@ -501,8 +501,8 @@ class ConsolePage(QWidget):
         if hasattr(win, "dashboard_page"):
             try:
                 win.dashboard_page.on_output()  # 重置假死计时
-            except Exception:
-                pass
+            except (AttributeError, RuntimeError):
+                pass  # 仪表盘未加载或已被销毁
 
     def mark_recovered(self):
         """恢复运行时清理崩溃标记。"""

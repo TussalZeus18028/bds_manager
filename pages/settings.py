@@ -583,8 +583,8 @@ class SettingsPage(QWidget):
             try:
                 from shared.toast import toast_info
                 toast_info("已重置", f"{rec.label} → {rec.default_key}", self.window())
-            except Exception:
-                pass
+            except (ImportError, AttributeError):
+                pass  # toast 不可用
 
     def _on_shortcuts_reset_all(self):
         from qfluentwidgets import MessageBox
@@ -600,7 +600,7 @@ class SettingsPage(QWidget):
         try:
             from shared.toast import toast_success
             toast_success("已恢复", "所有快捷键已恢复为默认值", self.window())
-        except Exception:
+        except (ImportError, AttributeError):
             pass
 
     def refresh_theme(self):

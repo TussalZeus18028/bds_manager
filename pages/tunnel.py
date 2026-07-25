@@ -216,8 +216,8 @@ class TunnelPage(QWidget):
             try:
                 with open(cfg, "r", encoding="utf-8") as f:
                     self._cfg_edit.setPlainText(f.read())
-            except Exception:
-                pass
+            except OSError:
+                pass  # frpc 配置文件损坏或不存在
 
     def _save_config(self):
         cfg = self._cfg_path()
@@ -343,8 +343,8 @@ class TunnelPage(QWidget):
             try:
                 self._process.terminate()
                 self._process.wait(3)
-            except Exception:
-                pass
+            except (OSError, subprocess.TimeoutExpired):
+                pass  # 进程已退出
         self._process = None
         self._start_btn.setEnabled(True)
         self._stop_btn.setEnabled(False)

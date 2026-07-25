@@ -1,5 +1,175 @@
 [
   {
+    "id": "n_1784964748324_bee6",
+    "ts": 1784964748.3246584,
+    "level": "warning",
+    "category": "toast",
+    "title": "安全关闭",
+    "body": "服务器 / 隧道 / 监控已全部停止，1 秒后退出",
+    "action_target": "",
+    "read": false
+  },
+  {
+    "id": "n_1784964748295_0945",
+    "ts": 1784964748.2956882,
+    "level": "warning",
+    "category": "system",
+    "title": "安全关闭",
+    "body": "服务器 / 隧道 / 监控已全部停止，1 秒后退出",
+    "action_target": "",
+    "read": false
+  },
+  {
+    "id": "n_1784964744828_32bc",
+    "ts": 1784964744.8282373,
+    "level": "warning",
+    "category": "toast",
+    "title": "内存告警",
+    "body": "内存使用率 64.3%（阈值: 50%）",
+    "action_target": "",
+    "read": false
+  },
+  {
+    "id": "n_1784962330945_ee79",
+    "ts": 1784962330.9455695,
+    "level": "warning",
+    "category": "toast",
+    "title": "安全关闭",
+    "body": "服务器 / 隧道 / 监控已全部停止，1 秒后退出",
+    "action_target": "",
+    "read": false
+  },
+  {
+    "id": "n_1784962330920_c15f",
+    "ts": 1784962330.9205685,
+    "level": "warning",
+    "category": "system",
+    "title": "安全关闭",
+    "body": "服务器 / 隧道 / 监控已全部停止，1 秒后退出",
+    "action_target": "",
+    "read": false
+  },
+  {
+    "id": "n_1784962329039_2431",
+    "ts": 1784962329.0395548,
+    "level": "warning",
+    "category": "toast",
+    "title": "内存告警",
+    "body": "内存使用率 54.6%（阈值: 50%）",
+    "action_target": "",
+    "read": false
+  },
+  {
+    "id": "n_1784962322021_8f0a",
+    "ts": 1784962322.021776,
+    "level": "info",
+    "category": "toast",
+    "title": "工具即将重启",
+    "body": "将在 1 秒后自动重启",
+    "action_target": "",
+    "read": false
+  },
+  {
+    "id": "n_1784962317944_bc76",
+    "ts": 1784962317.9441495,
+    "level": "warning",
+    "category": "toast",
+    "title": "内存告警",
+    "body": "内存使用率 53.8%（阈值: 50%）",
+    "action_target": "",
+    "read": false
+  },
+  {
+    "id": "n_1784962310924_7802",
+    "ts": 1784962310.9243128,
+    "level": "info",
+    "category": "toast",
+    "title": "工具即将重启",
+    "body": "将在 1 秒后自动重启",
+    "action_target": "",
+    "read": false
+  },
+  {
+    "id": "n_1784962283770_2c6c",
+    "ts": 1784962283.7701054,
+    "level": "warning",
+    "category": "toast",
+    "title": "内存告警",
+    "body": "内存使用率 53.0%（阈值: 50%）",
+    "action_target": "",
+    "read": false
+  },
+  {
+    "id": "n_1784962276740_ea9d",
+    "ts": 1784962276.7402666,
+    "level": "info",
+    "category": "toast",
+    "title": "工具即将重启",
+    "body": "将在 1 秒后自动重启",
+    "action_target": "",
+    "read": false
+  },
+  {
+    "id": "n_1784962272007_df0e",
+    "ts": 1784962272.0071,
+    "level": "warning",
+    "category": "toast",
+    "title": "内存告警",
+    "body": "内存使用率 51.6%（阈值: 50%）",
+    "action_target": "",
+    "read": false
+  },
+  {
+    "id": "n_1784962133381_f238",
+    "ts": 1784962133.3817976,
+    "level": "warning",
+    "category": "toast",
+    "title": "安全关闭",
+    "body": "服务器 / 隧道 / 监控已全部停止，1 秒后退出",
+    "action_target": "",
+    "read": false
+  },
+  {
+    "id": "n_1784962133049_f930",
+    "ts": 1784962133.049462,
+    "level": "warning",
+    "category": "system",
+    "title": "安全关闭",
+    "body": "服务器 / 隧道 / 监控已全部停止，1 秒后退出",
+    "action_target": "",
+    "read": false
+  },
+  {
+    "id": "n_1784962128050_f020",
+    "ts": 1784962128.0506163,
+    "level": "warning",
+    "category": "toast",
+    "title": "内存告警",
+    "body": "内存使用率 51.7%（阈值: 50%）",
+    "action_target": "",
+    "read": false
+  },
+  {
+    "id": "n_1784962120554_2c78",
+    "ts": 1784962120.554051,
+    "level": "info",
+    "category": "toast",
+    "title": "工具即将重启",
+    "body": "将在 1 秒后自动重启",
+    "action_target": "",
+    "read": false
+  },
+  {
+    "id": "n_1784962110649_4f87",
+    "ts": 1784962110.6499171,
+    "level": "warning",
+    "category": "toast",
+    "title": "内存告警",
+    "body": "内存使用率 50.5%（阈值: 50%）",
+    "action_target": "",
+    "read": false
+  },
+  {
     "id": "n_1784961846482_e71c",
     "ts": 1784961846.4825926,
     "level": "warning",

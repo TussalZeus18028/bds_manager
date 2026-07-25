@@ -328,7 +328,7 @@ class ConfigPage(QWidget):
             widget.setText(value)
         elif typ == "int":
             try: widget.setValue(int(value))
-            except: pass
+            except (ValueError, TypeError): pass
         elif typ == "bool":
             val = value if isinstance(value, bool) else str(value).lower() == "true"
             widget.setChecked(val)

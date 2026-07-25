@@ -64,7 +64,7 @@ def _calc_world_size(world_path: str) -> str:
                     total_size += os.path.getsize(os.path.join(root, f))
                 except OSError:
                     pass
-    except Exception:
+    except (OSError, PermissionError, RecursionError):
         return "(无法计算)"
     return _format_size(total_size)
 
@@ -398,7 +398,7 @@ class WorldPage(QWidget):
         try:
             import main
             bds_ver = main.__version__
-        except Exception:
+        except (ImportError, AttributeError):
             pass
 
         self._worker = BackupWorker(
@@ -428,8 +428,8 @@ class WorldPage(QWidget):
             try:
                 from backend.notifications import notify
                 notify("error", "backup", "备份失败", message, "page:world")
-            except Exception:
-                pass
+            except (ImportError, OSError, AttributeError):
+                pass  # 通知中心不可用时静默
         self._refresh_list()
 
     def _cleanup_backups(self):
@@ -444,8 +444,8 @@ class WorldPage(QWidget):
             )
             for old in files[keep:]:
                 os.remove(os.path.join(ctx.backup_dir, old))
-        except Exception:
-            pass
+        except OSError:
+            pass  # 文件可能被占用或已删除
 
     # ---------- 还原 ----------
     def _on_restore_selected(self):
@@ -487,21 +487,21 @@ class WorldPage(QWidget):
     def _on_restore_done(self, success: bool, message: str, info_bar):
         try:
             info_bar.close()
-        except Exception:
-            pass
+        except (AttributeError, RuntimeError):
+            pass  # InfoBar 可能已被销毁
         if success:
             toast_success("还原完成", message, self.window())
             try:
                 from backend.notifications import notify
                 notify("success", "backup", "世界已还原", message, "page:world")
-            except Exception:
-                pass
+            except (ImportError, OSError, AttributeError):
+                pass  # 通知中心不可用
         else:
             toast_error("还原失败", message, self.window())
             try:
                 from backend.notifications import notify
                 notify("error", "backup", "还原失败", message, "page:world")
-            except Exception:
+            except (ImportError, OSError, AttributeError):
                 pass
 
     def _on_delete_selected(self):

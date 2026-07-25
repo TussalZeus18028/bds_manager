@@ -121,5 +121,5 @@ def send_webhook(event: str, title: str, message: str, extra: dict | None = None
         try:
             from backend.notifications import notify
             notify("warning", "webhook", "Webhook 发送失败", f"[{event}] {e}")
-        except Exception:
-            pass
+        except (ImportError, AttributeError):
+            pass  # 通知中心不可用

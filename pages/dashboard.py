@@ -623,7 +623,7 @@ class DashboardPage(QWidget):
         try:
             win = self.window()
             return bool(win and getattr(win, "is_server_running", False))
-        except Exception:
+        except (RuntimeError, AttributeError):
             return False
 
     # ---------- v3.02.01 fix: 与 ConsolePage 对齐的服务器状态回调 ----------

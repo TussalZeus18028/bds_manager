@@ -42,7 +42,7 @@ def _deobfuscate_token(obfuscated: str) -> str:
         data = base64.urlsafe_b64decode(obfuscated.encode())
         key = (_TOKEN_XOR_KEY * (len(data) // len(_TOKEN_XOR_KEY) + 1))[:len(data)]
         return bytes(a ^ b for a, b in zip(data, key)).decode("utf-8")
-    except Exception:
+    except (base64.binascii.Error, UnicodeDecodeError, ValueError, IndexError):
         return ""
 
 

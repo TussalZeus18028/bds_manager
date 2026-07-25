@@ -1,9 +1,9 @@
 {
-    "version": "3.03.01",
+    "version": "3.03.02",
     "release_date": "2026-07-25",
-    "download_url": "https://github.com/TussalZeus18028/bds_manager/releases/download/v3.03.01/bds_manager_v3.03.01.zip",
-    "sha256": "5cfd1efab101f177c514929934bfae3dbcc6de090e7fc7182451e5139931dbde",
-    "file_size": 148042,
+    "download_url": "https://github.com/TussalZeus18028/bds_manager/releases/download/v3.03.02/bds_manager_v3.03.02.zip",
+    "sha256": "",
+    "file_size": 0,
     "min_compatible_version": "2.00.00",
-    "changelog": "## v3.03.01 (2026-07-25)\n\n### 闪屏\n- 深浅色自动适配：启动时读取配置主题，暗色/浅色两套渲染\n- 圆角优化：QBitmap 反锯齿 mask 替代多边形近似\n- 尺寸480x300 + 分割线 + 底部品牌提示\n\n### BDS 命令\n- 删除 save-all / save-on / save-off（Java 版命令，BDS 不支持）\n- 替换为 BDS 原生命令：save hold / save query / save resume\n- 优雅停服流程：save hold → save resume → stop\n- 自动补全扩充 20+ 基岩版原生命令\n\n### 主题适配\n- 通知抽屉 LEVEL_COLORS 按深/浅色双索引取值\n- 控制台 _COLOR_MAP 全系更换为双值表 + _resolve_color()\n- 控制台默认回退色 / 搜索高亮前景色\n- 通知铃铛图标跟随主题切换\n- 快捷键录制按钮 refresh_theme 刷新样式\n- 包详情 badge 深浅色双套背景\n- 主窗口圆角 QBitmap 反锯齿\n\n### 界面\n- 预设色板 ColorSwatch WA_StyledBackground 修复\n- 升级页按钮行高 setDefaultSectionSize(40) 防截断\n- 设置页窗口背景 ComboBox tooltip 说明\n- 包预览极简图标替换 emoji\n\n### 默认值\n- 主题 dark → light\n- 配置加载前移到闪屏之前"
+    "changelog": "## v3.03.02 (2026-07-25)\n\n### 架构\n- main.py 拆分：闪屏 → components/splash.py，服务器生命周期 → backend/server_lifecycle.py\n- 主文件从 1300 行压缩到 1054 行\n\n### 错误处理\n- 消除唯一裸 except: pass（config.py）\n- ~25 处 except Exception 窄化为具体异常类型（OSError / ValueError / ImportError 等）\n- packs.py manifest 解析失败加 logger.warning 记录\n- upgrade.py 网络请求加 logger.debug\n- config_mgr.set 忘记 save() 系统性修复（6 处）\n\n### Bug 修复\n- 深色模式重启后丢失：_restart_app / _shortcut_toggle_theme / _on_theme_changed 补 save()\n- bds_manager.py 新增 ensure_dependencies() 自动装依赖\n- .gitignore 新增 bds_manager_notifications.json\n- README 更新至 v3.03.02"
 }

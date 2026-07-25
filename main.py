@@ -46,6 +46,8 @@ from backend.self_update import CheckUpdateWorker, DownloadUpdateWorker, Install
 from backend.notifications import notify  # v3.02.00 通知中心
 from backend.notifications import get_bus as _notify_bus, get_unread_count as _notify_unread
 from components.notification_panel import BellButton, NotificationDrawer
+from components.splash import AnimatedSplashScreen, animate_progress
+from backend import server_lifecycle as _slc
 from backend.log_handler import make_rotating_file_handler
 from pages.dashboard import DashboardPage
 from pages.console import ConsolePage
@@ -75,7 +77,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger("bds_manager")
 
-__version__ = "3.03.01"
+__version__ = "3.03.02"
 # ⚠️ 工具版本固定写在这里，不在 bds_manager_config.json / bds_version_cache.json 等任何配置文件中。
 # 如果需要做配置兼容性检查，读取远端 version.json（自更新流程用）即可。
 # 格式规范：x.xx.xx —— Major 1 位、Minor 2 位（补零）、Patch 2 位（补零）
@@ -829,153 +831,33 @@ class BDSFluentWindow(FluentWindow):
         return self._server is not None and self._server.is_running
 
     def start_server(self):
-        if self._server and self._server.is_running:
-            return "服务器已在运行中"
-
-        ctx = get_context()
-        exe_path = os.path.join(ctx.server_dir, config_mgr.get("server_exe", "bedrock_server.exe"))
-        if not os.path.exists(exe_path):
-            err = f"未找到服务器可执行文件: {exe_path}"
-            notify("error", "server", "服务器启动失败", err, "page:dashboard")
-            return err
-
-        # v3.02.02: 断开旧 ServerProcess 信号连接，防止泄漏
-        if self._server is not None:
-            try:
-                self._server.output_received.disconnect()
-                self._server.process_stopped.disconnect()
-                self._server.error_occurred.disconnect()
-                self._server.status_changed.disconnect()
-                self._server.proc_stats.disconnect()
-            except Exception:
-                pass
-        self._server = ServerProcess(exe_path, ctx.server_dir)
-        self._server.output_received.connect(self._on_server_output)
-        self._server.process_stopped.connect(self._on_server_stopped)
-        self._server.error_occurred.connect(
-            lambda msg: (
-                self.console_page._append_output(f"[ERROR] {msg}", "#ff5555"),
-                notify("error", "server", "服务器错误", msg, "page:console"),
-            )
-        )
-        self._server.status_changed.connect(self._on_status_changed)
-        # 进程级资源（如果启用）
-        if config_mgr.get("enable_bds_process_monitor", True):
-            self._server.proc_stats.connect(self.dashboard_page.update_proc_stats)
-        self._server.start()
-
-        self.dashboard_page._on_server_started()
-        self.console_page._on_server_started()
-        notify("success", "server", "服务器已启动", os.path.basename(exe_path), "page:dashboard")
-
-        if not hasattr(self, "_lag_timer") or not self._lag_timer:
-            self._lag_timer = QTimer(self)
-            self._lag_timer.timeout.connect(self._lag_ping)
-        self._lag_timer.start(30000)
-        return None
+        return _slc.start_server(self)
 
     def stop_server(self):
-        if self._server and self._server.is_running:
-            self.console_page._append_output("[系统] 正在停止服务器...", "#E65100")
-            # v3.02.01: 直接 stop，不经过 save hold + 10s 等待
-            self._server.stop_server(graceful=False)
-        self._restart_count = 0  # 用户手动停服时重置自动重启计数
-        if hasattr(self, "_lag_timer") and self._lag_timer:
-            self._lag_timer.stop()
+        _slc.stop_server(self)
 
     def _on_server_output(self, text: str):
-        """服务器输出同时推送给控制台 + Dashboard 假死检测。"""
-        self.console_page._append_output(text)
-        self.dashboard_page.on_output()
+        _slc._on_server_output(self, text)
 
     def _on_server_stopped(self, retcode: int):
-        self.dashboard_page._on_server_stopped()
-        self.console_page._on_server_stopped()
-
-        # v3.02.01 fix: 区分正常退出 / 启动失败 / 崩溃
-        if retcode == 0:
-            self.console_page._append_output("[系统] 服务器已正常退出", "#555")
-            self._restart_count = 0
-            if hasattr(self, "_lag_timer") and self._lag_timer:
-                self._lag_timer.stop()
-            return
-
-        if retcode == -1:
-            self.console_page._append_output("[系统] 服务器启动失败", "#ff5555")
-            notify("error", "server", "服务器启动失败", "", "page:console")
-            return
-
-        # retcode != 0 且 != -1 → 崩溃自动重启
-        send_webhook("crash", "服务器崩溃", f"BDS 异常退出，返回码: {retcode}")
-        notify("warning", "server", "服务器已停止", f"退出码 {retcode}", "page:console")
-        max_retries = config_mgr.get("max_restart_retries", 5)
-        if max_retries > 0 and self._restart_count < max_retries:
-            self._restart_count += 1
-            msg = f"服务器崩溃，5秒后自动重启（第 {self._restart_count}/{max_retries} 次）"
-            self.console_page._append_output(f"[系统] {msg}", "#E65100")
-            self.console_page.mark_crash(self._restart_count, max_retries)
-            from shared.toast import toast_warning
-            toast_warning("自动重启", f"第 {self._restart_count} 次尝试", self)
-            QTimer.singleShot(5000, self.start_server)
-        else:
-            if self._restart_count >= max_retries and max_retries > 0:
-                log_text = self.console_page._log.toPlainText()
-                if log_text:
-                    try:
-                        crash_path = os.path.join(LOG_DIR, f"crash_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log")
-                        with open(crash_path, "w", encoding="utf-8") as f:
-                            f.write(log_text[-8000:])
-                        self.console_page._append_output(f"[系统] 崩溃日志已保存: {crash_path}", "#555")
-                    except Exception:
-                        pass
-            self._restart_count = 0
-            if hasattr(self, "_lag_timer") and self._lag_timer:
-                self._lag_timer.stop()
+        _slc._on_server_stopped(self, retcode)
 
     def _on_status_changed(self, running: bool):
-        self.dashboard_page._on_status_changed(running)
-        self.console_page._on_status_changed(running)
+        _slc._on_status_changed(self, running)
 
-    # ── RTT 延迟探测 ──
+    # ── RTT 延迟探测 → backend/server_lifecycle ──
     _lag_ping_sent = 0.0
     _lag_ping_pending = False
 
     def _lag_ping(self):
-        if not self._server or not self._server.is_running:
-            return
-        import time
-        self._lag_ping_sent = time.time()
-        self._lag_ping_pending = True
-        self._server.send_command("list")
+        _slc._lag_ping(self)
 
     def check_lag_response(self, text: str):
-        import time, re
-        if self._lag_ping_pending and re.search(r"players online", text, re.I):
-            rtt = (time.time() - self._lag_ping_sent) * 1000.0
-            if 0 < rtt < 60000:
-                self._lag_samples.append(rtt)
-                if len(self._lag_samples) > 10:
-                    self._lag_samples.pop(0)
-            self._lag_ping_pending = False
-            if self._lag_samples:
-                s = sorted(self._lag_samples)
-                med = s[len(s) // 2]
-                color = "#4CAF50" if med < 80 else ("#E65100" if med < 200 else "#ff5555")
-                self.dashboard_page.status_card.update_rtt(med, color)
+        _slc.check_lag_response(self, text)
 
-    # ---------- 资源监控 ----------
+    # ── 资源监控 → backend/server_lifecycle ──
     def _on_stats_updated(self, snap: SystemStatsSnapshot):
-        self.dashboard_page.status_card.update_server_stats(snap)
-        if not hasattr(self, "_last_mem_warn"):
-            self._last_mem_warn = 0.0
-        import time as _t
-        threshold = config_mgr.get("mem_warn_threshold", 80) or 80
-        if snap.mem_percent >= threshold and _t.time() - self._last_mem_warn > 30:
-            self._last_mem_warn = _t.time()
-            msg = f"内存使用率 {snap.mem_percent:.1f}%（阈值: {threshold}%）"
-            send_webhook("memory", "内存告警", msg)
-            from shared.toast import toast_warning
-            toast_warning("内存告警", msg, self, duration=8000)
+        _slc.on_stats_updated(self, snap)
 
     # ── 工具自更新 ──
     def _check_self_update(self):
@@ -1106,135 +988,6 @@ class BDSFluentWindow(FluentWindow):
             notify("error", "update", "安装失败", msg, "page:upgrade")
 
 
-# ---------- 启动闪屏（圆角 · 半透明 · 动画进度条）----------
-class AnimatedSplashScreen(QSplashScreen):
-    """v3.03.00 重设计：圆角窗口 + 半透明背景 + 动画进度条 + 深浅色适配。
-
-    QSplashScreen 基于 QPixmap 渲染，不支持 QSS。圆角通过 QBitmap setMask 实现，
-    半透明通过 setWindowOpacity，绘制内容在 drawContents 手动处理。
-    """
-
-    W, H = 480, 300
-
-    def __init__(self, version: str, is_dark: bool = False):
-        from PySide6.QtGui import QPixmap, QColor
-
-        self._is_dark = is_dark
-
-        pix = QPixmap(self.W, self.H)
-        bg = "#1a1c20" if is_dark else "#f5f5f5"
-        pix.fill(QColor(bg))
-        super().__init__(pix, Qt.WindowStaysOnTopHint)
-        self.setWindowFlag(Qt.FramelessWindowHint, True)
-
-        from PySide6.QtGui import QBitmap, QPainter
-        bitmap = QBitmap(self.W, self.H)
-        bitmap.fill(Qt.color0)
-        mp = QPainter(bitmap)
-        mp.setBrush(Qt.color1)
-        mp.setPen(Qt.NoPen)
-        mp.setRenderHint(QPainter.Antialiasing)
-        mp.drawRoundedRect(0, 0, self.W, self.H, 14, 14)
-        mp.end()
-        self.setMask(bitmap)
-
-        self.setWindowOpacity(0.94)
-        self._progress = 0
-        self._status = "正在启动..."
-        self._version = version
-
-    def set_progress(self, percent: int, status: str = ""):
-        self._progress = max(0, min(100, percent))
-        if status:
-            self._status = status
-        self.repaint()
-
-    def set_status(self, status: str):
-        self._status = status
-        self.repaint()
-
-    def drawContents(self, painter):
-        from PySide6.QtGui import QColor, QFont, QPen
-        rect = self.rect()
-        is_dark = self._is_dark
-
-        # ── 主题色值 ──
-        accent = QColor("#0DC5D4")
-        title_color = QColor("#0DC5D4") if is_dark else QColor("#0078D4")
-        sub_color = QColor("#78909c") if is_dark else QColor("#6b7b8d")
-        line_color = QColor("#2a2e33") if is_dark else QColor("#d0d4d8")
-        track_color = QColor("#252830") if is_dark else QColor("#e0e3e6")
-        status_color = QColor("#b0b8c0") if is_dark else QColor("#5a6268")
-        pct_color = QColor("#5a6268") if is_dark else QColor("#8a9098")
-        hint_color = QColor("#3a4048") if is_dark else QColor("#a0a4a8")
-
-        # ── 标题 ──
-        painter.setPen(title_color)
-        title_font = QFont("Microsoft YaHei", 20)
-        title_font.setBold(True)
-        painter.setFont(title_font)
-        painter.drawText(rect.adjusted(0, 54, 0, 0), Qt.AlignHCenter, "BDS Manager")
-
-        # ── 副标题 ──
-        painter.setPen(sub_color)
-        sub_font = QFont("Microsoft YaHei", 10)
-        painter.setFont(sub_font)
-        painter.drawText(rect.adjusted(0, 94, 0, 0), Qt.AlignHCenter,
-                         f"v{self._version}  —  服务器管理工具")
-
-        # ── 分割线 ──
-        line_y = 140
-        painter.setPen(QPen(line_color, 1))
-        painter.drawLine(60, line_y, self.W - 60, line_y)
-
-        # ── 进度条 ──
-        bar_x, bar_y, bar_w, bar_h = 60, 175, self.W - 120, 5
-        painter.setPen(Qt.NoPen)
-        painter.setBrush(track_color)
-        painter.drawRoundedRect(bar_x, bar_y, bar_w, bar_h, 3, 3)
-        if self._progress > 0:
-            fg_w = int(bar_w * self._progress / 100)
-            painter.setBrush(accent)
-            painter.drawRoundedRect(bar_x, bar_y, fg_w, bar_h, 3, 3)
-
-        # ── 状态文字 ──
-        painter.setPen(status_color)
-        status_font = QFont("Microsoft YaHei", 10)
-        painter.setFont(status_font)
-        painter.drawText(rect.adjusted(0, 200, 0, 0), Qt.AlignHCenter, self._status)
-
-        # ── 百分比 ──
-        painter.setPen(pct_color)
-        pct_font = QFont("Microsoft YaHei", 9)
-        painter.setFont(pct_font)
-        painter.drawText(rect.adjusted(0, 232, 0, 0), Qt.AlignHCenter,
-                         f"加载 {self._progress}%")
-
-        # ── 底部提示 ──
-        painter.setPen(hint_color)
-        hint_font = QFont("Microsoft YaHei", 8)
-        painter.setFont(hint_font)
-        painter.drawText(rect.adjusted(0, 272, 0, 0), Qt.AlignHCenter,
-                         "Bedrock Dedicated Server 管理工具")
-
-
-def _animate_progress(splash: AnimatedSplashScreen, app: QApplication,
-                      target: int, duration_ms: int = 250):
-    """从当前进度平滑过渡到 target（ease-out 曲线）。
-
-    v3.02.01 优化：sleep 从 16ms 减到 5ms，动画更快。
-    """
-    start = splash._progress
-    steps = max(1, duration_ms // 16)  # ~60fps
-    for i in range(1, steps + 1):
-        ratio = i / steps
-        eased = 1 - (1 - ratio) ** 3  # ease-out cubic
-        pct = int(start + (target - start) * eased)
-        splash.set_progress(pct)
-        app.processEvents()
-        time.sleep(0.008)  # v3.02.01: 从 0.016 → 0.008，动画仍平滑但快一倍
-
-
 # ---------- 入口 ----------
 def main():
     # 1. QApplication（必须先于任何 QWidget）
@@ -1256,9 +1009,9 @@ def main():
     # 4. 全局错误处理
     set_error_handler(_toast_error_handler)
     install_excepthook()
-    _animate_progress(splash, app, 10, 60)
+    animate_progress(splash, app, 10, 60)
     splash.set_status("配置已加载")
-    _animate_progress(splash, app, 25, 60)
+    animate_progress(splash, app, 25, 60)
 
     # 5. 字体
     font_size = config_mgr.get("font_size", 12)
@@ -1266,7 +1019,7 @@ def main():
     f.setPointSize(font_size)
     app.setFont(f)
     splash.set_status("字体已设置")
-    _animate_progress(splash, app, 35, 50)
+    animate_progress(splash, app, 35, 50)
 
     # v3.02.01: 构造页面之前先设主题，否则 isDarkTheme() 在页面 __init__ 中返回 False，
     # 导致 QPlainTextEdit/QTableWidget 等控件的硬编码样式走浅色分支。
@@ -1275,9 +1028,9 @@ def main():
 
     # 6. 主窗口（最耗时的一步，1.5+ 秒）
     splash.set_status("正在构造主窗口...")
-    _animate_progress(splash, app, 45, 50)
+    animate_progress(splash, app, 45, 50)
     window = BDSFluentWindow()
-    _animate_progress(splash, app, 80, 100)
+    animate_progress(splash, app, 80, 100)
 
     # 7. 主题
     splash.set_status("正在应用主题...")
@@ -1285,11 +1038,11 @@ def main():
         config_mgr.get("theme", "light"),
         config_mgr.get("theme_color", "#0DC5D4"),
     )
-    _animate_progress(splash, app, 95, 60)
+    animate_progress(splash, app, 95, 60)
 
     # 8. 进度条到达 100% 时主窗口登场
     splash.set_status("准备就绪")
-    _animate_progress(splash, app, 100, 60)
+    animate_progress(splash, app, 100, 60)
     window.show()
     splash.finish(window)
     app.processEvents()
