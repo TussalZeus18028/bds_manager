@@ -2,8 +2,8 @@
     "version": "3.03.02",
     "release_date": "2026-07-25",
     "download_url": "https://github.com/TussalZeus18028/bds_manager/releases/download/v3.03.02/bds_manager_v3.03.02.zip",
-    "sha256": "",
-    "file_size": 0,
+    "sha256": "3f4a158b089781c43cd7f539ea9984755e9a057e882292c5179470a74a06aacd",
+    "file_size": 151212,
     "min_compatible_version": "2.00.00",
     "changelog": "## v3.03.02 (2026-07-25)\n\n### 架构\n- main.py 拆分：闪屏 → components/splash.py，服务器生命周期 → backend/server_lifecycle.py\n- 主文件从 1300 行压缩到 1054 行\n\n### 错误处理\n- 消除唯一裸 except: pass（config.py）\n- ~25 处 except Exception 窄化为具体异常类型（OSError / ValueError / ImportError 等）\n- packs.py manifest 解析失败加 logger.warning 记录\n- upgrade.py 网络请求加 logger.debug\n- config_mgr.set 忘记 save() 系统性修复（6 处）\n\n### Bug 修复\n- 深色模式重启后丢失：_restart_app / _shortcut_toggle_theme / _on_theme_changed 补 save()\n- bds_manager.py 新增 ensure_dependencies() 自动装依赖\n- .gitignore 新增 bds_manager_notifications.json\n- README 更新至 v3.03.02"
 }
