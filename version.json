@@ -2,8 +2,8 @@
     "version": "3.03.03",
     "release_date": "2026-07-25",
     "download_url": "https://github.com/TussalZeus18028/bds_manager/releases/download/v3.03.03/bds_manager_v3.03.03.zip",
-    "sha256": "",
-    "file_size": 0,
+    "sha256": "f894b2d5fdfed50d87d54f4f4d036b8ee58dd5b371b69ea0f25ec1b3bd6681fc",
+    "file_size": 151954,
     "min_compatible_version": "2.00.00",
     "changelog": "## v3.03.03 (2026-07-25)\n\n### Bug 修复\n- Win11 暗色模式标题栏适配：DwmSetWindowAttribute DWMWA_USE_IMMERSIVE_DARK_MODE\n- 切换主题快捷键导致窗口最小化（删除错误的 SetWindowPos 调用）\n- 部分 Windows 设备 SSL 证书缺失导致 GitHub API 请求失败（关闭验证）\n- 配置预设 _apply_preset 崩溃：先取值再解包避免 \"pvp\": \"real\" 拆散\n- 配置保存日志刷屏：加 2 秒节流 + import time 缺失\n- 重复 config_mgr.load() 调用合并\n\n### 新功能\n- 高 DPI 缩放适配开关（设置页，默认关，重启生效）\n- bds_manager.py 自动安装依赖"
 }
