@@ -381,7 +381,7 @@ class UpgradePage(QWidget):
             il.addWidget(self._info)
         else:
             self._info = BodyLabel(f"❌ 未检测到 BDS — 请先安装服务器", info_card)
-            self._info.setStyleSheet("color: #ffaa00;")
+            self._info.setStyleSheet("color: #E65100;")
             il.addWidget(self._info)
             il.addWidget(CaptionLabel(f"预期路径: {self._server_exe_path}", info_card))
         layout.addWidget(info_card)
@@ -412,7 +412,7 @@ class UpgradePage(QWidget):
         self._ver_table = QTableWidget(0, 4, ver_card)
         self._ver_table.setHorizontalHeaderLabels(["版本", "分支", "大小", "操作"])
         self._ver_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
-        for col, w in [(1, 80), (2, 90), (3, 110)]:
+        for col, w in [(1, 80), (2, 90), (3, 120)]:
             self._ver_table.horizontalHeader().setSectionResizeMode(col, QHeaderView.Fixed)
             self._ver_table.setColumnWidth(col, w)
         self._ver_table.verticalHeader().setVisible(False)
@@ -420,6 +420,7 @@ class UpgradePage(QWidget):
         self._ver_table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self._ver_table.setSelectionMode(QAbstractItemView.ExtendedSelection)
         self._ver_table.setMinimumHeight(320)
+        self._ver_table.verticalHeader().setDefaultSectionSize(40)  # 行高：容纳 PushButton
         self._ver_table.setStyleSheet(_table_style())
         vl.addWidget(self._ver_table)
 
@@ -468,6 +469,7 @@ class UpgradePage(QWidget):
         self._history_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.Fixed)
         self._history_table.setColumnWidth(2, 80)
         self._history_table.verticalHeader().setVisible(False)
+        self._history_table.verticalHeader().setDefaultSectionSize(36)
         self._history_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self._history_table.setStyleSheet(_table_style())
         hl.addWidget(self._history_table)
@@ -896,6 +898,8 @@ class UpgradePage(QWidget):
             self._ver_table.setItem(i, 1, item)
             self._ver_table.setItem(i, 2, QTableWidgetItem("—"))
             btn = PushButton("下载安装", self._ver_table)
+            btn.setMinimumHeight(30)
+            btn.setMaximumHeight(34)
             btn.clicked.connect(lambda checked, u=url, v=ver: self._install(u, v))
             self._ver_table.setCellWidget(i, 3, btn)
         # 恢复 size button

@@ -197,75 +197,9 @@ class InstallUpdateWorker(QThread):
 
     def run(self):
         try:
-            # 备份
-            ts = __import__("time").strftime("%Y%m%d_%H%M%S")
-            backup_dir = os.path.join(SCRIPT_DIR, "backups", f"upgrade_backup_{ts}")
-            os.makedirs(backup_dir, exist_ok=True)
-            self.log.emit("正在备份核心文件...")
-            for f in os.listdir(SCRIPT_DIR):
-                if f.endswith((".py", ".json", ".txt", ".md")) and os.path.isfile(os.path.join(SCRIPT_DIR, f)):
-                    shutil.copy2(os.path.join(SCRIPT_DIR, f), os.path.join(backup_dir, f))
-
-            # v2.x → v3.x 迁移：检测到旧版特征文件时移到 backups/legacy_v2/
-            legacy_files = {"bds_manager.py", "bds_manager.py.bak_174752", "release_gui.py"}
-            legacy_dirs = {"web_ui", "tests"}
-            legacy_detected = [n for n in legacy_files if os.path.exists(os.path.join(SCRIPT_DIR, n))]
-            legacy_detected += [n for n in legacy_dirs if os.path.isdir(os.path.join(SCRIPT_DIR, n))]
-            if legacy_detected:
-                self.log.emit(f"检测到 v2.x 旧版文件: {', '.join(legacy_detected)}")
-                legacy_dir = os.path.join(SCRIPT_DIR, "backups", "legacy_v2")
-                os.makedirs(legacy_dir, exist_ok=True)
-                moved = []
-                for n in legacy_detected:
-                    src = os.path.join(SCRIPT_DIR, n)
-                    dst = os.path.join(legacy_dir, n)
-                    try:
-                        shutil.move(src, dst)
-                        moved.append(n)
-                    except OSError as e:
-                        self.log.emit(f"迁移失败 {n}: {e}")
-                if moved:
-                    self.log.emit(f"已将 {len(moved)} 个 v2.x 旧文件移动到 backups/legacy_v2/（可手动删除）")
-
-            # 解压
-            skip_files = {"bds_manager_config.json", "bds_version_cache.json"}
-            skip_dirs = {"logs", "backups", "Server", "Earlier version", ".git", "__pycache__"}
-            self.log.emit("正在解压更新...")
-            with zipfile.ZipFile(self._zip) as zf:
-                names = zf.namelist()
-                top = common_top_dir(names)
-                for name in names:
-                    if name.endswith("/") or name.endswith("\\"):
-                        continue
-                    rel = name
-                    if top and name.startswith(top):
-                        rel = name[len(top):]
-                    rel = rel.lstrip("/\\")
-                    parts = rel.replace("\\", "/").split("/")
-                    if not rel or not parts:
-                        continue
-                    if parts[-1] in skip_files or parts[0] in skip_dirs:
-                        continue
-                    if parts[-1] in ("", ".", "..") or ".." in parts:
-                        continue
-                    target = os.path.join(SCRIPT_DIR, *parts)
-                    tr = os.path.realpath(target)
-                    if not tr.startswith(os.path.realpath(SCRIPT_DIR)):
-                        self.log.emit(f"跳过越权路径: {name}")
-                        continue
-                    os.makedirs(os.path.dirname(target) or SCRIPT_DIR, exist_ok=True)
-                    with zf.open(name) as src, open(target, "wb") as dst:
-                        dst.write(src.read())
-
-            # ── 注意：bds_manager.py 转发 stub 现在直接打进 zip ──
-            # 新方案：release.py 把 `bds_manager.py`（伪装的智能更新脚本）打进 zip
-            # 解压时它会覆盖旧版 Manager/ 的 bds_manager.py，下次旧版 _restart_app
-            # 调 subprocess.Popen("bds_manager.py") 时会跑到这个伪装脚本：
-            #   1) 自动检查 GitHub 更新
-            #   2) 下载并解压新版本
-            #   3) detached 启动 main.py
-            # 详见 bds_manager.py 文件头注释。
-
+            backup_dir = self._backup_core_files()
+            self._migrate_legacy_v2()
+            self._extract_update()
             try:
                 os.remove(self._zip)
             except OSError:
@@ -275,6 +209,70 @@ class InstallUpdateWorker(QThread):
         except Exception as e:
             self.log.emit(f"安装失败: {e}")
             self.finished.emit(False, str(e))
+
+    def _backup_core_files(self) -> str:
+        """备份 .py/.json/.txt/.md 到 backups/upgrade_backup_<ts>/。"""
+        ts = __import__("time").strftime("%Y%m%d_%H%M%S")
+        backup_dir = os.path.join(SCRIPT_DIR, "backups", f"upgrade_backup_{ts}")
+        os.makedirs(backup_dir, exist_ok=True)
+        self.log.emit("正在备份核心文件...")
+        for f in os.listdir(SCRIPT_DIR):
+            if f.endswith((".py", ".json", ".txt", ".md")) and os.path.isfile(os.path.join(SCRIPT_DIR, f)):
+                shutil.copy2(os.path.join(SCRIPT_DIR, f), os.path.join(backup_dir, f))
+        return backup_dir
+
+    def _migrate_legacy_v2(self):
+        """检测 v2.x 旧版文件 → 移到 backups/legacy_v2/。"""
+        legacy_files = {"bds_manager.py", "bds_manager.py.bak_174752", "release_gui.py"}
+        legacy_dirs = {"web_ui", "tests"}
+        detected = [n for n in legacy_files if os.path.exists(os.path.join(SCRIPT_DIR, n))]
+        detected += [n for n in legacy_dirs if os.path.isdir(os.path.join(SCRIPT_DIR, n))]
+        if not detected:
+            return
+        self.log.emit(f"检测到 v2.x 旧版文件: {', '.join(detected)}")
+        legacy_dir = os.path.join(SCRIPT_DIR, "backups", "legacy_v2")
+        os.makedirs(legacy_dir, exist_ok=True)
+        for n in detected:
+            src = os.path.join(SCRIPT_DIR, n)
+            try:
+                shutil.move(src, os.path.join(legacy_dir, n))
+            except OSError as e:
+                self.log.emit(f"迁移失败 {n}: {e}")
+        self.log.emit(f"已将旧版文件移动到 backups/legacy_v2/（可手动删除）")
+
+    def _extract_update(self):
+        """解压更新 zip，跳过配置/日志/backups 等用户目录。"""
+        skip_files = {"bds_manager_config.json", "bds_version_cache.json"}
+        skip_dirs = {"logs", "backups", "Server", "Earlier version", ".git", "__pycache__"}
+        self.log.emit("正在解压更新...")
+        with zipfile.ZipFile(self._zip) as zf:
+            top = common_top_dir(zf.namelist())
+            for name in zf.namelist():
+                target = _resolve_zip_path(name, top, skip_files, skip_dirs)
+                if target is None:
+                    continue
+                os.makedirs(os.path.dirname(target) or SCRIPT_DIR, exist_ok=True)
+                with zf.open(name) as src, open(target, "wb") as dst:
+                    dst.write(src.read())
+
+
+def _resolve_zip_path(name: str, top: str, skip_files: set, skip_dirs: set) -> str | None:
+    """解析 zip 条目路径；返回目标绝对路径或 None（跳过）。"""
+    if name.endswith("/") or name.endswith("\\"):
+        return None
+    rel = name[len(top):] if top and name.startswith(top) else name
+    rel = rel.lstrip("/\\")
+    if not rel:
+        return None
+    parts = rel.replace("\\", "/").split("/")
+    if not parts or parts[-1] in ("", ".", "..") or ".." in parts:
+        return None
+    if parts[-1] in skip_files or parts[0] in skip_dirs:
+        return None
+    target = os.path.join(SCRIPT_DIR, *parts)
+    if not os.path.realpath(target).startswith(os.path.realpath(SCRIPT_DIR)):
+        return None
+    return target
 
 
 # ── 重启 ──

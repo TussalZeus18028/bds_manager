@@ -301,14 +301,12 @@ class ConfigPage(QWidget):
         ctx = get_context()
         fp = ctx.server_properties
         if not os.path.exists(fp):
-            reply = QMessageBox.question(
-                self, "配置文件不存在",
+            w = MessageBox("配置文件不存在",
                 f"server.properties 不存在：\n{fp}\n\n是否创建默认配置文件？",
-                QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes,
-            )
-            if reply == QMessageBox.Yes:
-                self._create_default_properties()
-                self._load_properties()
+                self.window())
+            w.yesSignal.connect(lambda: (self._create_default_properties(), self._load_properties()))
+            w.cancelSignal.connect(w.close)
+            w.show()
             return
         try:
             with open(fp, "r", encoding="utf-8") as f:

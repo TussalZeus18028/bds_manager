@@ -27,7 +27,7 @@ VERSION_CACHE_FILE = os.path.join(SCRIPT_DIR, "bds_version_cache.json")
 LOG_DIR = os.path.join(SCRIPT_DIR, "logs")
 CONFIG_BACKUP_DIR = os.path.join(SCRIPT_DIR, "backups", "config")
 CONFIG_MAX_BACKUPS = 5
-CONFIG_VERSION = "3.02.02"  # 当前配置 schema 版本
+CONFIG_VERSION = "3.03.00"  # 当前配置 schema 版本
 
 
 def _get_default_bedrock_exe_name():
@@ -136,7 +136,7 @@ def get_context() -> ServerContext:
 # ---------- 默认配置 ----------
 DEFAULT_CONFIG = {
     "config_version": CONFIG_VERSION,
-    "theme": "dark",
+    "theme": "light",
     "theme_color": "#0DC5D4",
     "window_background_opacity": 100,  # 窗口透明度 20-100，100=不透明
     "server_dir": "Server",

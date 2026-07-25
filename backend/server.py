@@ -6,7 +6,7 @@ BDS 服务器进程管理（PySide6 版）。
 
 v3.1 改进：
 - 进程级资源监控（psutil 采集 BDS 进程 CPU/内存/线程数）
-- 优雅停服流程：save-all → save-on → stop → 等待 → terminate → kill
+- 优雅停服流程：save hold → save resume → stop → 等待 → terminate → kill
 - 启动参数注入（命令行参数）
 - 假死检测（is_running 增加健康检查）
 """
@@ -206,23 +206,26 @@ class ServerProcess(QThread):
                 logger.error("发送命令失败: %s", e)
 
     def send_save_all(self):
-        """保存世界（先 save-all, save-on 让区块写回）。"""
-        self.send_command("save-all")
-        self.send_command("save-on")
+        """保存世界（BDS 基岩版用 save hold→通知备份→save resume）。"""
+        self.send_command("save hold")
+        time.sleep(0.3)
+        self.send_command("save query")
+        self.send_command("save resume")
 
     def stop_server(self, graceful: bool = True, grace_seconds: int = 10):
         """停止 BDS。
 
-        graceful=True: 先 save-all → save-on → stop → 等待 grace 秒 → terminate → 1s 后 kill
+        graceful=True: 先 save hold → save resume → stop → 等待 grace 秒 → terminate → 1s 后 kill
         graceful=False: stop → 等 3s → 未退出则 terminate → 1s 后 kill
         """
         if not self.process:
             return
         if graceful:
             try:
-                logger.info("优雅停服: save-all → stop")
-                self.send_command("save-all")
+                logger.info("优雅停服: save hold → stop")
+                self.send_command("save hold")
                 time.sleep(0.5)
+                self.send_command("save resume")
                 self.send_command("stop")
             except Exception as e:
                 logger.debug("优雅停服 stop 命令发送失败: %s", e)

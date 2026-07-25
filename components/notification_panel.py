@@ -138,6 +138,17 @@ class NotificationItemWidget(QFrame):
     - **双击**：跳转目标页（如果有 action_target）→ 触发 navigate_requested
     - **右侧 → 按钮**：跳转目标页（明确的跳转意图）
     """
+
+    # v3.03.00: class-level QFont 缓存，避免 paintEvent 每帧分配
+    FONT_ICON = QFont("Segoe UI Symbol", 13)
+    FONT_TITLE = QFont("Microsoft YaHei", 10)
+    FONT_TITLE.setBold(True)
+    FONT_BODY = QFont("Microsoft YaHei", 9)
+    FONT_LINK = QFont("Consolas", 8)
+    FONT_TIME = QFont("Microsoft YaHei", 8)
+    FONT_ARROW = QFont("Segoe UI Symbol", 11)
+    FONT_MARK = QFont("Segoe UI Symbol", 9)
+
     clicked = Signal(object)  # 单击展开（携带 Notification）
     navigate_requested = Signal(object)  # 双击/按钮跳转（携带 Notification）
 
@@ -225,7 +236,8 @@ class NotificationItemWidget(QFrame):
         p.setRenderHint(QPainter.Antialiasing)
         rect = self.rect()
         # 左侧色条（按 level）
-        accent_hex, _ = LEVEL_COLORS.get(self.n.level, LEVEL_COLORS["info"])
+        idx = 0 if isDarkTheme() else 1
+        accent_hex = LEVEL_COLORS.get(self.n.level, LEVEL_COLORS["info"])[idx]
         p.setBrush(QColor(accent_hex))
         p.setPen(Qt.NoPen)
         p.drawRoundedRect(0, 8, 4, rect.height() - 16, 2, 2)
@@ -233,28 +245,24 @@ class NotificationItemWidget(QFrame):
         icon = CATEGORY_ICONS.get(self.n.category, "•")
         icon_color = "#aabbcc" if isDarkTheme() else "#666666"
         p.setPen(QColor(icon_color))
-        f = QFont("Segoe UI Symbol", 13)
-        p.setFont(f)
+        p.setFont(self.FONT_ICON)
         p.drawText(rect.adjusted(14, 8, 0, 0), Qt.AlignLeft | Qt.AlignTop, icon)
         # 标题（粗体）
         title_color = "#ffffff" if isDarkTheme() else "#1a1a1a"
         body_color = "#a0a8b0" if isDarkTheme() else "#666666"
         time_color = "#777" if isDarkTheme() else "#999"
-        title_font = QFont("Microsoft YaHei", 10)
-        title_font.setBold(True)
-        p.setFont(title_font)
+        p.setFont(self.FONT_TITLE)
         p.setPen(QColor(title_color))
         title_rect = rect.adjusted(40, 8, -50, 0)
-        fm = QFontMetrics(title_font)
+        fm = QFontMetrics(self.FONT_TITLE)
         p.drawText(title_rect, Qt.AlignLeft | Qt.AlignTop,
                    fm.elidedText(self.n.title, Qt.ElideRight, title_rect.width()))
         # body（小字 + 灰）
         if self.n.body:
-            body_font = QFont("Microsoft YaHei", 9)
-            p.setFont(body_font)
+            p.setFont(self.FONT_BODY)
             p.setPen(QColor(body_color))
             body_rect = rect.adjusted(40, 28, -50, -8)
-            fm2 = QFontMetrics(body_font)
+            fm2 = QFontMetrics(self.FONT_BODY)
             # v3.02.01: 展开时显示完整 body，否则单行省略
             if self._expanded:
                 p.drawText(body_rect, Qt.AlignLeft | Qt.AlignTop | Qt.TextWordWrap, self.n.body)
@@ -263,31 +271,27 @@ class NotificationItemWidget(QFrame):
                            fm2.elidedText(self.n.body, Qt.ElideRight, body_rect.width()))
         # 跳转路径（仅展开时显示）
         if self._expanded and self.n.action_target:
-            link_font = QFont("Consolas", 8)
-            p.setFont(link_font)
+            p.setFont(self.FONT_LINK)
             p.setPen(QColor("#0DC5D4"))
             link_rect = rect.adjusted(40, rect.height() - 22, -10, -4)
-            fm3 = QFontMetrics(link_font)
+            fm3 = QFontMetrics(self.FONT_LINK)
             p.drawText(link_rect, Qt.AlignLeft | Qt.AlignTop,
                        fm3.elidedText(self.n.action_target, Qt.ElideRight, link_rect.width()))
         # 时间（右上）
-        time_font = QFont("Microsoft YaHei", 8)
-        p.setFont(time_font)
+        p.setFont(self.FONT_TIME)
         p.setPen(QColor(time_color))
         time_text = _format_time(self.n.ts)
         p.drawText(rect.adjusted(0, 10, -10, 0), Qt.AlignRight | Qt.AlignTop, time_text)
         # 跳转箭头（右下，主题感知）—— 可点击（仅在有 action_target 时）
         if self.n.action_target:
-            arrow_font = QFont("Segoe UI Symbol", 11)
-            p.setFont(arrow_font)
+            p.setFont(self.FONT_ARROW)
             # v3.02.01: hover 时高亮（蓝色），告诉用户「可点击」
             arrow_color = "#0DC5D4" if self._hovered else ("#666" if isDarkTheme() else "#aaa")
             p.setPen(QColor(arrow_color))
             p.drawText(rect.adjusted(0, 0, -10, -8), Qt.AlignRight | Qt.AlignBottom, "→")
         # 展开/收起标记（右下角，仅有 body 的项显示）
         if self._has_body():
-            mark_font = QFont("Segoe UI Symbol", 9)
-            p.setFont(mark_font)
+            p.setFont(self.FONT_MARK)
             mark_color = "#888" if isDarkTheme() else "#aaa"
             p.setPen(QColor(mark_color))
             # ▼ 展开 / ▶ 收起
@@ -456,7 +460,7 @@ class NotificationDrawer(QWidget):
         for k, btn in self._chip_buttons.items():
             btn.setChecked(k == key)
         self._update_chip_style()
-        self.refresh()
+        self.refresh(force=True)
 
     def _update_chip_style(self):
         # v3.02.01 fix: 主题感知（之前 chip 在浅色主题下背景太深看不清楚）
@@ -484,15 +488,8 @@ class NotificationDrawer(QWidget):
                 """)
 
     # ---------- 列表渲染 ----------
-    def refresh(self):
-        # 清空现有项（保留 addStretch）
-        while self._list_layout.count() > 1:
-            item = self._list_layout.takeAt(0)
-            w = item.widget()
-            if w:
-                w.setParent(None)
-                w.deleteLater()
-        # 加载并过滤
+    def refresh(self, force: bool = False):
+        """刷新通知列表。force=True 时全量重建（过滤器切换等），否则增量追加。"""
         items = get_all()
         if self._filter != self.FILTER_ALL:
             _, ftype = self.FILTER_MAP[self._filter]
@@ -500,21 +497,46 @@ class NotificationDrawer(QWidget):
                 items = [n for n in items if n.level == "error"]
             else:
                 items = [n for n in items if n.category == ftype]
-        if not items:
-            # v3.02.01 fix: 改用 CaptionLabel（主题感知，之前 QLabel 黑色）
-            empty = CaptionLabel("暂无通知", self._list_container)
-            empty.setAlignment(Qt.AlignCenter)
-            empty.setStyleSheet(f"color: {'#666' if isDarkTheme() else '#999'}; padding: 40px; font-size: 12px;")
-            self._list_layout.insertWidget(0, empty)
+        items = items[:200]
+        # 当前已渲染的 widget 数量（减去最后一个 stretch）
+        current_count = self._list_layout.count() - 1
+        # 是否需要全量重建：过滤变了或数量对不上
+        if force or current_count < 0 or len(items) != current_count or self._filter != self.FILTER_ALL:
+            # 全量重建
+            while self._list_layout.count() > 1:
+                item = self._list_layout.takeAt(0)
+                w = item.widget()
+                if w:
+                    w.setParent(None)
+                    w.deleteLater()
+            if not items:
+                empty = CaptionLabel("暂无通知", self._list_container)
+                empty.setAlignment(Qt.AlignCenter)
+                empty.setStyleSheet(f"color: {'#666' if isDarkTheme() else '#999'}; padding: 40px; font-size: 12px;")
+                self._list_layout.insertWidget(0, empty)
+                return
+            for n in items:
+                row = NotificationItemWidget(n, self._list_container)
+                row.clicked.connect(lambda _n=n: self._on_item_expanded(_n))
+                row.navigate_requested.connect(self._on_item_navigate)
+                self._list_layout.insertWidget(self._list_layout.count() - 1, row)
             return
-        # 渲染（最多 200 条，避免卡顿）
-        for n in items[:200]:
-            row = NotificationItemWidget(n, self._list_container)
-            # 单击展开（不再触发跳转，跳转由双击/箭头按钮触发）
-            row.clicked.connect(lambda _n: self._on_item_expanded(_n))
-            # 双击跳转
+        # v3.03.00: 增量追加 — 只插入 newest（在"全部"过滤下）
+        new_items = [n for n in items if n.id != "n_placeholder"]
+        if not new_items:
+            return
+        # 找到最新通知 ID，如果它已在列表中就不插入
+        latest_id = new_items[0].id
+        existing_ids = set()
+        for i in range(current_count):
+            w = self._list_layout.itemAt(i).widget()
+            if w and hasattr(w, 'n'):
+                existing_ids.add(w.n.id)
+        if latest_id not in existing_ids:
+            row = NotificationItemWidget(new_items[0], self._list_container)
+            row.clicked.connect(lambda _n=new_items[0]: self._on_item_expanded(_n))
             row.navigate_requested.connect(self._on_item_navigate)
-            self._list_layout.insertWidget(self._list_layout.count() - 1, row)
+            self._list_layout.insertWidget(0, row)
 
     # ---------- 信号处理 ----------
     def _on_notification_event(self, n):

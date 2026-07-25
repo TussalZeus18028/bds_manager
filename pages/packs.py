@@ -8,7 +8,7 @@ v3.02.01 重写（对齐旧版正确逻辑）：
 - 所有包始终显示在列表中（✓已激活 / —未激活）
 - 新添加的包默认不激活（用户手动点启用）
 """
-import os, json, shutil, time
+import os, json, shutil, time, sys
 import json5  # v3.02.01: BDS manifest.json 常含注释/trailing commas
 
 from PySide6.QtCore import Qt, QThread, Signal
@@ -218,8 +218,21 @@ class PackInfoDialog(QDialog):
         self._pack_type = pack_type
         self._is_active = is_active
 
+        # v3.03.00: Windows 暗色标题栏（DWM API）
+        if sys.platform == "win32" and isDarkTheme():
+            try:
+                import ctypes
+                hwnd = int(self.winId())
+                DWMWA_USE_IMMERSIVE_DARK_MODE = 20
+                ctypes.windll.dwmapi.DwmSetWindowAttribute(
+                    hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE,
+                    ctypes.byref(ctypes.c_int(1)), ctypes.sizeof(ctypes.c_int),
+                )
+            except Exception:
+                pass
+
         if isDarkTheme():
-            bg, fg, sub, dim, card_bg, accent = "#1a1d21", "#d4d4d4", "#888", "#666", "#22252a", "#0dc5d4"
+            bg, fg, sub, dim, card_bg, accent = "#1e1e1e", "#d4d4d4", "#888", "#666", "#25282d", "#0dc5d4"
             tag_stable_bg, tag_stable_fg = "#1a3a1a", "#4CAF50"
             tag_preview_bg, tag_preview_fg = "#3a2a1a", "#ff9800"
         else:
@@ -248,8 +261,10 @@ class PackInfoDialog(QDialog):
         badge = BodyLabel("已激活 ✓" if is_active else "未激活", frame)
         badge.setFixedHeight(26); badge.setMinimumWidth(80)
         badge.setAlignment(Qt.AlignCenter)
+        badge_bg = ("#1a3a1a" if is_active else "#2a2222") if isDarkTheme() else ("#e8f5e9" if is_active else "#ffebee")
+        badge_fg = "#4CAF50" if is_active else "#D32F2F"
         badge.setStyleSheet(
-            f"background:{'#1a3a1a' if is_active else '#2a2222'};color:{'#4CAF50' if is_active else '#ff7777'};"
+            f"background:{badge_bg};color:{badge_fg};"
             "border-radius:6px;padding:2px 10px;font-size:12px;font-weight:bold;")
         header.addWidget(badge)
         fl.addLayout(header)
@@ -419,7 +434,7 @@ class PacksPage(QWidget):
         # 打开目录按钮（单独一行，靠右，不和 header 按钮挤在一起）
         dir_row = QHBoxLayout()
         dir_row.addStretch()
-        open_dir_btn = PushButton("📂 打开目录", card)
+        open_dir_btn = PushButton("打开目录", card, FluentIcon.FOLDER)
         open_dir_btn.setMaximumWidth(130)
         def _open_dir(d):
             if os.path.isdir(d):
@@ -478,7 +493,8 @@ class PacksPage(QWidget):
                 # 状态列：✓ 已激活 / — 未激活
                 status_item = QTableWidgetItem("✅ 已激活" if p["is_active"] else "— 未激活")
                 status_item.setForeground(
-                    QColor("#4CAF50") if p["is_active"] else QColor("#888"))
+                    QColor("#4CAF50") if p["is_active"] else
+                    (QColor("#555") if not isDarkTheme() else QColor("#888")))
                 table.setItem(i, 3, status_item)
 
                 # 操作按钮

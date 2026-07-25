@@ -1,9 +1,9 @@
 {
-    "version": "3.03.00",
+    "version": "3.03.01",
     "release_date": "2026-07-25",
-    "download_url": "https://github.com/TussalZeus18028/bds_manager/releases/download/v3.03.00/bds_manager_v3.03.00.zip",
-    "sha256": "d058af804a8232c86ce0cae8887a10155e783c3600cb4649643b4196ed452531",
-    "file_size": 145315,
+    "download_url": "https://github.com/TussalZeus18028/bds_manager/releases/download/v3.03.01/bds_manager_v3.03.01.zip",
+    "sha256": "",
+    "file_size": 0,
     "min_compatible_version": "2.00.00",
-    "changelog": "## v3.03.00 (2026-07-25)\n\n### 新功能\n- Ctrl+Shift+D 安全关闭：停服 + 停隧道 + 停监控后退出\n- Alt+F4 / 窗口x 按钮自动走安全关闭流程\n- 仪表盘新增「服务器目录」「存档目录」快捷按钮\n- 仪表盘显示「下次备份:N分钟后」实时倒计时\n- 窗口透明度可调节（设置页滑块 20%-100%），需重启生效\n- 窗口圆角（Win11 原生 DWM / Win10 QRegion mask 降级）\n- 控制台右键菜单：复制选中 / 全选 / 清屏\n- 控制台满 5000 行自动写快照到 logs/\n\n### 用户体验\n- 服务器启动/停止/下载等操作弹出视觉 Toast 通知\n- 升级页分支列颜色+图标区分：稳定版(绿) / 预览版(橙)\n- 资源包详情对话框重构：分区展示、状态徽章、极简几何图标\n- 设置页所有开关/滑块改为即时静默保存，仅点「保存」弹 toast\n\n### 代码质量\n- Toast 系统重构：全局变量 -> ToastQueue 类\n- _scan_packs 30秒缓存 + 注册/注销自动刷新\n- HeadScanWorker.run() 拆分 _generate_urls + _probe_head（复杂度降50%）\n- config 字段值设置提取 _set_editor_value，消除重复\n- 配置迁移 _migrate_config 实际执行 + 废弃键清理\n- 代码分析工具集成：fuck-u-code 评分 78.71 -> 79.35\n\n### Bug 修复\n- 修复 _restore_window_state/resizeEvent 重复定义\n- 修复 close_to_tray 不持久化\n- 修复通知面板绕过 Store RLock 写文件竞态\n- 修复 ServerProcess 信号未断开导致的泄漏\n- 修复备份失败/取消时 zip 半成品残留\n- 修复版本列表缓存未持久化（避免每次启动拉 GitHub）\n- 修复配置迁移版本号未写入（不再每次打印迁移日志）\n- 修复 notify() 仅写抽屉不弹 toast\n- 修复 ToastQueue _enqueue 命名残留"
+    "changelog": "## v3.03.01 (2026-07-25)\n\n### 闪屏\n- 深浅色自动适配：启动时读取配置主题，暗色/浅色两套渲染\n- 圆角优化：QBitmap 反锯齿 mask 替代多边形近似\n- 尺寸480x300 + 分割线 + 底部品牌提示\n\n### BDS 命令\n- 删除 save-all / save-on / save-off（Java 版命令，BDS 不支持）\n- 替换为 BDS 原生命令：save hold / save query / save resume\n- 优雅停服流程：save hold → save resume → stop\n- 自动补全扩充 20+ 基岩版原生命令\n\n### 主题适配\n- 通知抽屉 LEVEL_COLORS 按深/浅色双索引取值\n- 控制台 _COLOR_MAP 全系更换为双值表 + _resolve_color()\n- 控制台默认回退色 / 搜索高亮前景色\n- 通知铃铛图标跟随主题切换\n- 快捷键录制按钮 refresh_theme 刷新样式\n- 包详情 badge 深浅色双套背景\n- 主窗口圆角 QBitmap 反锯齿\n\n### 界面\n- 预设色板 ColorSwatch WA_StyledBackground 修复\n- 升级页按钮行高 setDefaultSectionSize(40) 防截断\n- 设置页窗口背景 ComboBox tooltip 说明\n- 包预览极简图标替换 emoji\n\n### 默认值\n- 主题 dark → light\n- 配置加载前移到闪屏之前"
 }

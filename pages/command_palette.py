@@ -205,7 +205,7 @@ def build_default_commands(window) -> list[CommandItem]:
         return f
     for label, cmd in [
         ("发送 list 命令", "list"),
-        ("发送 save-all 命令", "save-all"),
+        ("保存世界（save hold）", "save hold"),
         ("发送 stop 命令", "stop"),
         ("发送 whitelist on 命令", "whitelist on"),
         ("发送 time set day 命令", "time set day"),

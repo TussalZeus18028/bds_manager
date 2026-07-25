@@ -80,6 +80,9 @@ class ColorSwatch(QWidget):
         self._settings = parent_settings
         self.setToolTip(f"{label} ({hex_color})")
         self.setFixedSize(36, 36)
+        # v3.03.00: QWidget 默认不渲染 QSS background（仅 QFrame/QPushButton 等支持）。
+        # ColorSwatch 继承 QWidget，必须显式开启 WA_StyledBackground 才能让 background 显示
+        self.setAttribute(Qt.WA_StyledBackground, True)
         # v3.02.01 fix: 边框颜色主题感知（浅色主题下 #444 太深，与白底融合差）
         border_color = "#444" if isDarkTheme() else "#bbb"
         self.setStyleSheet(
@@ -114,6 +117,13 @@ class SettingsPage(QWidget):
         # 窗口背景
         self._bg_combo = ComboBox(theme_card)
         self._bg_combo.addItems(["原版默认", "透明"])
+        # v3.03.00: tooltip 说明
+        # QFluentWidgets ComboBox 不暴露 model()/view()，且其下拉是 ComboBoxMenu
+        # 不支持逐项 ToolTipRole；只能设整个 ComboBox 的 setToolTip（鼠标悬浮即显示）
+        self._bg_combo.setToolTip(
+            "• 原版默认：窗口完全不透明，使用系统默认背景\n"
+            "• 透明：启用窗口透明度调节（需重启），可通过下方滑块设置 20%–99%"
+        )
         opacity = config_mgr.get("window_background_opacity", 100)
         self._bg_combo.setCurrentText("透明" if opacity < 100 else "原版默认")
         self._bg_combo.currentTextChanged.connect(self._on_bg_changed)
@@ -183,7 +193,7 @@ class SettingsPage(QWidget):
         sl.addLayout(_row("可执行文件", self._exe_edit, svr))
 
         # 优雅停服
-        self._graceful = ToggleButton("启用优雅停服（先 save-all 再 stop）", svr)
+        self._graceful = ToggleButton("启用优雅停服（先 save hold 再 stop）", svr)
         self._graceful.setChecked(config_mgr.get("graceful_shutdown", True))
         sl.addWidget(self._graceful, alignment=Qt.AlignLeft)
         self._grace_seconds = NoScrollSpinBox(svr)
@@ -445,7 +455,6 @@ class SettingsPage(QWidget):
                   main._init_shortcuts（注册 12 个） → settings_page.refresh_shortcut_card（填行）
         这样确保 ShortcutManager 注册后再渲染行，避免出现「设置页里快捷键 0 行」。
         """
-        from PySide6.QtWidgets import QFrame
         self._sc_card = CardWidget(inner)
         self._sc_layout_outer = QVBoxLayout(self._sc_card)
         self._sc_layout_outer.setContentsMargins(16, 12, 16, 16)
@@ -464,6 +473,10 @@ class SettingsPage(QWidget):
 
         # 行容器（会被 refresh_shortcut_card 重建）
         self._sc_rows_container = QWidget(self._sc_card)
+        self._sc_rows_container.setObjectName("_sc_rows_container")
+        self._sc_rows_container.setStyleSheet(
+            "QWidget#_sc_rows_container { background: transparent; }"
+        )
         self._sc_rows_layout = QVBoxLayout(self._sc_rows_container)
         self._sc_rows_layout.setContentsMargins(0, 0, 0, 0)
         self._sc_rows_layout.setSpacing(4)
@@ -518,6 +531,7 @@ class SettingsPage(QWidget):
                 row.addStretch()
                 # 用容器包一层让 addLayout 不被忽略
                 wrap = QWidget(self._sc_rows_container)
+                wrap.setStyleSheet("background: transparent;")
                 wrap.setLayout(row)
                 self._sc_rows_layout.addWidget(wrap)
 
@@ -590,7 +604,7 @@ class SettingsPage(QWidget):
             pass
 
     def refresh_theme(self):
-        """v3.02.01：主题切换后调用，重设 hint 文字色 + ColorSwatch 边框。"""
+        """v3.03.00：主题切换后重设 hint 文字色 + ColorSwatch 边框 + 快捷键录制按钮样式。"""
         color = _hint_color()
         # 重新设所有 hint label
         for lbl in self.findChildren(BodyLabel, "_hint_label"):
@@ -601,6 +615,9 @@ class SettingsPage(QWidget):
             sw.setStyleSheet(
                 f"background:{sw._hex}; border:2px solid {border_color}; border-radius:6px;"
             )
+        # v3.03.00: 快捷键录制按钮也跟随主题
+        for btn in self.findChildren(KeyCaptureButton):
+            btn._apply_style()
         # 当前色预览保持原样（color:#fff + hex bg，任何主题都清晰）
         # webhook / 字体等 ToggleButton 由 qfluentwidgets 自动处理
 
@@ -658,8 +675,11 @@ class SettingsPage(QWidget):
 
     def _update_color_preview(self, h: str):
         self._color_preview.setText(f"  {h}  ")
+        qc = QColor(h)
+        brightness = (qc.red() * 299 + qc.green() * 587 + qc.blue() * 114) / 1000
+        text_c = "#1a1a1a" if brightness > 150 else "#ffffff"
         self._color_preview.setStyleSheet(
-            f"background:{h}; color:#fff; padding:6px 14px; "
+            f"background:{h}; color:{text_c}; padding:6px 14px; "
             f"border-radius:6px; font-weight:bold;"
         )
 

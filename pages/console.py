@@ -57,27 +57,35 @@ def _init_log_file():
         _log_file = None
 
 
+_log_write_count = 0
+
+
 def _write_log(text: str):
-    global _log_file
+    global _log_file, _log_write_count
     if _log_file is None:
         return
     try:
         ts = datetime.now().strftime("%H:%M:%S")
         with _log_lock:
             _log_file.write(f"[{ts}] {text}\n")
-            _log_file.flush()
+            # v3.03.00: 每 50 行 flush 一次，避免每条输出都同步写磁盘
+            _log_write_count += 1
+            if _log_write_count % 50 == 0:
+                _log_file.flush()
     except Exception:
         pass
 
 
 def _close_log_file():
-    global _log_file
+    global _log_file, _log_write_count
     if _log_file:
         try:
+            _log_file.flush()
             _log_file.close()
         except Exception:
             pass
         _log_file = None
+    _log_write_count = 0
 
 
 # ── 暗色日志 ──
@@ -315,9 +323,11 @@ class ConsolePage(QWidget):
         preset_layout.setSpacing(6)
         preset_layout.addWidget(CaptionLabel("命令预设:", preset_card))
         for label, cmd in [
-            ("save-all", "save-all"),
-            ("list", "list"),
-            ("stop", "stop"),
+            ("保存世界", "save hold"),
+            ("查询保存", "save query"),
+            ("恢复保存", "save resume"),
+            ("玩家列表", "list"),
+            ("停服", "stop"),
             ("白名单开", "whitelist on"),
             ("天气晴", "weather clear"),
             ("白天", "time set day"),
@@ -332,43 +342,73 @@ class ConsolePage(QWidget):
         layout.addStretch()
 
     def refresh_theme(self):
-        """v3.02.01: 主题切换后重新设置输出区样式。"""
+        """v3.02.01: 主题切换后重新设置输出区+状态标签样式。"""
         self._log.setStyleSheet(_log_style())
+        # 刷新状态标签颜色
+        hint = "#888" if isDarkTheme() else "#666"
+        if "未运行" in self._status_label.text() or "离线" in self._status_label.text():
+            self._status_label.setStyleSheet(f"color: {hint};")
 
     # ---------- 补全 ----------
     def _refresh_completer(self):
         cmds = [
-            "list", "stop", "save-all", "save-on", "save-off", "save query",
-            "say ", "tell ", "msg ",
+            "list", "stop",
+            # BDS 存档
+            "save hold", "save query", "save resume",
+            # 聊天
+            "say ", "tell ", "msg ", "w ",
+            # 权限
             "op ", "deop ",
             "kick ", "ban ", "pardon ", "banlist",
             "whitelist on", "whitelist off", "whitelist list",
             "whitelist add ", "whitelist remove ", "whitelist reload",
             "permission add ", "permission remove ", "permission list",
+            # 游戏规则
             "gamemode ", "difficulty ", "weather ", "time ",
+            "alwaysday ", "gamerule ",
+            # 传送 / 实体
             "tp ", "give ", "effect ", "summon ",
-            "setworldspawn ", "spawnpoint ", "kill ",
+            "spreadplayers ", "setworldspawn ", "spawnpoint ",
+            "kill ", "clear ", "enchant ", "xp ", "replaceitem ",
+            "ride ", "event ", "damage ",
+            # 常加载区块
+            "tickingarea add ", "tickingarea remove ", "tickingarea list",
+            # 计分板
+            "scoreboard objectives add ", "scoreboard objectives remove ",
+            "scoreboard objectives list", "scoreboard players ",
+            # 结构
+            "structure save ", "structure load ", "structure delete ",
+            # 信息 / 管理
             "reload", "help", "version", "about", "me ",
+            "title ", "titleraw ",
+            "ability ", "stopsound ", "setmaxplayers ",
+            "transferserver ", "checkspawnpoint ", "clearspawnpoint",
+            "schedule ", "camerashake ", "fog ", "music ", "playanimation ",
         ]
         self._completer_model.setStringList(cmds)
 
-    # ---------- 着色规则 ----------
+    # ── 着色规则（两套：暗色 / 浅色，第一值暗色，第二值浅色）──
     _COLOR_MAP = [
-        ("joined the game|connected",                              "#4CAF50"),
-        ("left the game|disconnected|timed out|Connection lost",   "#ff7043"),
-        ("<[^>]+>",                                                "#ffd700"),
-        ("^> ",                                                     "#0DC5D4"),
-        ("\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}:\\d+",       "#64b5f6"),
-        ("[\\da-f]{8}-[\\da-f]{4}-[\\da-f]{4}-[\\da-f]{4}-[\\da-f]{12}", "#ab47bc"),
-        ("^\\[系统\\]|^\\[System\\]",                                "#888"),
-        ("\\[.*?\\] .*\\bERROR\\b",                                 "#ff5555"),
-        ("\\[.*?\\] .*\\bWARN\\b",                                  "#ffaa00"),
-        ("\\[.*?\\] .*\\bINFO\\b",                                  "#aaa"),
-        ("\\bERROR\\b|!!!ERROR|\\[ERROR\\]",                       "#ff5555"),
-        ("\\bFAIL\\b|FATAL|CRITICAL",                              "#ff5555"),
-        ("\\bWARN\\b|\\[WARN\\]|WARNING",                          "#ffaa00"),
-        ("\\[SUCCESS\\]|Done\\!|started\\!",                       "#4CAF50"),
+        ("joined the game|connected",                              "#4CAF50", "#388E3C"),
+        ("left the game|disconnected|timed out|Connection lost",   "#ff7043", "#E64A19"),
+        ("<[^>]+>",                                                "#ffd700", "#b8860b"),
+        ("^> ",                                                     "#0DC5D4", "#00838F"),
+        ("\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}:\\d+",       "#64b5f6", "#1976D2"),
+        ("[\\da-f]{8}-[\\da-f]{4}-[\\da-f]{4}-[\\da-f]{4}-[\\da-f]{12}", "#ab47bc", "#8E24AA"),
+        ("^\\[系统\\]|^\\[System\\]",                                "#888",     "#555"),
+        ("\\[.*?\\] .*\\bERROR\\b",                                 "#ff5555", "#D32F2F"),
+        ("\\[.*?\\] .*\\bWARN\\b",                                  "#ffaa00", "#E65100"),
+        ("\\[.*?\\] .*\\bINFO\\b",                                  "#aaa",     "#666"),
+        ("\\bERROR\\b|!!!ERROR|\\[ERROR\\]",                       "#ff5555", "#D32F2F"),
+        ("\\bFAIL\\b|FATAL|CRITICAL",                              "#ff5555", "#D32F2F"),
+        ("\\bWARN\\b|\\[WARN\\]|WARNING",                          "#ffaa00", "#E65100"),
+        ("\\[SUCCESS\\]|Done\\!|started\\!",                       "#4CAF50", "#388E3C"),
     ]
+
+    @classmethod
+    def _resolve_color(cls, dark: str, light: str) -> str:
+        """按当前主题返回暗色或浅色值。"""
+        return dark if isDarkTheme() else light
 
     def _classify_level(self, text: str) -> str:
         """返回日志级别：info/warn/error/chat。"""
@@ -386,9 +426,9 @@ class ConsolePage(QWidget):
         return "info"
 
     def _color_for_line(self, text: str) -> str:
-        for pattern, color in self._COLOR_MAP:
+        for pattern, dark, light in self._COLOR_MAP:
             if re.search(pattern, text, re.IGNORECASE):
-                return color
+                return self._resolve_color(dark, light)
         lower = text.lower()
         if any(kw in lower for kw in ("starting minecraft server", "server started", "startup done")):
             return "#4CAF50"
@@ -396,7 +436,7 @@ class ConsolePage(QWidget):
             return "#ff5555"
         if any(kw in lower for kw in ("warning", "deprecated")):
             return "#ffaa00"
-        return "#ccc"
+        return "#ccc" if isDarkTheme() else "#555"
 
     _PLAYER_JOIN = re.compile(r"Player (?:connected|S(?:p|s)awned):\s+([A-Za-z0-9_]+)", re.I)
     _PLAYER_LEAVE = re.compile(r"Player disconnected:\s+([A-Za-z0-9_]+)", re.I)
@@ -562,4 +602,5 @@ class ConsolePage(QWidget):
             self._status_label.setStyleSheet("color: #4CAF50;")
         else:
             self._status_label.setText("● 未运行")
-            self._status_label.setStyleSheet("color: #888;")
+            hint = "#888" if isDarkTheme() else "#666"
+            self._status_label.setStyleSheet(f"color: {hint};")

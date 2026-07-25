@@ -63,7 +63,7 @@ class FrpcReader(QThread):
             if self._stop:
                 break
             text = line.rstrip()
-            c = "#ccc"
+            c = "#ccc" if isDarkTheme() else "#444"
             ls = text.lower()
             if "error" in ls:
                 c = "#ff5555"
@@ -236,7 +236,7 @@ class TunnelPage(QWidget):
         if checked:
             self._edit_lock_btn.setText("编辑中")
             self._edit_lock_btn.setIcon(FluentIcon.PENCIL_INK)
-            self._edit_lock_btn.setStyleSheet("color: #ffaa33; font-weight: bold;")
+            self._edit_lock_btn.setStyleSheet("color: #E65100; font-weight: bold;")
         else:
             self._edit_lock_btn.setText("点击编辑")
             self._edit_lock_btn.setIcon(FluentIcon.EDIT)
@@ -286,14 +286,13 @@ class TunnelPage(QWidget):
             "# local_port = 19132\n"
             "# remote_port = 外网端口\n"
         )
-        reply = QMessageBox.question(
-            self, "加载模板",
+        w = MessageBox("加载模板",
             "将用模板替换当前编辑内容，是否继续？\n\n"
             "提示：请前往 https://www.chmlfrp.net/ 创建隧道。",
-            QMessageBox.Yes | QMessageBox.No, QMessageBox.No,
-        )
-        if reply == QMessageBox.Yes:
-            self._cfg_edit.setPlainText(template)
+            self.window())
+        w.yesSignal.connect(lambda: self._cfg_edit.setPlainText(template))
+        w.cancelSignal.connect(w.close)
+        w.show()
 
     def _append_log(self, text: str, color="#ccc"):
         self._log.appendHtml(

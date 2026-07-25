@@ -75,7 +75,8 @@ class ConsoleSearchBar(QHBoxLayout):
         self._last_pos = -1
         self._highlight_format = QTextCharFormat()
         self._highlight_format.setBackground(QColor("#FFA726"))
-        self._highlight_format.setForeground(QColor("#000"))
+        # 不设前景色，让文字继承 QPlainTextEdit 的自然前景（暗色白/浅色黑），
+        # 避免 #000 在暗色模式下不可见
 
     def _on_text_changed(self, _text):
         self._last_pos = -1

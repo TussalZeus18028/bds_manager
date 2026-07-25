@@ -174,27 +174,10 @@ def extract_zip(zip_path: str) -> bool:
     try:
         log(f"📦 解压: {os.path.basename(zip_path)}")
         with zipfile.ZipFile(zip_path, "r") as zf:
-            names = zf.namelist()
-            top = common_top_dir(names)
-            for name in names:
-                if name.endswith("/") or name.endswith("\\"):
-                    continue
-                rel = name[len(top):] if top and name.startswith(top) else name
-                rel = rel.lstrip("/\\")
-                if not rel:
-                    continue
-                parts = rel.replace("\\", "/").split("/")
-                if not parts or parts[-1] in ("", ".", "..") or ".." in parts:
-                    continue
-                if parts[-1] in SKIP_FILES:
-                    continue
-                if parts[0] in SKIP_DIRS:
-                    continue
-                target = os.path.join(SCRIPT_DIR, *parts)
-                real = os.path.realpath(target)
-                # ZipSlip 防护
-                if not real.startswith(os.path.realpath(SCRIPT_DIR)):
-                    log(f"  跳过越权路径: {name}")
+            top = common_top_dir(zf.namelist())
+            for name in zf.namelist():
+                target = _resolve_zip_target(name, top)
+                if target is None:
                     continue
                 os.makedirs(os.path.dirname(target) or SCRIPT_DIR, exist_ok=True)
                 with zf.open(name) as src, open(target, "wb") as dst:
@@ -208,6 +191,26 @@ def extract_zip(zip_path: str) -> bool:
     except Exception as e:
         log(f"  ❌ 解压失败: {e}")
         return False
+
+
+def _resolve_zip_target(name: str, top: str) -> str | None:
+    """解析 zip 条目到目标路径；不需要解压的返回 None。"""
+    if name.endswith("/") or name.endswith("\\"):
+        return None
+    rel = name[len(top):] if top and name.startswith(top) else name
+    rel = rel.lstrip("/\\")
+    if not rel:
+        return None
+    parts = rel.replace("\\", "/").split("/")
+    if not parts or parts[-1] in ("", ".", "..") or ".." in parts:
+        return None
+    if parts[-1] in SKIP_FILES or parts[0] in SKIP_DIRS:
+        return None
+    target = os.path.join(SCRIPT_DIR, *parts)
+    if not os.path.realpath(target).startswith(os.path.realpath(SCRIPT_DIR)):
+        log(f"  跳过越权路径: {name}")
+        return None
+    return target
 
 
 # ── 启动主程序 ────────────────────────────────────────────────────────

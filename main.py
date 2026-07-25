@@ -75,7 +75,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger("bds_manager")
 
-__version__ = "3.03.00"
+__version__ = "3.03.01"
 # ⚠️ 工具版本固定写在这里，不在 bds_manager_config.json / bds_version_cache.json 等任何配置文件中。
 # 如果需要做配置兼容性检查，读取远端 version.json（自更新流程用）即可。
 # 格式规范：x.xx.xx —— Major 1 位、Minor 2 位（补零）、Patch 2 位（补零）
@@ -189,13 +189,20 @@ class BDSFluentWindow(FluentWindow):
         self._update_rounded_mask()
 
     def _update_rounded_mask(self):
-        """用 QPainterPath → QRegion 裁剪窗口四个圆角。"""
-        from PySide6.QtGui import QPainterPath, QRegion
-        from PySide6.QtCore import QRectF
+        """用 QBitmap 反锯齿圆角 mask（比 QRegion 多边形近似平滑得多）。"""
+        from PySide6.QtGui import QBitmap, QPainter
         r = self.rect()
-        path = QPainterPath()
-        path.addRoundedRect(QRectF(r), 12, 12)
-        self.setMask(QRegion(path.toFillPolygon().toPolygon()))
+        if r.width() <= 0 or r.height() <= 0:
+            return
+        bitmap = QBitmap(r.size())
+        bitmap.fill(Qt.color0)
+        p = QPainter(bitmap)
+        p.setBrush(Qt.color1)
+        p.setPen(Qt.NoPen)
+        p.setRenderHint(QPainter.Antialiasing)
+        p.drawRoundedRect(r, 12, 12)
+        p.end()
+        self.setMask(bitmap)
 
     def _save_geometry(self):
         """v3.02.01：保存窗口几何，同时存 width/height 做可靠 fallback。
@@ -495,15 +502,19 @@ class BDSFluentWindow(FluentWindow):
             QTimer.singleShot(5000, self._check_self_update)
 
     def resizeEvent(self, event):
-        """v3.02.01：实时保存窗口几何（含 maximized 状态）。
-        
-        之前保存 width/height，最大化时存的是最大化后的尺寸（错），下次启动恢复成大窗口
-        而不是最大化。改用 saveGeometry 始终保存 normalGeometry + windowState flag。
-        """
+        """v3.02.01：实时保存窗口几何（含 maximized 状态）。v3.03.00: 300ms debounce。"""
         super().resizeEvent(event)
-        self._save_geometry()
         if getattr(self, "_rounded_mask_active", False):
             self._update_rounded_mask()
+        # v3.03.00: debounce 300ms，避免拖拽窗口时高频写 config_mgr
+        if hasattr(self, '_resize_timer'):
+            self._resize_timer.start(300)
+        else:
+            from PySide6.QtCore import QTimer
+            self._resize_timer = QTimer(self)
+            self._resize_timer.setSingleShot(True)
+            self._resize_timer.timeout.connect(self._save_geometry)
+            self._resize_timer.start(300)
 
     def closeEvent(self, event):
         # v3.02.02: 服务器在运行 → 先安全关闭，不直接退出
@@ -610,7 +621,7 @@ class BDSFluentWindow(FluentWindow):
         if self.is_server_running():
             self._server and self._server.send_save_all()
             from shared.toast import toast_success
-            toast_success("已发送", "save-all + save-on", self)
+            toast_success("已发送", "save hold + save resume（基岩版存档）", self)
 
     def _shortcut_stop_server(self):
         if self.is_server_running():
@@ -670,14 +681,14 @@ class BDSFluentWindow(FluentWindow):
         if self._server is not None and self._server.is_running:
             self.stop_server()
             stopped_any = True
-            self.console_page._append_output("[系统] Ctrl+Shift+D 安全关闭：正在停止服务器...", "#ffaa00")
+            self.console_page._append_output("[系统] Ctrl+Shift+D 安全关闭：正在停止服务器...", "#E65100")
 
         # 2. 停隧道
         if hasattr(self, "tunnel_page") and self.tunnel_page:
             try:
                 self.tunnel_page.cleanup()
                 stopped_any = True
-                self.console_page._append_output("[系统] 安全关闭：隧道已停止", "#ffaa00")
+                self.console_page._append_output("[系统] 安全关闭：隧道已停止", "#E65100")
             except Exception:
                 pass
 
@@ -731,6 +742,10 @@ class BDSFluentWindow(FluentWindow):
             setThemeColor(QColor(accent_color))
         except Exception:
             setThemeColor(QColor("#0DC5D4"))
+
+        # 通知铃铛图标跟随主题切换（FluentIcon.MESSAGE 有深/浅两套 SVG）
+        if hasattr(self, "_bell") and self._bell is not None:
+            self._bell.setIcon(FluentIcon.MESSAGE.icon(theme=theme_map.get(theme, Theme.DARK)))
 
         # v3.02.01 fix：主题切换后通知抽屉刷新（背景色 + chip 样式）
         # 抽屉在 _build_ui 时一次性读取 isDarkTheme()，主题切换后不会自动更新。
@@ -857,8 +872,8 @@ class BDSFluentWindow(FluentWindow):
 
     def stop_server(self):
         if self._server and self._server.is_running:
-            self.console_page._append_output("[系统] 正在停止服务器...", "#ffaa00")
-            # v3.02.01: 直接 stop，不经过 save-all + 10s 等待
+            self.console_page._append_output("[系统] 正在停止服务器...", "#E65100")
+            # v3.02.01: 直接 stop，不经过 save hold + 10s 等待
             self._server.stop_server(graceful=False)
         self._restart_count = 0  # 用户手动停服时重置自动重启计数
         if hasattr(self, "_lag_timer") and self._lag_timer:
@@ -875,7 +890,7 @@ class BDSFluentWindow(FluentWindow):
 
         # v3.02.01 fix: 区分正常退出 / 启动失败 / 崩溃
         if retcode == 0:
-            self.console_page._append_output("[系统] 服务器已正常退出", "#888")
+            self.console_page._append_output("[系统] 服务器已正常退出", "#555")
             self._restart_count = 0
             if hasattr(self, "_lag_timer") and self._lag_timer:
                 self._lag_timer.stop()
@@ -893,7 +908,7 @@ class BDSFluentWindow(FluentWindow):
         if max_retries > 0 and self._restart_count < max_retries:
             self._restart_count += 1
             msg = f"服务器崩溃，5秒后自动重启（第 {self._restart_count}/{max_retries} 次）"
-            self.console_page._append_output(f"[系统] {msg}", "#ffaa00")
+            self.console_page._append_output(f"[系统] {msg}", "#E65100")
             self.console_page.mark_crash(self._restart_count, max_retries)
             from shared.toast import toast_warning
             toast_warning("自动重启", f"第 {self._restart_count} 次尝试", self)
@@ -906,7 +921,7 @@ class BDSFluentWindow(FluentWindow):
                         crash_path = os.path.join(LOG_DIR, f"crash_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log")
                         with open(crash_path, "w", encoding="utf-8") as f:
                             f.write(log_text[-8000:])
-                        self.console_page._append_output(f"[系统] 崩溃日志已保存: {crash_path}", "#888")
+                        self.console_page._append_output(f"[系统] 崩溃日志已保存: {crash_path}", "#555")
                     except Exception:
                         pass
             self._restart_count = 0
@@ -941,7 +956,7 @@ class BDSFluentWindow(FluentWindow):
             if self._lag_samples:
                 s = sorted(self._lag_samples)
                 med = s[len(s) // 2]
-                color = "#4CAF50" if med < 80 else ("#ffaa00" if med < 200 else "#ff5555")
+                color = "#4CAF50" if med < 80 else ("#E65100" if med < 200 else "#ff5555")
                 self.dashboard_page.status_card.update_rtt(med, color)
 
     # ---------- 资源监控 ----------
@@ -992,16 +1007,30 @@ class BDSFluentWindow(FluentWindow):
         self._dl_updater.start()
 
     def _prompt_cross_version_upgrade(self, remote_ver, dl_url, sha256, msg):
-        """跨主版本升级引导：弹 MessageBox 让用户选择「打开下载页」或「继续自动升级」。"""
-        from PySide6.QtWidgets import QMessageBox
+        """跨主版本升级引导：弹主题适配的 Dialog 让用户选择。"""
         from shared.toast import toast_info
         from backend.self_update import GITHUB_REPO_OWNER, GITHUB_REPO_NAME
         import webbrowser
+        from PySide6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel
+        from PySide6.QtCore import Qt
+        from qfluentwidgets import PushButton, PrimaryPushButton, isDarkTheme
 
-        box = QMessageBox(self)
-        box.setIcon(QMessageBox.Information)
-        box.setWindowTitle("发现新版本（建议手动下载）")
-        body = (
+        dlg = QDialog(self)
+        dlg.setWindowTitle("发现新版本（建议手动下载）")
+        dlg.resize(520, 380)
+        # 主题适配
+        bg = "#1e1e1e" if isDarkTheme() else "#fafafa"
+        fg = "#ccc" if isDarkTheme() else "#1a1a1a"
+        dlg.setStyleSheet(f"QDialog {{ background: {bg}; }} QLabel {{ color: {fg}; }}")
+        layout = QVBoxLayout(dlg)
+        layout.setContentsMargins(20, 16, 20, 16)
+        layout.setSpacing(12)
+
+        title = QLabel("发现新版本（建议手动下载）")
+        title.setStyleSheet(f"font-size: 15px; font-weight: bold; color: {fg};")
+        layout.addWidget(title)
+
+        body_text = (
             f"检测到新版本 v{remote_ver}（当前 v{__version__}）。\n\n"
             f"您的版本与新版差异较大，{msg or '自动升级可能需要手动调整'}。\n\n"
             f"建议手动下载完整包升级（更稳妥）：\n"
@@ -1011,29 +1040,29 @@ class BDSFluentWindow(FluentWindow):
             f"4. 重启程序\n\n"
             f"如果您想继续体验一键自动升级，也可选择「继续自动升级」。"
         )
-        box.setText(body)
-        box.setTextFormat(0)  # PlainText 让换行符生效
-        btn_manual = box.addButton("打开下载页（推荐）", QMessageBox.AcceptRole)
-        btn_auto = box.addButton("继续自动升级", QMessageBox.ActionRole)
-        box.addButton("取消", QMessageBox.RejectRole)
-        box.setDefaultButton(btn_manual)
-        box.exec()
-        clicked = box.clickedButton()
-        if clicked is btn_manual:
-            url = f"https://github.com/{GITHUB_REPO_OWNER}/{GITHUB_REPO_NAME}/releases/tag/v{remote_ver}"
-            webbrowser.open(url)
-            toast_info("已打开下载页", f"请手动下载 v{remote_ver} 并解压到工具目录", self, duration=5000)
-            return
-        if clicked is btn_auto:
-            if not dl_url:
-                toast_warning("无法自动升级", "version.json 未提供下载链接", self, duration=5000)
-                return
-            toast_info("开始下载升级包", f"v{__version__} → v{remote_ver}", self)
-            self._dl_updater = DownloadUpdateWorker(dl_url, remote_ver, self)
-            self._dl_updater.finished.connect(lambda s, m, p: self._on_update_downloaded(s, m, p, sha256))
-            self._dl_updater.start()
-            return
-        # 取消：什么都不做
+        body_label = QLabel(body_text)
+        body_label.setWordWrap(True)
+        layout.addWidget(body_label)
+
+        btn_row = QHBoxLayout()
+        btn_manual = PrimaryPushButton("打开下载页（推荐）", dlg)
+        btn_auto = PushButton("继续自动升级", dlg)
+        btn_cancel = PushButton("取消", dlg)
+        btn_manual.clicked.connect(lambda: webbrowser.open(
+            f"https://github.com/{GITHUB_REPO_OWNER}/{GITHUB_REPO_NAME}/releases/tag/v{remote_ver}"
+        ) or dlg.accept())
+        btn_auto.clicked.connect(lambda: (self._start_download_update(remote_ver, dl_url, sha256), dlg.accept()))
+        btn_cancel.clicked.connect(dlg.reject)
+        btn_row.addStretch()
+        btn_row.addWidget(btn_cancel)
+        btn_row.addWidget(btn_auto)
+        btn_row.addWidget(btn_manual)
+        layout.addLayout(btn_row)
+        dlg.exec()
+
+    def _show_update_complete(self):
+        """更新完成提示。"""
+        toast_success("更新完成", "程序已更新，重启后自动生效", self, duration=6000)
 
     def _on_update_downloaded(self, success, msg, path, sha256):
         from shared.toast import toast_success, toast_error
@@ -1064,79 +1093,125 @@ class BDSFluentWindow(FluentWindow):
         self._installer.start()
 
     def _on_update_installed(self, success, msg):
-        from PySide6.QtWidgets import QMessageBox
-        from shared.toast import toast_error
+        from shared.toast import toast_error, toast_success
         if success:
-            notify("success", "update", "工具已更新", f"即将自动重启到新版本", "page:upgrade")
-            QMessageBox.information(self, "更新完成",
-                "BDS Manager 已更新！\n旧文件已备份到 backups/upgrade_backup_*/\n程序即将自动重启。")
-            restart_app("main.py")
+            toast_success("更新完成", "BDS Manager 已更新，旧文件已备份，即将自动重启", self, duration=6000)
+            QTimer.singleShot(1500, lambda: restart_app("main.py"))
         else:
             toast_error("安装失败", msg, self, duration=6000)
             notify("error", "update", "安装失败", msg, "page:upgrade")
 
 
-# ---------- 启动闪屏（可动画进度条）----------
+# ---------- 启动闪屏（圆角 · 半透明 · 动画进度条）----------
 class AnimatedSplashScreen(QSplashScreen):
-    """带动画进度条的启动闪屏：进度条平滑推进，100% 时主窗口登场。"""
+    """v3.03.00 重设计：圆角窗口 + 半透明背景 + 动画进度条 + 深浅色适配。
 
-    def __init__(self, version: str):
+    QSplashScreen 基于 QPixmap 渲染，不支持 QSS。圆角通过 QBitmap setMask 实现，
+    半透明通过 setWindowOpacity，绘制内容在 drawContents 手动处理。
+    """
+
+    W, H = 480, 300
+
+    def __init__(self, version: str, is_dark: bool = False):
         from PySide6.QtGui import QPixmap, QColor
-        pix = QPixmap(420, 240)
-        pix.fill(QColor("#1e1e1e"))
+
+        self._is_dark = is_dark
+
+        pix = QPixmap(self.W, self.H)
+        bg = "#1a1c20" if is_dark else "#f5f5f5"
+        pix.fill(QColor(bg))
         super().__init__(pix, Qt.WindowStaysOnTopHint)
         self.setWindowFlag(Qt.FramelessWindowHint, True)
+
+        from PySide6.QtGui import QBitmap, QPainter
+        bitmap = QBitmap(self.W, self.H)
+        bitmap.fill(Qt.color0)
+        mp = QPainter(bitmap)
+        mp.setBrush(Qt.color1)
+        mp.setPen(Qt.NoPen)
+        mp.setRenderHint(QPainter.Antialiasing)
+        mp.drawRoundedRect(0, 0, self.W, self.H, 14, 14)
+        mp.end()
+        self.setMask(bitmap)
+
+        self.setWindowOpacity(0.94)
         self._progress = 0
         self._status = "正在启动..."
         self._version = version
 
     def set_progress(self, percent: int, status: str = ""):
-        """0-100，更新进度条；status 非空时同步更新状态文本。"""
         self._progress = max(0, min(100, percent))
         if status:
             self._status = status
         self.repaint()
 
     def set_status(self, status: str):
-        """仅更新状态文本。"""
         self._status = status
         self.repaint()
 
     def drawContents(self, painter):
-        from PySide6.QtGui import QColor, QFont
+        from PySide6.QtGui import QColor, QFont, QPen
         rect = self.rect()
-        # 标题
-        painter.setPen(QColor("#0DC5D4"))
-        f = QFont("Microsoft YaHei", 18)
-        f.setBold(True)
-        painter.setFont(f)
-        painter.drawText(rect.adjusted(0, 55, 0, 0), Qt.AlignHCenter, "BDS Manager")
-        # 副标题
-        painter.setPen(QColor("#aaa"))
-        f2 = QFont("Microsoft YaHei", 10)
-        painter.setFont(f2)
-        painter.drawText(rect.adjusted(0, 90, 0, 0), Qt.AlignHCenter,
-                         f"v{self._version} — 正在加载…")
-        # 进度条（背景轨道 + 前景填充）
-        bar_x, bar_y, bar_w, bar_h = 60, 165, 300, 6
+        is_dark = self._is_dark
+
+        # ── 主题色值 ──
+        accent = QColor("#0DC5D4")
+        title_color = QColor("#0DC5D4") if is_dark else QColor("#0078D4")
+        sub_color = QColor("#78909c") if is_dark else QColor("#6b7b8d")
+        line_color = QColor("#2a2e33") if is_dark else QColor("#d0d4d8")
+        track_color = QColor("#252830") if is_dark else QColor("#e0e3e6")
+        status_color = QColor("#b0b8c0") if is_dark else QColor("#5a6268")
+        pct_color = QColor("#5a6268") if is_dark else QColor("#8a9098")
+        hint_color = QColor("#3a4048") if is_dark else QColor("#a0a4a8")
+
+        # ── 标题 ──
+        painter.setPen(title_color)
+        title_font = QFont("Microsoft YaHei", 20)
+        title_font.setBold(True)
+        painter.setFont(title_font)
+        painter.drawText(rect.adjusted(0, 54, 0, 0), Qt.AlignHCenter, "BDS Manager")
+
+        # ── 副标题 ──
+        painter.setPen(sub_color)
+        sub_font = QFont("Microsoft YaHei", 10)
+        painter.setFont(sub_font)
+        painter.drawText(rect.adjusted(0, 94, 0, 0), Qt.AlignHCenter,
+                         f"v{self._version}  —  服务器管理工具")
+
+        # ── 分割线 ──
+        line_y = 140
+        painter.setPen(QPen(line_color, 1))
+        painter.drawLine(60, line_y, self.W - 60, line_y)
+
+        # ── 进度条 ──
+        bar_x, bar_y, bar_w, bar_h = 60, 175, self.W - 120, 5
         painter.setPen(Qt.NoPen)
-        painter.setBrush(QColor("#2a2a2a"))
+        painter.setBrush(track_color)
         painter.drawRoundedRect(bar_x, bar_y, bar_w, bar_h, 3, 3)
         if self._progress > 0:
             fg_w = int(bar_w * self._progress / 100)
-            painter.setBrush(QColor("#0DC5D4"))
+            painter.setBrush(accent)
             painter.drawRoundedRect(bar_x, bar_y, fg_w, bar_h, 3, 3)
-        # 状态文本
-        painter.setPen(QColor("#ccc"))
-        f3 = QFont("Microsoft YaHei", 9)
-        painter.setFont(f3)
-        painter.drawText(rect.adjusted(0, 190, 0, 0), Qt.AlignHCenter, self._status)
-        # 百分比
-        painter.setPen(QColor("#666"))
-        f4 = QFont("Microsoft YaHei", 8)
-        painter.setFont(f4)
-        painter.drawText(rect.adjusted(0, 212, 0, 0), Qt.AlignHCenter,
-                         f"{self._progress}%")
+
+        # ── 状态文字 ──
+        painter.setPen(status_color)
+        status_font = QFont("Microsoft YaHei", 10)
+        painter.setFont(status_font)
+        painter.drawText(rect.adjusted(0, 200, 0, 0), Qt.AlignHCenter, self._status)
+
+        # ── 百分比 ──
+        painter.setPen(pct_color)
+        pct_font = QFont("Microsoft YaHei", 9)
+        painter.setFont(pct_font)
+        painter.drawText(rect.adjusted(0, 232, 0, 0), Qt.AlignHCenter,
+                         f"加载 {self._progress}%")
+
+        # ── 底部提示 ──
+        painter.setPen(hint_color)
+        hint_font = QFont("Microsoft YaHei", 8)
+        painter.setFont(hint_font)
+        painter.drawText(rect.adjusted(0, 272, 0, 0), Qt.AlignHCenter,
+                         "Bedrock Dedicated Server 管理工具")
 
 
 def _animate_progress(splash: AnimatedSplashScreen, app: QApplication,
@@ -1163,19 +1238,21 @@ def main():
     app.setApplicationName("BDS Manager")
     app.setApplicationVersion(__version__)
 
-    # 2. 闪屏（立即显示，进度条 0%）
-    splash = AnimatedSplashScreen(__version__)
+    # 2. 先加载配置（闪屏需要知道主题，才能按深/浅色渲染）
+    #    配置损坏 → 自动回退到备份 → 都失败则用 DEFAULT_CONFIG（浅色）
+    config_mgr.load()
+    theme_raw = config_mgr.get("theme", "light")
+    init_context(config_mgr.get("server_dir"))
+
+    # 3. 闪屏（根据配置主题选择深/浅色）
+    splash = AnimatedSplashScreen(__version__, is_dark=(theme_raw == "dark"))
     splash.show()
     app.processEvents()
 
-    # 3. 全局错误处理
+    # 4. 全局错误处理
     set_error_handler(_toast_error_handler)
     install_excepthook()
     _animate_progress(splash, app, 10, 60)
-
-    # 4. 加载配置
-    config_mgr.load()
-    init_context(config_mgr.get("server_dir"))
     splash.set_status("配置已加载")
     _animate_progress(splash, app, 25, 60)
 
@@ -1189,9 +1266,8 @@ def main():
 
     # v3.02.01: 构造页面之前先设主题，否则 isDarkTheme() 在页面 __init__ 中返回 False，
     # 导致 QPlainTextEdit/QTableWidget 等控件的硬编码样式走浅色分支。
-    theme_raw = config_mgr.get("theme", "dark")
     theme_map = {"dark": Theme.DARK, "light": Theme.LIGHT, "auto": Theme.AUTO}
-    setTheme(theme_map.get(theme_raw, Theme.DARK))
+    setTheme(theme_map.get(theme_raw, Theme.LIGHT))
 
     # 6. 主窗口（最耗时的一步，1.5+ 秒）
     splash.set_status("正在构造主窗口...")
@@ -1202,7 +1278,7 @@ def main():
     # 7. 主题
     splash.set_status("正在应用主题...")
     window.apply_theme(
-        config_mgr.get("theme", "dark"),
+        config_mgr.get("theme", "light"),
         config_mgr.get("theme_color", "#0DC5D4"),
     )
     _animate_progress(splash, app, 95, 60)

@@ -270,6 +270,8 @@ class WorldPage(QWidget):
         ctx = get_context()
         files = get_backup_files(ctx.backup_dir)
         self._table.setRowCount(len(files))
+        # v3.03.00: 累加统计信息避免 _refresh_summary 再逐文件 os.stat
+        total_mb = 0.0; latest_fn = ""; latest_ts = 0
         for i, fn in enumerate(files):
             info = get_backup_info(ctx.backup_dir, fn)
             if not info:
@@ -280,6 +282,8 @@ class WorldPage(QWidget):
             try:
                 mtime = os.path.getmtime(os.path.join(ctx.backup_dir, fn))
                 bucket = _time_bucket(mtime)
+                if mtime > latest_ts:
+                    latest_ts = mtime; latest_fn = fn
             except OSError:
                 bucket = "?"
             self._table.setItem(i, 3, QTableWidgetItem(bucket))
@@ -287,44 +291,32 @@ class WorldPage(QWidget):
             if info.get("metadata"):
                 bds_ver = info["metadata"].get("bds_version", "")
             self._table.setItem(i, 4, QTableWidgetItem(bds_ver or "—"))
+            # 用 info 中已有的 size_mb（避免重复 stat）
+            if isinstance(info.get("size_mb"), (int, float)):
+                total_mb += info["size_mb"]
         # 状态栏
         self._status_label.setText(f"共 {len(files)} 个备份")
-        self._refresh_summary()
+        self._refresh_summary_values(len(files), total_mb, latest_fn, latest_ts)
         # 保持选中
         sel = self._table.selectionModel().selectedRows()
         if sel:
             self._show_preview_for_row(sel[0].row())
 
-    def _refresh_summary(self):
-        """更新顶部摘要：总占用 / 数量 / 最近一次。"""
-        ctx = get_context()
-        files = get_backup_files(ctx.backup_dir)
-        if not files:
+    def _refresh_summary_values(self, count: int, total_mb: float, latest: str, latest_ts: float):
+        """v3.03.00: 用 _refresh_list 传入的统计值（避免重复 stat）。"""
+        if count == 0:
             self._summary_label.setText("尚无备份")
             return
-        total_mb = 0.0
-        latest = None
-        latest_t = 0
-        for fn in files:
-            try:
-                fp = os.path.join(ctx.backup_dir, fn)
-                st = os.stat(fp)
-                total_mb += st.st_size / (1024 * 1024)
-                if st.st_mtime > latest_t:
-                    latest_t = st.st_mtime
-                    latest = fn
-            except OSError:
-                pass
         ago = ""
-        if latest_t > 0:
-            delta = int(time.time() - latest_t)
+        if latest_ts > 0:
+            delta = int(time.time() - latest_ts)
             if delta < 60: ago = f"{delta} 秒前"
             elif delta < 3600: ago = f"{delta // 60} 分钟前"
             elif delta < 86400: ago = f"{delta // 3600} 小时前"
             else: ago = f"{delta // 86400} 天前"
         size_text = f"{total_mb/1024:.2f} GB" if total_mb >= 1024 else f"{total_mb:.1f} MB"
         self._summary_label.setText(
-            f"共 {len(files)} 个备份 · 总占用 {size_text} · 最近备份: {latest}（{ago}）"
+            f"共 {count} 个备份 · 总占用 {size_text} · 最近备份: {latest}（{ago}）"
         )
 
     def _refresh_world_info(self):
