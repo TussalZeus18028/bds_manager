@@ -18,7 +18,7 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QTableWidget, QTableWidgetItem,
     QHeaderView, QAbstractItemView, QPlainTextEdit,
 )
-from PySide6.QtGui import QTextCursor
+from PySide6.QtGui import QTextCursor, QColor
 from qfluentwidgets import (
     CardWidget, SubtitleLabel, StrongBodyLabel, BodyLabel, CaptionLabel,
     PrimaryPushButton, PushButton, LineEdit, FluentIcon,
@@ -149,6 +149,19 @@ class HeadScanWorker(QThread):
         while len(parts) < 4:
             parts.append(0)
 
+        urls = self._generate_urls(parts)
+        total = len(urls)
+        checked = 0
+        for ver, url, branch in urls:
+            if self._cancel:
+                break
+            self._probe_head(ver, url, branch)
+            checked += 1
+            self.progress.emit(ver, int(checked * 100 / total))
+        self.finished.emit()
+
+    def _generate_urls(self, parts: list[int]) -> list[tuple[str, str, str]]:
+        """v3.02.02: 生成待探测的版本 URL 列表（从 run() 拆分）。"""
         if self._append_mode:
             stable = [(f"{parts[0]}.{parts[1]}.{p}.{b}",
                        f"https://www.minecraft.net/bedrockdedicatedserver/bin-win/bedrock-server-{parts[0]}.{parts[1]}.{p}.{b}.zip",
@@ -158,48 +171,42 @@ class HeadScanWorker(QThread):
                         f"https://www.minecraft.net/bedrockdedicatedserver/bin-win-preview/bedrock-server-{parts[0]}.{parts[1]}.{p}.{b}.zip",
                         "preview")
                        for p in range(0, self._patch_range) for b in range(0, self._build_range)]
-            urls = stable + preview
-        else:
-            urls = []
-            for major in range(1, parts[0] + 1):
-                sm = 18 if major == 1 else 0
-                em = parts[1] + 1 if major == parts[0] else 40
-                for minor in range(sm, em):
-                    ep = parts[2] + 1 if (major == parts[0] and minor == parts[1]) else 140
-                    for patch in range(0, ep):
-                        for build in range(0, 35):
-                            v = f"{major}.{minor}.{patch}.{build}"
-                            urls.append((v, f"https://www.minecraft.net/bedrockdedicatedserver/bin-win/bedrock-server-{v}.zip", "stable"))
-                            urls.append((v, f"https://www.minecraft.net/bedrockdedicatedserver/bin-win-preview/bedrock-server-{v}.zip", "preview"))
+            return stable + preview
+        urls = []
+        for major in range(1, parts[0] + 1):
+            sm = 18 if major == 1 else 0
+            em = parts[1] + 1 if major == parts[0] else 40
+            for minor in range(sm, em):
+                ep = parts[2] + 1 if (major == parts[0] and minor == parts[1]) else 140
+                for patch in range(0, ep):
+                    for build in range(0, 35):
+                        v = f"{major}.{minor}.{patch}.{build}"
+                        urls.append((v, f"https://www.minecraft.net/bedrockdedicatedserver/bin-win/bedrock-server-{v}.zip", "stable"))
+                        urls.append((v, f"https://www.minecraft.net/bedrockdedicatedserver/bin-win-preview/bedrock-server-{v}.zip", "preview"))
+        return urls
 
-        total = len(urls)
-        checked = 0
-        for ver, url, branch in urls:
+    def _probe_head(self, ver: str, url: str, branch: str):
+        """v3.02.02: 单条 HEAD 探测 + 3 次重试（从 run() 拆分）。"""
+        for attempt in range(3):
             if self._cancel:
                 break
-            for attempt in range(3):
-                if self._cancel:
+            try:
+                req = urllib.request.Request(url, method="HEAD",
+                    headers={"User-Agent": random.choice(_UA_POOL)})
+                resp = urllib.request.urlopen(req, timeout=6)
+                if resp.getcode() == 200:
+                    self.found.emit(ver, branch, url)
+                break
+            except urllib.error.HTTPError as e:
+                if e.code == 429:
+                    time.sleep(min(2 ** attempt, 8))
+                else:
                     break
-                try:
-                    req = urllib.request.Request(url, method="HEAD",
-                        headers={"User-Agent": random.choice(_UA_POOL)})
-                    resp = urllib.request.urlopen(req, timeout=6)
-                    if resp.getcode() == 200:
-                        self.found.emit(ver, branch, url)
+            except (urllib.error.URLError, socket.timeout):
+                if attempt < 2:
+                    time.sleep(0.5 * (attempt + 1))
+                else:
                     break
-                except urllib.error.HTTPError as e:
-                    if e.code == 429:
-                        time.sleep(min(2 ** attempt, 8))
-                    else:
-                        break
-                except (urllib.error.URLError, socket.timeout):
-                    if attempt < 2:
-                        time.sleep(0.5 * (attempt + 1))
-                    else:
-                        break
-            checked += 1
-            self.progress.emit(ver, int(checked * 100 / total))
-        self.finished.emit()
 
 
 class DownloadWorker(QThread):
@@ -555,8 +562,8 @@ class UpgradePage(QWidget):
         self._auto_refreshed = True
         cached = config_mgr.get("version_list", {})
         ts = cached.get("timestamp", 0) if isinstance(cached, dict) else 0
-        # 缓存 5 分钟内不算过期，不触发后台请求
-        if time.time() - ts < 300:
+        # 缓存 24 小时内不算过期，减少 GitHub 请求
+        if time.time() - ts < 86400:
             return
         # 延迟 800ms 启动后台刷新，避免影响 UI 渲染
         QTimer.singleShot(800, self._auto_refresh)
@@ -678,12 +685,16 @@ class UpgradePage(QWidget):
         self.__dl.progress.connect(self._tool_bar.setValue)
         self.__dl.finished.connect(lambda s, m, p: self._on_tool_dl_done(s, m, p, sha256))
         self.__dl.start()
+        toast_info("下载中", f"BDS Manager v{remote_ver} 正在下载...", self.window())
 
     def _on_tool_dl_done(self, success, msg, path, sha256):
         self._tool_bar.setVisible(False)
         if not success:
             self._tool_status.setText(f"❌ 下载失败: {msg}")
+            toast_error("更新下载失败", msg, self.window())
             return
+        self._tool_status.setText(f"✅ 下载完成: v{remote_ver}，准备安装...")
+        toast_success("更新就绪", f"BDS Manager v{remote_ver} 下载完成", self.window())
         from backend.self_update import verify_sha256, is_valid_zip
         if not is_valid_zip(path):
             self._tool_status.setText("❌ 下载文件无效")
@@ -821,10 +832,12 @@ class UpgradePage(QWidget):
         self._scan_status.setText(f"共 {len(self._results)} 个版本可用")
 
     def _save_cache(self):
+        # v3.02.02: persist 到磁盘，避免每次重启重新拉 GitHub
         config_mgr.set("version_list", {
             "data": self._results,
             "timestamp": int(time.time()),
         })
+        config_mgr.save()
         config_mgr.save()
 
     def _stop_scan(self):
@@ -875,8 +888,11 @@ class UpgradePage(QWidget):
         # 默认占位 "—"，文件大小需要用户点「获取文件大小」按钮才请求（启动加速）
         for i, (ver, branch, url) in enumerate(deduped):
             self._ver_table.setItem(i, 0, QTableWidgetItem(ver))
-            branch_text = "稳定版" if branch == "stable" else "预览版"
+            # v3.02.02: stable 绿色 / preview 橙色，加 emoji 图标
+            is_stable = branch == "stable"
+            branch_text = "🟢 稳定版" if is_stable else "🟠 预览版"
             item = QTableWidgetItem(branch_text)
+            item.setForeground(QColor("#4CAF50" if is_stable else "#ff9800"))
             self._ver_table.setItem(i, 1, item)
             self._ver_table.setItem(i, 2, QTableWidgetItem("—"))
             btn = PushButton("下载安装", self._ver_table)
@@ -927,6 +943,8 @@ class UpgradePage(QWidget):
         self._dl_worker.status.connect(self._dl_status.setText)
         self._dl_worker.finished.connect(lambda ok, msg: self._on_dl_done(ok, msg, dl_path, version))
         self._dl_worker.start()
+        # v3.02.02: 下载开始 toast
+        toast_info("下载中", f"BDS {version} 正在下载...", self.window())
 
     def _on_dl_done(self, ok: bool, msg: str, zip_path: str, version: str):
         if not ok:
@@ -935,6 +953,7 @@ class UpgradePage(QWidget):
             self._log_line(f"❌ 下载失败: {msg}")
             return
         self._log_line("下载完成，开始安装...")
+        toast_success("下载完成", f"BDS {version} 下载完成", self.window())
         ctx = get_context()
         # 检测当前版本
         from_version = ""

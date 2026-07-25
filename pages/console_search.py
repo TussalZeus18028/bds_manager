@@ -60,11 +60,15 @@ class ConsoleSearchBar(QHBoxLayout):
         self._case_sensitive.toggled.connect(self._refresh_highlight)
         self.addWidget(self._case_sensitive)
 
+        self.addStretch(1)
+
         export_btn = PushButton("导出", parent_widget)
+        export_btn.setMaximumWidth(50)
         export_btn.clicked.connect(self._export)
         self.addWidget(export_btn)
 
         clear_btn = PushButton("清屏", parent_widget)
+        clear_btn.setMaximumWidth(50)
         clear_btn.clicked.connect(self._log.clear)
         self.addWidget(clear_btn)
 

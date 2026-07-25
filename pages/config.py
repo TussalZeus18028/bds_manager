@@ -288,24 +288,12 @@ class ConfigPage(QWidget):
         if name not in _PRESETS:
             return
         preset = _PRESETS[name]
-        for key, value in preset.items():
-            if key == "pvp":
-                continue
-            if key not in self._editors:
+        for key, (typ2, val) in preset.items():
+            if key == "pvp" or key not in self._editors:
                 continue
             typ, w = self._editors[key]
-            typ2, val = value
-            if typ != typ2:
-                continue
-            if typ == "int":
-                w.setValue(val)
-            elif typ == "bool":
-                w.setChecked(val)
-                w.setText("启用" if val else "禁用")
-            elif typ == "combo":
-                idx = w.findText(val)
-                if idx >= 0:
-                    w.setCurrentIndex(idx)
+            if typ == typ2:
+                self._set_editor_value(w, typ, val)
         toast_info("已应用预设", f"方案: {name}，请检查后保存", self.window())
 
     # ---------- 加载 ----------
@@ -331,20 +319,26 @@ class ConfigPage(QWidget):
                     key, value = line.split("=", 1)
                     if key in self._editors:
                         typ, w = self._editors[key]
-                        if typ == "text":
-                            w.setText(value)
-                        elif typ == "int":
-                            try: w.setValue(int(value))
-                            except: pass
-                        elif typ == "bool":
-                            val = value.lower() == "true"
-                            w.setChecked(val)
-                            w.setText("启用" if val else "禁用")
-                        elif typ == "combo":
-                            idx = w.findText(value)
-                            if idx >= 0: w.setCurrentIndex(idx)
+                        self._set_editor_value(w, typ, value)
         except Exception as e:
             toast_error("加载失败", str(e), self.window())
+
+    @staticmethod
+    def _set_editor_value(widget, typ: str, value):
+        """v3.02.02: 通用字段设置（消除 _load_properties/_apply_preset 重复）。"""
+        if typ == "text":
+            widget.setText(value)
+        elif typ == "int":
+            try: widget.setValue(int(value))
+            except: pass
+        elif typ == "bool":
+            val = value if isinstance(value, bool) else str(value).lower() == "true"
+            widget.setChecked(val)
+            widget.setText("启用" if val else "禁用")
+        elif typ == "combo":
+            idx = widget.findText(value)
+            if idx >= 0:
+                widget.setCurrentIndex(idx)
 
     def _create_default_properties(self):
         ctx = get_context()

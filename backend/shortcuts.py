@@ -238,5 +238,6 @@ DEFAULT_SHORTCUTS: list[tuple[str, str, str, str]] = [
     ("clear_console",        "清屏控制台",     "console",   "Ctrl+L"),
     ("search_console",       "搜索控制台",     "console",   "Ctrl+F"),
     ("refresh_dashboard",    "刷新仪表盘",     "dashboard", "F5"),
+    ("safe_shutdown",        "安全关闭",       "global",    "Ctrl+Shift+D"),
     # Ctrl+1..7 切页（保留旧实现，在 main.py 中单独处理）
 ]

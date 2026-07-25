@@ -151,11 +151,34 @@ class _Store:
         if len(self._items) > MAX_NOTIFICATIONS:
             self._items = self._items[:MAX_NOTIFICATIONS]
 
-    def add(self, n: Notification):
-        """新增一条通知到头部。"""
+    def mark_read(self, uuid: str):
+        """v3.02.02: 标记单条通知已读（线程安全）。"""
         with self._lock:
             self._load()
-            self._items.insert(0, n.to_dict())
+            changed = False
+            for n in self._items:
+                if n.get("uuid") == uuid and not n.get("read"):
+                    n["read"] = True
+                    changed = True
+            if changed:
+                self._save()
+
+    def add(self, n: Notification):
+        """新增一条通知到头部。"""
+        self.add_raw(n.level, n.category, n.title, n.body, n.action_target)
+
+    def add_raw(self, level: str, category: str, title: str, body: str = "",
+                 action_target: str = ""):
+        """v3.02.02: 跳过 Notification 对象创建，直接写 dict。"""
+        import time as _t, uuid as _u
+        with self._lock:
+            self._load()
+            self._items.insert(0, {
+                "id": f"n_{int(_t.time() * 1000)}_{_u.uuid4().hex[:4]}",
+                "ts": _t.time(), "level": level, "category": category,
+                "title": title[:80], "body": body[:500],
+                "action_target": action_target, "read": False,
+            })
             self._prune()
             self._save()
 

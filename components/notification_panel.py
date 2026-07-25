@@ -541,18 +541,8 @@ class NotificationDrawer(QWidget):
         # 标记单条已读（如果未读）
         if not n.read:
             try:
-                import json
-                import os
-                from backend.notifications import NOTIFY_FILE
-                with open(NOTIFY_FILE, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                for item in data:
-                    if item.get("id") == n.id:
-                        item["read"] = True
-                        break
-                with open(NOTIFY_FILE + ".tmp", "w", encoding="utf-8") as f:
-                    json.dump(data, f, ensure_ascii=False, indent=2)
-                os.replace(NOTIFY_FILE + ".tmp", NOTIFY_FILE)
+                from backend.notifications import _STORE
+                _STORE.mark_read(n.id)
             except Exception:
                 pass
             n.read = True
@@ -567,18 +557,8 @@ class NotificationDrawer(QWidget):
         # 标记已读
         if not n.read:
             try:
-                import json
-                import os
-                from backend.notifications import NOTIFY_FILE
-                with open(NOTIFY_FILE, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                for item in data:
-                    if item.get("id") == n.id:
-                        item["read"] = True
-                        break
-                with open(NOTIFY_FILE + ".tmp", "w", encoding="utf-8") as f:
-                    json.dump(data, f, ensure_ascii=False, indent=2)
-                os.replace(NOTIFY_FILE + ".tmp", NOTIFY_FILE)
+                from backend.notifications import _STORE
+                _STORE.mark_read(n.id)
                 n.read = True
             except Exception:
                 pass

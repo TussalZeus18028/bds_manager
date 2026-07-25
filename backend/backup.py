@@ -134,6 +134,11 @@ class BackupWorker(BaseWorker):
                 for root, dirs, files in os.walk(self.world_path):
                     for file in files:
                         if self._cancel:
+                            # v3.02.02: 取消时清理不完整的 zip
+                            try:
+                                os.remove(backup_path)
+                            except OSError:
+                                pass
                             self.finished.emit(False, "备份已取消")
                             return
                         file_path = os.path.join(root, file)
@@ -162,6 +167,11 @@ class BackupWorker(BaseWorker):
             self.finished.emit(True, f"备份成功: {backup_name}")
         except Exception as e:
             logger.error("备份失败: %s", e)
+            # v3.02.02: 清理半成品 zip 文件
+            try:
+                os.remove(backup_path)
+            except OSError:
+                pass
             self.finished.emit(False, f"备份失败: {e}")
 
 

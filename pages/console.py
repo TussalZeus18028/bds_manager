@@ -100,9 +100,51 @@ def make_console_log(parent=None, min_height=200):
     if min_height:
         log.setMinimumHeight(min_height)
     max_lines = config_mgr.get("console_max_lines", 5000)
+    # v3.02.02: 截断前保存快照到 logs/console_snapshot.log
+    log.blockCountChanged.connect(lambda new: _dump_snapshot_if_full(log, new, max_lines))
     log.setMaximumBlockCount(max_lines)
     log.setStyleSheet(_log_style())
+    # v3.02.02: 右键菜单
+    log.setContextMenuPolicy(Qt.CustomContextMenu)
+    log.customContextMenuRequested.connect(lambda pos: _console_context_menu(log, pos))
     return log
+
+
+def _console_context_menu(log, pos):
+    """v3.02.02: 控制台右键菜单。"""
+    from PySide6.QtWidgets import QMenu
+    from PySide6.QtGui import QAction
+    menu = QMenu(log)
+    a_copy = QAction("复制选中", log)
+    a_copy.triggered.connect(log.copy)
+    a_select = QAction("全选", log)
+    a_select.triggered.connect(log.selectAll)
+    a_clear = QAction("清屏", log)
+    a_clear.triggered.connect(log.clear)
+    menu.addAction(a_copy)
+    menu.addAction(a_select)
+    menu.addSeparator()
+    menu.addAction(a_clear)
+    menu.exec(log.mapToGlobal(pos))
+
+
+_snapshot_dumped = False  # 每次会话只 dump 一次避免磁盘轰炸
+
+
+def _dump_snapshot_if_full(log, new_count: int, limit: int):
+    """v3.02.02: 达到上限时，截断前保存日志快照。"""
+    global _snapshot_dumped
+    if new_count >= limit and not _snapshot_dumped:
+        _snapshot_dumped = True
+        try:
+            from datetime import datetime
+            from shared.config import LOG_DIR
+            import os
+            path = os.path.join(LOG_DIR, f"console_snapshot_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log")
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(log.toPlainText()[-100000:])
+        except Exception:
+            pass
 
 
 # ---------- 玩家列表 ----------

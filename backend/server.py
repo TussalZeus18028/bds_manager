@@ -224,8 +224,8 @@ class ServerProcess(QThread):
                 self.send_command("save-all")
                 time.sleep(0.5)
                 self.send_command("stop")
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("优雅停服 stop 命令发送失败: %s", e)
             self._stop_event.set()
             # 等待 grace 秒让 BDS 自行退出
             for _ in range(grace_seconds * 10):
@@ -235,8 +235,8 @@ class ServerProcess(QThread):
         else:
             try:
                 self.send_command("stop")
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("停服 stop 命令发送失败: %s", e)
             self._stop_event.set()
             # v3.02.01: 等 3 秒让 BDS 处理 stop 命令并自行退出
             for _ in range(30):  # 3 秒 / 0.1 秒步进
@@ -250,12 +250,12 @@ class ServerProcess(QThread):
                 logger.info("BDS 未在 3s 内退出，强制 terminate")
             try:
                 self.process.terminate()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("terminate 失败: %s", e)
             time.sleep(1)
             if self.process.poll() is None:
                 logger.warning("terminate 失败，强制 kill")
                 try:
                     self.process.kill()
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug("kill 失败: %s", e)

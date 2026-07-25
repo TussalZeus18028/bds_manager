@@ -27,7 +27,7 @@ VERSION_CACHE_FILE = os.path.join(SCRIPT_DIR, "bds_version_cache.json")
 LOG_DIR = os.path.join(SCRIPT_DIR, "logs")
 CONFIG_BACKUP_DIR = os.path.join(SCRIPT_DIR, "backups", "config")
 CONFIG_MAX_BACKUPS = 5
-CONFIG_VERSION = "3.1"  # 当前配置 schema 版本
+CONFIG_VERSION = "3.02.02"  # 当前配置 schema 版本
 
 
 def _get_default_bedrock_exe_name():
@@ -138,6 +138,7 @@ DEFAULT_CONFIG = {
     "config_version": CONFIG_VERSION,
     "theme": "dark",
     "theme_color": "#0DC5D4",
+    "window_background_opacity": 100,  # 窗口透明度 20-100，100=不透明
     "server_dir": "Server",
     "server_exe": _get_default_bedrock_exe_name(),
     "auto_backup_enabled": True,
@@ -177,6 +178,7 @@ DEFAULT_CONFIG = {
     # v3.02.00 新增
     "show_command_palette_tip": True,    # 首次启动提示「Ctrl+K 试试」
     "shortcuts": {},                     # 快捷键用户自定义覆盖 {action_id: key_string}
+    "close_to_tray": True,               # 关闭窗口时最小化到托盘
 }
 
 # 类型 schema（用于校验和自动修正）
@@ -204,7 +206,7 @@ BOOL_FIELDS = {
     "multi_dl_enabled", "show_startup_toasts", "github_auth_enabled",
     "follow_system_theme", "console_show_timestamps",
     "enable_bds_process_monitor", "graceful_shutdown",
-    "console_auto_scroll",
+    "console_auto_scroll", "close_to_tray",
 }
 
 STR_CHOICES = {
@@ -236,10 +238,15 @@ def _validate_value(key: str, value):
 def _migrate_config(loaded: dict) -> dict:
     """配置迁移：从旧版本升级到当前 schema。"""
     cfg_ver = loaded.get("config_version", "")
-    # 3.0 → 3.1：新增字段已在 DEFAULT_CONFIG 通过 .get() 补全，无需特殊处理
-    # 这里保留扩展点
-    if not cfg_ver:
-        logger.info("配置无 version 字段，视为 v3.0 升级到 v%s", CONFIG_VERSION)
+    if not cfg_ver or cfg_ver != CONFIG_VERSION:
+        logger.info("配置迁移: %s → %s", cfg_ver or "未知", CONFIG_VERSION)
+        loaded["config_version"] = CONFIG_VERSION  # v3.02.02: 标记已迁移
+        # 清理废弃键
+        for dead_key in ("window_background",):
+            loaded.pop(dead_key, None)
+        # 补齐缺失字段
+        loaded.setdefault("window_background_opacity", 100)
+        loaded.setdefault("close_to_tray", True)
     return loaded
 
 
@@ -309,6 +316,8 @@ class ConfigManager:
             "show_command_palette_tip", "shortcuts",
             # v3.02.01 新增
             "window_geometry",
+            # v3.02.02 新增
+            "close_to_tray", "window_background_opacity",
         ]
         data = {k: self.values.get(k, DEFAULT_CONFIG.get(k)) for k in keys}
         os.makedirs(SCRIPT_DIR, exist_ok=True)

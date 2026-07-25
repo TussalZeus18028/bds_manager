@@ -42,3 +42,5 @@ dist/                         # release.py 产出（GitHub Release）
 archives/                     # archive.py 产出（本地代码快照）
 .workbuddy/                   # WorkBuddy 会话数据
 release/                      # 旧 release 残留目录
+
+PROJECT_SUMMARY.md

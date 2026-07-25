@@ -15,6 +15,8 @@ v3.1 改进：
 import os
 import time
 import logging
+import subprocess
+import sys
 from collections import deque
 from datetime import datetime
 
@@ -35,6 +37,18 @@ from shared.toast import toast_error, toast_success
 from shared.errors import ServerNotRunningError
 
 logger = logging.getLogger("bds_manager")
+
+
+def _open_dir(path: str):
+    """v3.02.02: 用系统文件管理器打开目录。"""
+    if not os.path.isdir(path):
+        os.makedirs(path, exist_ok=True)
+    if sys.platform == "win32":
+        os.startfile(path)
+    elif sys.platform == "darwin":
+        subprocess.Popen(["open", path])
+    else:
+        subprocess.Popen(["xdg-open", path])
 
 
 # ---------- 可滚动页面封装 ----------
@@ -205,6 +219,11 @@ class StatusCard(CardWidget):
         self._stale_label.setVisible(False)
         layout.addWidget(self._stale_label)
 
+        # 下次定时备份倒计时
+        self._backup_countdown = CaptionLabel("", self)
+        self._backup_countdown.setVisible(False)
+        layout.addWidget(self._backup_countdown)
+
         # 按钮行
         btn_row = QHBoxLayout()
         self._start_btn = PrimaryPushButton("启动服务器", self, FluentIcon.PLAY)
@@ -235,6 +254,21 @@ class StatusCard(CardWidget):
         else:
             self._uptime_label.setText("运行: —")
             self._stale_label.setVisible(False)
+
+        # 备份倒计时
+        from shared.config import config_mgr
+        if config_mgr.get("auto_backup_enabled", True):
+            interval = config_mgr.get("backup_interval", 60)  # 分钟
+            # 用当前分钟数估算剩下时间（假设从整点开始计数）
+            import datetime
+            now = datetime.datetime.now()
+            elapsed_min = now.minute + now.hour * 60
+            next_backup = ((elapsed_min // interval) + 1) * interval
+            remain = next_backup - elapsed_min
+            self._backup_countdown.setText(f"下次备份: {remain} 分钟后")
+            self._backup_countdown.setVisible(True)
+        else:
+            self._backup_countdown.setVisible(False)
 
     def mark_output(self):
         """每次有输出时调用，用于假死检测。"""
@@ -421,6 +455,16 @@ class QuickActionsCard(CardWidget):
         row3.addStretch()
         layout.addLayout(row3)
 
+        # 文件
+        layout.addWidget(CaptionLabel("文件", self))
+        row4 = QHBoxLayout()
+        btn_server_dir = PushButton("服务器目录", self, FluentIcon.FOLDER)
+        btn_worlds_dir = PushButton("存档目录", self, FluentIcon.FOLDER)
+        row4.addWidget(btn_server_dir)
+        row4.addWidget(btn_worlds_dir)
+        row4.addStretch()
+        layout.addLayout(row4)
+
         # v3.02.01 fix: navigationInterface.setCurrentItem 只亮导航不切页面，
         # 改用 switchTo(page) — 同时更新导航高亮和 stackedWidget
         def _nav(page_key):
@@ -435,6 +479,11 @@ class QuickActionsCard(CardWidget):
         btn_packs.clicked.connect(lambda: _nav("packs"))
         btn_update.clicked.connect(lambda: _nav("upgrade"))
         btn_tunnel.clicked.connect(lambda: _nav("tunnel"))
+        # v3.02.02: 打开文件夹
+        from shared.config import get_context
+        ctx = get_context()
+        btn_server_dir.clicked.connect(lambda: _open_dir(ctx.server_dir))
+        btn_worlds_dir.clicked.connect(lambda: _open_dir(os.path.join(ctx.server_dir, "worlds")))
 
 
 # ---------- 后台任务卡 ----------

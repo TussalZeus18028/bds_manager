@@ -26,7 +26,7 @@ from qfluentwidgets import (
 )
 
 from shared.config import config_mgr, SCRIPT_DIR, CONFIG_FILE
-from shared.toast import toast_success, toast_warning, toast_error
+from shared.toast import toast_success, toast_warning, toast_error, toast_info
 from pages.dashboard import wrap_scrollable
 from backend.shortcuts import ShortcutManager
 from components.key_capture import KeyCaptureButton
@@ -110,6 +110,25 @@ class SettingsPage(QWidget):
         self._theme_combo.setCurrentText({"dark":"Dark","light":"Light","auto":"Auto"}.get(current, "Dark"))
         self._theme_combo.currentTextChanged.connect(self._on_theme_changed)
         tc.addLayout(_row("主题模式", self._theme_combo, theme_card, "Auto=跟随系统"))
+
+        # 窗口背景
+        self._bg_combo = ComboBox(theme_card)
+        self._bg_combo.addItems(["原版默认", "透明"])
+        opacity = config_mgr.get("window_background_opacity", 100)
+        self._bg_combo.setCurrentText("透明" if opacity < 100 else "原版默认")
+        self._bg_combo.currentTextChanged.connect(self._on_bg_changed)
+        tc.addLayout(_row("窗口背景", self._bg_combo, theme_card, "透明模式可调透明度"))
+
+        # 透明度滑块（仅透明模式显示）
+        self._opacity_slider = Slider(Qt.Horizontal, theme_card)
+        self._opacity_slider.setRange(20, 99)
+        self._opacity_slider.setValue(max(opacity, 20) if opacity < 100 else 92)
+        self._opacity_slider.setVisible(opacity < 100)
+        self._opacity_slider.valueChanged.connect(self._on_opacity_changed)
+        self._opacity_label = CaptionLabel(f"透明度: {self._opacity_slider.value()}%", theme_card)
+        self._opacity_label.setVisible(opacity < 100)
+        tc.addWidget(self._opacity_slider)
+        tc.addWidget(self._opacity_label)
 
         # 跟随系统开关
         self._follow_system = ToggleButton("跟随系统主题变化", theme_card)
@@ -280,6 +299,8 @@ class SettingsPage(QWidget):
         ]:
             tb = ToggleButton(label, wh)
             tb.setChecked(event in config_mgr.get("webhook_events", []))
+            # v3.02.02: 即时静默保存
+            tb.toggled.connect(lambda checked, e=event: self._save_wh(e, checked))
             self._webhook_events[event] = tb
         wr = QHBoxLayout()
         for i, (event, _) in enumerate(self._webhook_events.items()):
@@ -361,6 +382,60 @@ class SettingsPage(QWidget):
         sr.addWidget(save_btn)
         layout.addLayout(sr)
         layout.addStretch()
+
+        # v3.02.02: 所有开关/下拉/数字框即时静默保存
+        self._connect_auto_save()
+
+    def _connect_auto_save(self):
+        """将所有控件的 change 信号连接到静默保存。"""
+        s = self  # shorthand
+        def _sa(key, v): s._silent_save(key, v)
+
+        # ── 外观 ──
+        s._follow_system.toggled.connect(lambda v: _sa("follow_system_theme", v))
+        s._font_size.valueChanged.connect(lambda v: _sa("font_size", v))
+
+        # ── 服务器 ──
+        s._graceful.toggled.connect(lambda v: _sa("graceful_shutdown", v))
+        s._grace_seconds.valueChanged.connect(lambda v: _sa("shutdown_grace_seconds", v))
+        s._proc_monitor.toggled.connect(lambda v: _sa("enable_bds_process_monitor", v))
+
+        # ── 备份 ──
+        s._backup_toggle.toggled.connect(lambda v: _sa("auto_backup_enabled", v))
+        s._backup_interval.valueChanged.connect(lambda v: _sa("backup_interval", v))
+        s._backup_keep.valueChanged.connect(lambda v: _sa("backup_keep", v))
+        s._online_backup.toggled.connect(lambda v: _sa("online_backup", v))
+
+        # ── Toast ──
+        s._toast_show.toggled.connect(lambda v: _sa("show_startup_toasts", v))
+        s._toast_opacity.valueChanged.connect(lambda v: _sa("toast_opacity", v))
+        s._toast_style.currentTextChanged.connect(
+            lambda t: s._silent_save("toast_style", "original" if "原版" in t else "modern"))
+        s._queue_delay.valueChanged.connect(lambda v: _sa("toast_queue_delay", v))
+        for tk in ("toast_duration_error", "toast_duration_warning",
+                   "toast_duration_success", "toast_duration_info"):
+            sp = getattr(s, f"_toast_{tk}", None)
+            if sp:
+                sp.valueChanged.connect(lambda v, k=tk: _sa(k, v))
+
+        # ── 控制台 ──
+        s._console_timestamps.toggled.connect(lambda v: _sa("console_show_timestamps", v))
+        s._console_max.valueChanged.connect(lambda v: _sa("console_max_lines", v))
+
+        # ── GitHub ──
+        s._gh_auth.toggled.connect(lambda v: _sa("github_auth_enabled", v))
+        s._auto_update.toggled.connect(lambda v: _sa("auto_check_update", v))
+        s._multi_dl.toggled.connect(lambda v: _sa("multi_dl_enabled", v))
+
+        # ── 高级 ──
+        s._mem_warn.valueChanged.connect(lambda v: _sa("mem_warn_threshold", v))
+        s._close_tray.toggled.connect(lambda v: _sa("close_to_tray", v))
+        s._crash_restart.valueChanged.connect(lambda v: _sa("max_restart_retries", v))
+
+        # ── LineEdit（失焦时保存） ──
+        for le, key in [(s._dir_edit, "server_dir"), (s._exe_edit, "server_exe"),
+                         (s._webhook_url, "webhook_url"), (s._gh_token, "github_token")]:
+            le.editingFinished.connect(lambda k=key, w=le: _sa(k, w.text()))
 
     # ── 快捷键 (v3.02.00) ──
     def _build_shortcut_card(self, inner, layout):
@@ -537,6 +612,37 @@ class SettingsPage(QWidget):
         if self._main_window:
             self._main_window.apply_theme(theme, color)
 
+    def _on_bg_changed(self, text: str):
+        """v3.02.02: 窗口背景切换。"""
+        if text == "透明":
+            v = self._opacity_slider.value()
+            self._silent_save("window_background_opacity", v)
+            self._opacity_slider.setVisible(True)
+            self._opacity_label.setVisible(True)
+        else:
+            self._silent_save("window_background_opacity", 100)
+            self._opacity_slider.setVisible(False)
+            self._opacity_label.setVisible(False)
+
+    def _on_opacity_changed(self, val: int):
+        self._opacity_label.setText(f"透明度: {val}%")
+        self._silent_save("window_background_opacity", val)
+
+    def _silent_save(self, key: str, value):
+        """v3.02.02: 静默保存配置（不弹 toast）。"""
+        config_mgr.set(key, value)
+        config_mgr.save()
+
+    def _save_wh(self, event: str, checked: bool):
+        """v3.02.02: 静默保存 webhook 事件列表。"""
+        events = config_mgr.get("webhook_events", [])
+        if checked:
+            if event not in events:
+                events.append(event)
+        else:
+            events = [e for e in events if e != event]
+        self._silent_save("webhook_events", events)
+
     def _on_pick_color(self):
         # 延迟导入 ColorDialog（qfluentwidgets 的 ColorDialog 模块导入耗时 ~200ms）
         from qfluentwidgets import ColorDialog
@@ -616,37 +722,7 @@ class SettingsPage(QWidget):
 
     # ── 保存 ──
     def _on_save(self, silent: bool = False):
-        old_values = {k: config_mgr.get(k) for k in config_mgr.values}
-        config_mgr.set("theme", {"Dark":"dark","Light":"light","Auto":"auto"}.get(self._theme_combo.currentText(), "dark"))
-        config_mgr.set("follow_system_theme", self._follow_system.isChecked())
-        config_mgr.set("font_size", self._font_size.value())
-        config_mgr.set("server_dir", self._dir_edit.text())
-        config_mgr.set("server_exe", self._exe_edit.text())
-        config_mgr.set("graceful_shutdown", self._graceful.isChecked())
-        config_mgr.set("shutdown_grace_seconds", self._grace_seconds.value())
-        config_mgr.set("enable_bds_process_monitor", self._proc_monitor.isChecked())
-        config_mgr.set("auto_backup_enabled", self._backup_toggle.isChecked())
-        config_mgr.set("backup_interval", self._backup_interval.value())
-        config_mgr.set("backup_keep", self._backup_keep.value())
-        config_mgr.set("online_backup", self._online_backup.isChecked())
-        config_mgr.set("show_startup_toasts", self._toast_show.isChecked())
-        for key in ["toast_duration_error","toast_duration_warning","toast_duration_success","toast_duration_info"]:
-            config_mgr.set(key, getattr(self, f"_toast_{key}").value())
-        config_mgr.set("toast_opacity", self._toast_opacity.value())
-        config_mgr.set("toast_style", "original" if "原版" in self._toast_style.currentText() else "modern")
-        config_mgr.set("toast_queue_delay", self._queue_delay.value())
-        config_mgr.set("console_show_timestamps", self._console_timestamps.isChecked())
-        config_mgr.set("console_max_lines", self._console_max.value())
-        config_mgr.set("webhook_url", self._webhook_url.text())
-        events = [e for e, cb in self._webhook_events.items() if cb.isChecked()]
-        config_mgr.set("webhook_events", events)
-        config_mgr.set("github_auth_enabled", self._gh_auth.isChecked())
-        config_mgr.set("github_token", self._gh_token.text())
-        config_mgr.set("auto_check_update", self._auto_update.isChecked())
-        config_mgr.set("multi_dl_enabled", self._multi_dl.isChecked())
-        config_mgr.set("mem_warn_threshold", self._mem_warn.value())
-        config_mgr.set("close_to_tray", self._close_tray.isChecked())
-        config_mgr.set("max_restart_retries", self._crash_restart.value())
-        config_mgr.save()
+        # v3.02.02: 所有控件已即时静默保存，这里只弹确认 toast
+        # 注：webhook_events 和 theme_color 走各自 handler 已即时保存
         if not silent:
-            toast_success("保存成功", "设置已保存", self.window())
+            toast_success("设置已保存", "所有配置已自动持久化", self.window())

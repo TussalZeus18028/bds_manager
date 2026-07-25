@@ -171,37 +171,50 @@ class ToastNotification(QWidget):
 #  排队系统（鱼贯而入）
 # ══════════════════════════════════════════
 
-_queued_parent = None
-_queue: list[tuple] = []
-_timer_active = False
+class ToastQueue:
+    """v3.02.02: 封装 toast 队列状态，避免模块级全局变量。"""
+
+    def __init__(self):
+        self._parent = None
+        self._queue: list[tuple] = []
+        self._timer_active = False
+
+    def set_parent(self, parent):
+        self._parent = parent
+
+    def enqueue(self, title, msg, level, duration):
+        self._queue.append((title, msg, level, duration))
+        if not self._timer_active:
+            self._timer_active = True
+            QTimer.singleShot(50, self._flush)
+        _sync_to_notification_center(level, title, msg)
+
+    def _flush(self):
+        if self._queue and self._parent:
+            args = self._queue.pop(0)
+            ToastNotification(self._parent, *args)
+        if self._queue:
+            if self._parent is None:
+                try:
+                    from main import _MAIN_WINDOW_REF
+                    self._parent = _MAIN_WINDOW_REF[0]
+                except Exception:
+                    self._timer_active = False
+                    return
+                if self._parent is None:
+                    self._timer_active = False
+                    return
+            delay = config_mgr.get("toast_queue_delay") or 200
+            QTimer.singleShot(max(delay, 0), self._flush)
+        else:
+            self._timer_active = False
+
+
+_TOAST_Q = ToastQueue()
 
 
 def _set_toast_parent(parent):
-    global _queued_parent
-    _queued_parent = parent
-
-
-def _flush_queue():
-    global _queue, _timer_active
-    if _queue and _queued_parent:
-        args = _queue.pop(0)
-        ToastNotification(_queued_parent, *args)
-    if _queue:
-        delay = config_mgr.get("toast_queue_delay") or 200
-        QTimer.singleShot(max(delay, 0), _flush_queue)
-    else:
-        _timer_active = False
-
-
-def _enqueue(title, msg, level, duration):
-    global _queue, _timer_active
-    _queue.append((title, msg, level, duration))
-    if not _timer_active:
-        _timer_active = True
-        QTimer.singleShot(50, _flush_queue)
-    # v3.02.01 fix: 入队时就同步进通知中心，不要等 4 秒后 _dismiss
-    # （否则用户看到的瞬间抽屉是空的，体验割裂）
-    _sync_to_notification_center(level, title, msg)
+    _TOAST_Q.set_parent(parent)
 
 
 # ══════════════════════════════════════════
@@ -236,8 +249,8 @@ def _show_modern(icon, title: str, content: str, parent, duration=None, level="i
 
 def toast_info(title: str, content: str, parent, duration: int | None = None, closable: bool = True):
     if _use_original():
-        _set_toast_parent(parent)
-        _enqueue(title, content, "info", duration or _get_duration("info"))
+        _TOAST_Q.set_parent(parent)
+        _TOAST_Q.enqueue(title, content, "info", duration or _get_duration("info"))
     else:
         _show_modern(InfoBarIcon.INFORMATION, title, content, parent, duration, "info", closable)
     _log_to_terminal("INFO", title, content)
@@ -245,8 +258,8 @@ def toast_info(title: str, content: str, parent, duration: int | None = None, cl
 
 def toast_success(title: str, content: str, parent, duration: int | None = None, closable: bool = True):
     if _use_original():
-        _set_toast_parent(parent)
-        _enqueue(title, content, "success", duration or _get_duration("success"))
+        _TOAST_Q.set_parent(parent)
+        _TOAST_Q.enqueue(title, content, "success", duration or _get_duration("success"))
     else:
         _show_modern(InfoBarIcon.SUCCESS, title, content, parent, duration, "success", closable)
     _log_to_terminal("OK  ", title, content)
@@ -254,8 +267,8 @@ def toast_success(title: str, content: str, parent, duration: int | None = None,
 
 def toast_warning(title: str, content: str, parent, duration: int | None = None, closable: bool = True):
     if _use_original():
-        _set_toast_parent(parent)
-        _enqueue(title, content, "warning", duration or _get_duration("warning"))
+        _TOAST_Q.set_parent(parent)
+        _TOAST_Q.enqueue(title, content, "warning", duration or _get_duration("warning"))
     else:
         _show_modern(InfoBarIcon.WARNING, title, content, parent, duration, "warning", closable)
     _log_to_terminal("WARN", title, content)
@@ -263,8 +276,8 @@ def toast_warning(title: str, content: str, parent, duration: int | None = None,
 
 def toast_error(title: str, content: str, parent, duration: int | None = None, closable: bool = True):
     if _use_original():
-        _set_toast_parent(parent)
-        _enqueue(title, content, "error", duration or _get_duration("error"))
+        _TOAST_Q.set_parent(parent)
+        _TOAST_Q.enqueue(title, content, "error", duration or _get_duration("error"))
     else:
         _show_modern(InfoBarIcon.ERROR, title, content, parent, duration, "error", closable)
     _log_to_terminal("ERR ", title, content)
@@ -280,13 +293,12 @@ def _log_to_terminal(level: str, title: str, content: str):
 #  通知中心同步（v3.02.01 新增）
 # ══════════════════════════════════════════
 def _sync_to_notification_center(level: str, title: str, content: str):
-    """把 toast 通知同步进通知中心（抽屉能记录所有 toast）。
-
-    重要：这是"可选"的——如果 backend.notifications 还没初始化好（比如极早期启动时），
-    静默忽略，不让 toast 流程崩。
-    """
+    """把 toast 通知同步进通知中心（抽屉能记录所有 toast）。"""
     try:
-        from backend.notifications import notify as _notify
-        _notify(level, "toast", title, content)
+        from backend.notifications import _STORE, get_bus
+        _STORE.add_raw(level, "toast", title, content)
+        bus = get_bus()
+        bus.notification_added.emit(None)
+        bus.unread_count_changed.emit(_STORE.get_unread_count())
     except Exception:
         pass

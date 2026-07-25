@@ -156,6 +156,46 @@ class BDSFluentWindow(FluentWindow):
         self.setWindowTitle(f"BDS Manager Fluent v{__version__}")
         self.setMinimumSize(960, 620)
         self.navigationInterface.setExpandWidth(280)
+        # v3.02.02: 窗口圆角
+        self._rounded_mask_active = False
+        self._apply_rounded_corners()
+        # v3.02.02: 窗口背景效果（毛玻璃 / 半透明）
+        self._apply_window_background()
+
+    def _apply_window_background(self):
+        """根据 window_background_opacity 设置透明度（100=不透明）。"""
+        opacity = config_mgr.get("window_background_opacity", 100)
+        if opacity < 100:
+            self.setWindowOpacity(opacity / 100.0)
+
+    def _apply_rounded_corners(self):
+        """窗口四个角圆角：优先 Win11 DWM API，降级到 QRegion mask。"""
+        if sys.platform != "win32":
+            return
+        # 1) 尝试 Win 11 DWM 原生圆角（Build 22000+）
+        try:
+            import ctypes
+            hwnd = int(self.winId())
+            result = ctypes.windll.dwmapi.DwmSetWindowAttribute(
+                hwnd, 33,  # DWMWA_WINDOW_CORNER_PREFERENCE
+                ctypes.byref(ctypes.c_int(3)), ctypes.sizeof(ctypes.c_int),
+            )
+            if result == 0:  # S_OK
+                return
+        except Exception:
+            pass
+        # 2) 降级：QRegion mask 模拟圆角（Win 10 / Win 8）
+        self._rounded_mask_active = True
+        self._update_rounded_mask()
+
+    def _update_rounded_mask(self):
+        """用 QPainterPath → QRegion 裁剪窗口四个圆角。"""
+        from PySide6.QtGui import QPainterPath, QRegion
+        from PySide6.QtCore import QRectF
+        r = self.rect()
+        path = QPainterPath()
+        path.addRoundedRect(QRectF(r), 12, 12)
+        self.setMask(QRegion(path.toFillPolygon().toPolygon()))
 
     def _save_geometry(self):
         """v3.02.01：保存窗口几何，同时存 width/height 做可靠 fallback。
@@ -187,10 +227,6 @@ class BDSFluentWindow(FluentWindow):
                     return
             except Exception:
                 pass
-        w = config_mgr.get("window_width", 1200)
-        h = config_mgr.get("window_height", 800)
-        self.resize(w, h)
-        # fallback：旧 config 或无配置 → 用默认尺寸
         w = config_mgr.get("window_width", 1200)
         h = config_mgr.get("window_height", 800)
         self.resize(w, h)
@@ -294,6 +330,8 @@ class BDSFluentWindow(FluentWindow):
         self._notif_drawer = NotificationDrawer(self)
         self._notif_drawer.hide()
         self._notif_drawer.navigate_requested.connect(self._on_notif_navigate)
+        # v3.02.02: 通知入队时同步弹出视觉 toast（GUI 线程安全）
+        _notify_bus().notification_added.connect(self._on_notif_to_toast)
         # 首启气泡（v3.02.00 起开始提示，可关闭）
         if config_mgr.get("show_command_palette_tip", True):
             QTimer.singleShot(2000, self._show_command_palette_tip)
@@ -318,6 +356,19 @@ class BDSFluentWindow(FluentWindow):
             except Exception as e:
                 logger.debug("通知高亮失败: %s", e)
 
+    def _on_notif_to_toast(self, n):
+        """v3.02.02: 通知入队 → 同时弹出视觉 toast。"""
+        if n is None:
+            return
+        # toast 来源的通知已经弹过视觉 toast，不重复弹
+        if getattr(n, "category", "") == "toast":
+            return
+        from shared.toast import toast_info, toast_success, toast_warning, toast_error
+        fn_map = {"error": toast_error, "warning": toast_warning,
+                  "success": toast_success, "info": toast_info}
+        fn = fn_map.get(n.level, toast_info)
+        fn(n.title, n.body, self)
+
     def _show_command_palette_tip(self):
         """首次启动提示气泡：按 Ctrl+K 试试命令面板。"""
         if not self._bell:
@@ -339,10 +390,6 @@ class BDSFluentWindow(FluentWindow):
         # v3.02.01 fix: TeachingTip 没有 closed 信号，只有 destroyed（widget 销毁时触发）
         # isDeleteOnClose=True 时，duration 到期或用户关闭都会 deleteLater → destroyed 触发
         tip.destroyed.connect(lambda: config_mgr.set("show_command_palette_tip", False))
-
-    def resizeEvent(self, event):
-        """窗口尺寸变化 —— bell 已放进 titleBar.buttonLayout，无需手动定位。"""
-        super().resizeEvent(event)
 
     # ---------- 服务初始化（资源监控 + 启动 toast + 自更新） ----------
     def _init_services(self):
@@ -447,11 +494,6 @@ class BDSFluentWindow(FluentWindow):
         if config_mgr.get("auto_check_update", True):
             QTimer.singleShot(5000, self._check_self_update)
 
-    def _restore_window_state(self):
-        w = config_mgr.get("window_width", 1200)
-        h = config_mgr.get("window_height", 800)
-        self.resize(w, h)
-
     def resizeEvent(self, event):
         """v3.02.01：实时保存窗口几何（含 maximized 状态）。
         
@@ -460,8 +502,15 @@ class BDSFluentWindow(FluentWindow):
         """
         super().resizeEvent(event)
         self._save_geometry()
+        if getattr(self, "_rounded_mask_active", False):
+            self._update_rounded_mask()
 
     def closeEvent(self, event):
+        # v3.02.02: 服务器在运行 → 先安全关闭，不直接退出
+        if self._server is not None and self._server.is_running:
+            self._do_safe_shutdown()
+            event.ignore()
+            return
         if self._tray and self._tray.isVisible() and config_mgr.get("close_to_tray", True):
             event.ignore()
             self.hide()
@@ -475,7 +524,8 @@ class BDSFluentWindow(FluentWindow):
             self.tunnel_page.cleanup()
         if hasattr(self, "upgrade_page"):
             self.upgrade_page._stop_scan()
-        self._tray.hide()
+        if self._tray is not None:
+            self._tray.hide()
         # v3.02.01：正常关闭时显式保存几何（resizeEvent 已实时保存，这里再保证一次）
         self._save_geometry()
         config_mgr.save()
@@ -540,6 +590,7 @@ class BDSFluentWindow(FluentWindow):
             "clear_console":     self._shortcut_clear_console,
             "search_console":    self._shortcut_search_console,
             "refresh_dashboard": self._shortcut_refresh_dashboard,
+            "safe_shutdown":     self._shortcut_safe_shutdown,
         }
         return cb_map.get(action_id, lambda: None)
 
@@ -596,6 +647,54 @@ class BDSFluentWindow(FluentWindow):
                 self.dashboard_page.status_card.refresh_status()
             except Exception:
                 pass
+
+    def _shortcut_safe_shutdown(self):
+        """v3.02.02: Ctrl+Shift+D 安全关闭 —— 停服 + 停隧道 + 停监控 + toast 通知。"""
+        # 防御：窗口未完全初始化时不响应
+        if not hasattr(self, "_server") or not hasattr(self, "console_page"):
+            return
+        # v3.02.02: 防重复触发
+        if getattr(self, "_shutting_down", False):
+            return
+        self._shutting_down = True
+        try:
+            self._do_safe_shutdown()
+        finally:
+            self._shutting_down = False
+
+    def _do_safe_shutdown(self):
+        from backend.notifications import notify
+        stopped_any = False
+
+        # 1. 停服务器
+        if self._server is not None and self._server.is_running:
+            self.stop_server()
+            stopped_any = True
+            self.console_page._append_output("[系统] Ctrl+Shift+D 安全关闭：正在停止服务器...", "#ffaa00")
+
+        # 2. 停隧道
+        if hasattr(self, "tunnel_page") and self.tunnel_page:
+            try:
+                self.tunnel_page.cleanup()
+                stopped_any = True
+                self.console_page._append_output("[系统] 安全关闭：隧道已停止", "#ffaa00")
+            except Exception:
+                pass
+
+        # 3. 停系统监控
+        if self._monitor:
+            self._monitor.stop()
+            stopped_any = True
+
+        # 4. 通知 → 停 1 秒让 BDS 处理 stop 命令 → 强制退出
+        if stopped_any:
+            notify("warning", "system", "安全关闭", "服务器 / 隧道 / 监控已全部停止，1 秒后退出")
+            # v3.02.02: 用 QApplication.quit() 而不是 self.close()，因为 close_to_tray=True
+            # 会导致 closeEvent 只隐藏窗口不退出进程。
+            QTimer.singleShot(1000, QApplication.quit)
+        else:
+            notify("info", "system", "安全关闭", "当前没有运行中的进程，退出")
+            QTimer.singleShot(500, QApplication.quit)
 
     def _on_page_changed_for_shortcuts(self, idx):
         """主窗口 stackedWidget 切页时通知 ShortcutManager 更新作用域。"""
@@ -721,6 +820,16 @@ class BDSFluentWindow(FluentWindow):
             notify("error", "server", "服务器启动失败", err, "page:dashboard")
             return err
 
+        # v3.02.02: 断开旧 ServerProcess 信号连接，防止泄漏
+        if self._server is not None:
+            try:
+                self._server.output_received.disconnect()
+                self._server.process_stopped.disconnect()
+                self._server.error_occurred.disconnect()
+                self._server.status_changed.disconnect()
+                self._server.proc_stats.disconnect()
+            except Exception:
+                pass
         self._server = ServerProcess(exe_path, ctx.server_dir)
         self._server.output_received.connect(self._on_server_output)
         self._server.process_stopped.connect(self._on_server_stopped)
@@ -761,12 +870,10 @@ class BDSFluentWindow(FluentWindow):
         self.dashboard_page.on_output()
 
     def _on_server_stopped(self, retcode: int):
-        send_webhook("crash", "服务器停止", "BDS 服务器进程已退出")
         self.dashboard_page._on_server_stopped()
         self.console_page._on_server_stopped()
 
-        # v3.02.01 fix: 只有异常退出 (retcode != 0) 且非用户手动停止才自动重启
-        # retcode=0 表示 BDS 正常退出 (Quit correctly)，不应触发重启
+        # v3.02.01 fix: 区分正常退出 / 启动失败 / 崩溃
         if retcode == 0:
             self.console_page._append_output("[系统] 服务器已正常退出", "#888")
             self._restart_count = 0
@@ -774,6 +881,13 @@ class BDSFluentWindow(FluentWindow):
                 self._lag_timer.stop()
             return
 
+        if retcode == -1:
+            self.console_page._append_output("[系统] 服务器启动失败", "#ff5555")
+            notify("error", "server", "服务器启动失败", "", "page:console")
+            return
+
+        # retcode != 0 且 != -1 → 崩溃自动重启
+        send_webhook("crash", "服务器崩溃", f"BDS 异常退出，返回码: {retcode}")
         notify("warning", "server", "服务器已停止", f"退出码 {retcode}", "page:console")
         max_retries = config_mgr.get("max_restart_retries", 5)
         if max_retries > 0 and self._restart_count < max_retries:

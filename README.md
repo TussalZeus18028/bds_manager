@@ -68,14 +68,6 @@ Manager_Fluent/
     └── toast.py         # 双模式 Toast 通知
 ```
 
-## 构建与发布
-
-```bash
-python release.py
-```
-
-自动打包 → 计算 SHA256 → 更新 version.json → 推送到 GitHub Release。
-
 ## License
 
 MIT

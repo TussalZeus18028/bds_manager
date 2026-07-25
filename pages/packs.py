@@ -8,7 +8,7 @@ v3.02.01 重写（对齐旧版正确逻辑）：
 - 所有包始终显示在列表中（✓已激活 / —未激活）
 - 新添加的包默认不激活（用户手动点启用）
 """
-import os, json, shutil
+import os, json, shutil, time
 import json5  # v3.02.01: BDS manifest.json 常含注释/trailing commas
 
 from PySide6.QtCore import Qt, QThread, Signal
@@ -90,7 +90,10 @@ def register_pack_to_world(world_path: str, pack_uuid: str, pack_version: str, p
     if not ver_parts:
         ver_parts = [1, 0, 0]
     data.append({"pack_id": pack_uuid, "version": ver_parts})
-    return _write_world_json(world_path, pack_type, data)
+    ok = _write_world_json(world_path, pack_type, data)
+    if ok:
+        _flush_packs_cache(pack_type)
+    return ok
 
 
 def unregister_pack_from_world(world_path: str, pack_uuid: str, pack_type: str) -> bool:
@@ -99,7 +102,10 @@ def unregister_pack_from_world(world_path: str, pack_uuid: str, pack_type: str) 
     new_data = [e for e in data if e.get("pack_id") != pack_uuid]
     if len(new_data) == len(data):
         return False  # 不存在
-    return _write_world_json(world_path, pack_type, new_data)
+    ok = _write_world_json(world_path, pack_type, new_data)
+    if ok:
+        _flush_packs_cache(pack_type)
+    return ok
 
 
 def _get_world_path(cfg) -> str:
@@ -121,8 +127,26 @@ def _get_world_path(cfg) -> str:
 
 
 # ── 扫描包 ──
+_PACKS_CACHE: dict[str, tuple[float, list[dict]]] = {}
+_PACKS_CACHE_TTL = 30  # 秒
+
+
+def _flush_packs_cache(pack_type: str = None):
+    """v3.02.02: 使缓存失效（注册/注销包后调用）。"""
+    if pack_type:
+        _PACKS_CACHE.pop(pack_type, None)
+    else:
+        _PACKS_CACHE.clear()
+
+
 def _scan_packs(pack_type: str) -> list[dict]:
-    """扫描资源包/行为包目录，检查世界注册状态。"""
+    """扫描资源包/行为包目录，检查世界注册状态（30s 缓存）。"""
+    # v3.02.02: 缓存避免频繁 os.listdir
+    cached = _PACKS_CACHE.get(pack_type)
+    if cached:
+        cached_ts, cached_data = cached
+        if time.time() - cached_ts < _PACKS_CACHE_TTL:
+            return cached_data
     ctx = get_context()
     packs_dir = ctx.resource_packs_dir if pack_type == "resource" else ctx.behavior_packs_dir
     world_path = _get_world_path(ctx)
@@ -156,6 +180,7 @@ def _scan_packs(pack_type: str) -> list[dict]:
         })
     # 激活的排前面
     result.sort(key=lambda x: (-x["is_active"], x["name"].lower()))
+    _PACKS_CACHE[pack_type] = (time.time(), result)
     return result
 
 
@@ -184,78 +209,118 @@ class CopyPackWorker(QThread):
 
 # ── 详情对话框 ──
 class PackInfoDialog(QDialog):
-    """双击 / 右键查看 manifest 完整信息。"""
+    """双击 / 右键查看 manifest 完整信息。v3.02.02 增强版。"""
     def __init__(self, pack_info: dict, pack_type: str, is_active: bool, parent=None):
         super().__init__(parent)
         self.setWindowTitle(f"包详情 - {pack_info['name']}")
-        self.resize(560, 500)
+        self.resize(620, 600)
         self._pack = pack_info
         self._pack_type = pack_type
         self._is_active = is_active
-        # v3.02.01 fix: QDialog 不跟随 qfluentwidgets 主题，手动设背景 + 文字色
+
         if isDarkTheme():
-            bg, fg, sub, dim = "#202225", "#ccc", "#888", "#666"
+            bg, fg, sub, dim, card_bg, accent = "#1a1d21", "#d4d4d4", "#888", "#666", "#22252a", "#0dc5d4"
+            tag_stable_bg, tag_stable_fg = "#1a3a1a", "#4CAF50"
+            tag_preview_bg, tag_preview_fg = "#3a2a1a", "#ff9800"
         else:
-            bg, fg, sub, dim = "#fafafa", "#1a1a1a", "#666", "#999"
+            bg, fg, sub, dim, card_bg, accent = "#fafafa", "#1a1a1a", "#666", "#999", "#f0f0f0", "#0078d4"
+            tag_stable_bg, tag_stable_fg = "#e6f5ec", "#2a8a4a"
+            tag_preview_bg, tag_preview_fg = "#fdf3e3", "#b86a00"
+
         self.setStyleSheet(f"QDialog {{ background: {bg}; }}")
         layout = QVBoxLayout(self)
+
         scroll = ScrollArea(self)
         scroll.setWidgetResizable(True)
-        scroll.setStyleSheet(f"QScrollArea {{ background: transparent; border: none; }}")
+        scroll.setStyleSheet("QScrollArea { background: transparent; border: none; }")
         frame = Frame()
         frame.setStyleSheet("QFrame { background: transparent; }")
         fl = QVBoxLayout(frame)
         fl.setContentsMargins(20, 16, 20, 16)
-        fl.setSpacing(10)
+        fl.setSpacing(12)
 
-        def add_field(label: str, value: str):
-            row = QHBoxLayout()
-            lbl = BodyLabel(label, frame)
-            lbl.setMinimumWidth(120)
-            lbl.setStyleSheet(f"color: {sub};")
-            row.addWidget(lbl)
-            val_lbl = BodyLabel(str(value) if value else "—", frame)
-            val_lbl.setWordWrap(True)
-            val_lbl.setTextInteractionFlags(Qt.TextSelectableByMouse)
-            row.addWidget(val_lbl, 1)
-            fl.addLayout(row)
+        # ── 头部：名称 + 状态标签 ──
+        header = QHBoxLayout()
+        name = SubtitleLabel(pack_info["name"], frame)
+        header.addWidget(name)
+        header.addStretch()
+        # 状态徽章
+        badge = BodyLabel("已激活 ✓" if is_active else "未激活", frame)
+        badge.setFixedHeight(26); badge.setMinimumWidth(80)
+        badge.setAlignment(Qt.AlignCenter)
+        badge.setStyleSheet(
+            f"background:{'#1a3a1a' if is_active else '#2a2222'};color:{'#4CAF50' if is_active else '#ff7777'};"
+            "border-radius:6px;padding:2px 10px;font-size:12px;font-weight:bold;")
+        header.addWidget(badge)
+        fl.addLayout(header)
 
-        fl.addWidget(SubtitleLabel(pack_info["name"], frame))
-        fl.addWidget(BodyLabel(
-            f"类型: {'资源包' if pack_type == 'resource' else '行为包'}  ·  "
-            f"状态: {'✅ 已激活' if is_active else '— 未激活'}", frame))
+        # 类型 + 描述
+        type_label = BodyLabel(f" {'资源包' if pack_type == 'resource' else '行为包'}", frame)
+        type_label.setStyleSheet(f"color:{accent};font-weight:bold;")
+        fl.addWidget(type_label)
         if pack_info["desc"]:
             desc = CaptionLabel(pack_info["desc"], frame)
             desc.setWordWrap(True)
             desc.setStyleSheet(f"color: {dim};")
             fl.addWidget(desc)
 
-        add_field("路径", pack_info["dirname"])
-        add_field("UUID", pack_info["uuid"])
-        add_field("版本", pack_info["version"])
-        add_field("pack_id", pack_info.get("pack_id", ""))
+        # ── 基本信息 ──
+        def _section(title, parent=frame):
+            # 简约分隔线 + 粗体标题
+            line = Frame()
+            line.setFrameShape(Frame.HLine)
+            line.setStyleSheet(f"QFrame {{ border: 1px solid {'#333' if isDarkTheme() else '#e0e0e0'}; }}")
+            fl.addWidget(line)
+            lbl = BodyLabel(title, parent)
+            lbl.setStyleSheet(f"color:{fg};font-weight:bold;margin-top:2px;")
+            fl.addWidget(lbl)
 
+        def _field(label, value, parent=frame):
+            row = QHBoxLayout()
+            lbl = BodyLabel(label, parent)
+            lbl.setMinimumWidth(130)
+            lbl.setStyleSheet(f"color: {sub};")
+            row.addWidget(lbl)
+            val = BodyLabel(str(value) if value else "—", parent)
+            val.setWordWrap(True)
+            val.setTextInteractionFlags(Qt.TextSelectableByMouse)
+            row.addWidget(val, 1)
+            fl.addLayout(row)
+
+        _section("● 基本信息")
+        _field("路径", pack_info["dirname"])
+        _field("UUID", pack_info["uuid"])
+        _field("版本", pack_info["version"])
+        _field("pack_id", pack_info.get("pack_id", ""))
+
+        # ── 模块 ──
         modules = pack_info.get("modules", [])
         if modules:
+            _section("◈ 模块")
             for m in modules:
-                add_field(f"模块 [{m.get('type', '?')}]",
-                          f"{m.get('uuid', '?')} ({m.get('version', '?')})")
+                _field(f"  · {m.get('type', '?')}",
+                       f"UUID: {m.get('uuid', '?')}\n版本: {m.get('version', '?')}")
 
+        # ── 依赖 ──
         deps = pack_info.get("dependencies", [])
         if deps:
-            fl.addWidget(SubtitleLabel("依赖", frame))
+            _section("→ 依赖")
             for d in deps:
-                add_field("  •", f"{d.get('uuid', '?')} ({d.get('version', '?')})")
+                _field("  ·", f"UUID: {d.get('uuid', '?')}  (v{d.get('version', '?')})")
 
+        # ── 引擎要求 ──
         min_eng = pack_info.get("min_engine", [])
         if min_eng:
-            add_field("最低引擎版本", ".".join(str(v) for v in min_eng))
+            _section("⬆ 引擎要求")
+            _field("最低引擎版本", ".".join(str(v) for v in min_eng))
 
+        fl.addStretch()
         scroll.setWidget(frame)
         layout.addWidget(scroll)
+
         btn_row = QHBoxLayout()
         btn_row.addStretch()
-        close_btn = PushButton("关闭", self)
+        close_btn = PushButton("关闭", self, FluentIcon.CANCEL)
         close_btn.clicked.connect(self.accept)
         btn_row.addWidget(close_btn)
         layout.addLayout(btn_row)
