@@ -15,6 +15,7 @@ import os
 import json
 import shutil
 import logging
+import time
 from collections import deque
 from datetime import datetime
 
@@ -179,6 +180,7 @@ DEFAULT_CONFIG = {
     "show_command_palette_tip": True,    # 首次启动提示「Ctrl+K 试试」
     "shortcuts": {},                     # 快捷键用户自定义覆盖 {action_id: key_string}
     "close_to_tray": True,               # 关闭窗口时最小化到托盘
+    "high_dpi": False,                  # 高 DPI 缩放适配（125/150/175% 清晰），重启生效
 }
 
 # 类型 schema（用于校验和自动修正）
@@ -318,12 +320,18 @@ class ConfigManager:
             "window_geometry",
             # v3.02.02 新增
             "close_to_tray", "window_background_opacity",
+            # v3.03.02 新增
+            "high_dpi",
         ]
         data = {k: self.values.get(k, DEFAULT_CONFIG.get(k)) for k in keys}
         os.makedirs(SCRIPT_DIR, exist_ok=True)
         # 原子写
         self._atomic_write_json(CONFIG_FILE, data)
-        logger.info("配置已保存: %s", os.path.basename(CONFIG_FILE))
+        # 日志节流：避免 _silent_save 刷屏，但数据每次都会落盘
+        now = time.time()
+        if not hasattr(self, "_last_log") or now - self._last_log > 2.0:
+            logger.info("配置已保存: %s", os.path.basename(CONFIG_FILE))
+            self._last_log = now
         # 版本数据单独存到独立文件
         self._save_version_cache()
 

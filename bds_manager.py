@@ -45,6 +45,10 @@ import time
 import urllib.request
 import zipfile
 
+# SSL: 部分 Windows 缺少根证书
+import ssl as _ssl
+_ssl._create_default_https_context = _ssl._create_unverified_context
+
 # ── 常量 ──────────────────────────────────────────────────────────────
 GITHUB_REPO_OWNER = "TussalZeus18028"
 GITHUB_REPO_NAME = "bds_manager"

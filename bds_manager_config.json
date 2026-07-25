@@ -1,6 +1,6 @@
 {
     "config_version": "3.03.00",
-    "theme": "dark",
+    "theme": "light",
     "theme_color": "#FF8C00",
     "server_dir": "E:/Launcher/服务器/Bedrock/Server",
     "server_exe": "bedrock_server.exe",
@@ -27,7 +27,7 @@
     "toast_duration_success": 4500,
     "toast_duration_info": 4000,
     "toast_queue_delay": 125,
-    "toast_opacity": 83,
+    "toast_opacity": 74,
     "toast_style": "original",
     "window_width": 960,
     "window_height": 620,
@@ -50,5 +50,6 @@
     },
     "window_geometry": "AdnQywADAAAAAAHgAAAAvgAABZ8AAAMpAAAB4AAAAL4AAAWfAAADKQAAAAAAAAAABkAAAAHgAAAAvgAABZ8AAAMp",
     "close_to_tray": true,
-    "window_background_opacity": 95
+    "window_background_opacity": 100,
+    "high_dpi": false
 }

@@ -152,6 +152,13 @@ class SettingsPage(QWidget):
         self._font_size.valueChanged.connect(self._on_font_size_changed)
         tc.addLayout(_row("字体大小(px)", self._font_size, theme_card, "影响全局 UI"))
 
+        # 高 DPI
+        self._high_dpi_toggle = ToggleButton("启用高 DPI 缩放适配", theme_card)
+        self._high_dpi_toggle.setChecked(config_mgr.get("high_dpi", False))
+        tc.addWidget(self._high_dpi_toggle, alignment=Qt.AlignLeft)
+        tc.addWidget(CaptionLabel(
+            "125%/150%/175% 缩放更清晰，需重启生效", theme_card))
+
         # 预设色板
         tc.addWidget(CaptionLabel("预设主色（点击切换）", theme_card))
         color_row = QHBoxLayout()
@@ -404,6 +411,7 @@ class SettingsPage(QWidget):
         # ── 外观 ──
         s._follow_system.toggled.connect(lambda v: _sa("follow_system_theme", v))
         s._font_size.valueChanged.connect(lambda v: _sa("font_size", v))
+        s._high_dpi_toggle.toggled.connect(lambda v: _sa("high_dpi", v))
 
         # ── 服务器 ──
         s._graceful.toggled.connect(lambda v: _sa("graceful_shutdown", v))

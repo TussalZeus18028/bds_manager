@@ -77,7 +77,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger("bds_manager")
 
-__version__ = "3.03.02"
+__version__ = "3.03.03"
 # ⚠️ 工具版本固定写在这里，不在 bds_manager_config.json / bds_version_cache.json 等任何配置文件中。
 # 如果需要做配置兼容性检查，读取远端 version.json（自更新流程用）即可。
 # 格式规范：x.xx.xx —— Major 1 位、Minor 2 位（补零）、Patch 2 位（补零）
@@ -85,6 +85,11 @@ __version__ = "3.03.02"
 # 注意：旧项目（v2.x，Manager/）版本格式是 x.xx.xx.xx (4段)，compare_versions 已兼容任意段数。
 __version_info__ = (3, 2, 2)
 __release_date__ = "2026-07-24"
+
+# SSL: 部分 Windows 缺少根证书，关闭验证以访问 GitHub API
+import ssl as _ssl
+_ssl._create_default_https_context = _ssl._create_unverified_context
+
 
 
 def format_version(major: int, minor: int, patch: int) -> str:
@@ -749,6 +754,22 @@ class BDSFluentWindow(FluentWindow):
         except Exception:
             setThemeColor(QColor("#0DC5D4"))
 
+        # ── Windows 11 原生暗色标题栏 ──
+        # QFluentWidgets setTheme 只管控件样式，不管 Windows 标题栏。
+        # Win10 1809+ / Win11 需要通过 DWMWA_USE_IMMERSIVE_DARK_MODE (20)
+        # 显式切换标题栏深/浅色，否则暗色模式下标题栏仍是白色。
+        if sys.platform == "win32":
+            try:
+                import ctypes
+                hwnd = int(self.winId())
+                dark = 1 if theme_map.get(theme, Theme.DARK) == Theme.DARK else 0
+                ctypes.windll.dwmapi.DwmSetWindowAttribute(
+                    hwnd, 20,  # DWMWA_USE_IMMERSIVE_DARK_MODE
+                    ctypes.byref(ctypes.c_int(dark)), ctypes.sizeof(ctypes.c_int),
+                )
+            except Exception:
+                pass
+
         # 通知铃铛图标跟随主题切换（FluentIcon.MESSAGE 有深/浅两套 SVG）
         if hasattr(self, "_bell") and self._bell is not None:
             self._bell.setIcon(FluentIcon.MESSAGE.icon(theme=theme_map.get(theme, Theme.DARK)))
@@ -990,18 +1011,25 @@ class BDSFluentWindow(FluentWindow):
 
 # ---------- 入口 ----------
 def main():
+    # 0. 先加载配置（高 DPI 必须在 QApplication 之前决策）
+    config_mgr.load()
+    init_context(config_mgr.get("server_dir"))
+
+    # 0a. 高 DPI 适配（必须在 QApplication 创建之前）
+    #     Qt6 默认启用 AA_EnableHighDpiScaling，用户可选更精确的缩放策略：
+    #     PassThrough → 允许非整数倍缩放（125%/150%/175%），文字不模糊
+    if config_mgr.get("high_dpi", False):
+        QApplication.setHighDpiScaleFactorRoundingPolicy(
+            Qt.HighDpiScaleFactorRoundingPolicy.PassThrough
+        )
+
     # 1. QApplication（必须先于任何 QWidget）
     app = QApplication(sys.argv)
     app.setApplicationName("BDS Manager")
     app.setApplicationVersion(__version__)
 
-    # 2. 先加载配置（闪屏需要知道主题，才能按深/浅色渲染）
-    #    配置损坏 → 自动回退到备份 → 都失败则用 DEFAULT_CONFIG（浅色）
-    config_mgr.load()
+    # 2. 闪屏（根据配置主题选择深/浅色）
     theme_raw = config_mgr.get("theme", "light")
-    init_context(config_mgr.get("server_dir"))
-
-    # 3. 闪屏（根据配置主题选择深/浅色）
     splash = AnimatedSplashScreen(__version__, is_dark=(theme_raw == "dark"))
     splash.show()
     app.processEvents()

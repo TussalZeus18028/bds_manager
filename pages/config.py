@@ -288,9 +288,10 @@ class ConfigPage(QWidget):
         if name not in _PRESETS:
             return
         preset = _PRESETS[name]
-        for key, (typ2, val) in preset.items():
+        for key, value in preset.items():
             if key == "pvp" or key not in self._editors:
                 continue
+            typ2, val = value
             typ, w = self._editors[key]
             if typ == typ2:
                 self._set_editor_value(w, typ, val)
