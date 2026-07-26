@@ -246,6 +246,7 @@ def launch_main_py() -> None:
 
 
 # ── 依赖自检 + 自动安装 ────────────────────────────────────────────────
+_DEPS_CHECKED = False
 _REQUIRED_PACKAGES = {
     "PySide6":         "PySide6",
     "qfluentwidgets":  "qfluentwidgets",
@@ -254,7 +255,14 @@ _REQUIRED_PACKAGES = {
 
 
 def ensure_dependencies() -> None:
-    """检查核心依赖是否可用。缺失的自动 pip install（无 PySide6 也能跑）。"""
+    """检查核心依赖是否可用。缺失的自动 pip install（无 PySide6 也能跑）。
+
+    缓存：首次检查后 _DEPS_CHECKED 标记为 True，后续调用跳过 __import__。
+    """
+    global _DEPS_CHECKED
+    if _DEPS_CHECKED:
+        return
+    _DEPS_CHECKED = True
     missing = []
     for imp_name, pkg_name in _REQUIRED_PACKAGES.items():
         try:

@@ -102,10 +102,10 @@ Manager_Fluent/
 - `bds_manager.py` 一键启动自动装依赖
 
 ### Bug 修复
-- Win11 暗色标题栏 / 切换主题最小化 / SSL 证书 / 预设崩溃 / 保存刷屏 / 滚动跳回顶部
+- 深色模式持久化 (9处) / 主题最小化 / SSL 证书 / 预设崩溃 / 停止确认 / 滚跳 / 标签截断 / frpc编辑按钮
 
 ### 代码质量
-- 全项目 30+ 处异常类型窄化 / main.py 拆分至 1054 行 / Toast 统一 / 配置持久化修复 9 处
+- 版本号集中到 shared/version.py / 样式统一到 shared/theme.py / 30+ 异常窄化 / PEP 8 清理
 
 ## License
 

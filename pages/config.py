@@ -601,6 +601,7 @@ class ConfigPage(QWidget):
         for label, port in [("IPv4", ipv4), ("IPv6", ipv6)]:
             try:
                 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                sock.settimeout(3)
                 sock.bind(("0.0.0.0", port))
                 sock.close()
                 msgs.append(f"✅ {label} {port}: 可用")

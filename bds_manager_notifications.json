@@ -1,5 +1,35 @@
 [
   {
+    "id": "n_1785051487604_4b6a",
+    "ts": 1785051487.6049764,
+    "level": "warning",
+    "category": "toast",
+    "title": "安全关闭",
+    "body": "服务器 / 隧道 / 监控已全部停止，1 秒后退出",
+    "action_target": "",
+    "read": false
+  },
+  {
+    "id": "n_1785051487347_1954",
+    "ts": 1785051487.3471966,
+    "level": "warning",
+    "category": "system",
+    "title": "安全关闭",
+    "body": "服务器 / 隧道 / 监控已全部停止，1 秒后退出",
+    "action_target": "",
+    "read": false
+  },
+  {
+    "id": "n_1785051469660_ca8f",
+    "ts": 1785051469.6609597,
+    "level": "warning",
+    "category": "toast",
+    "title": "内存告警",
+    "body": "内存使用率 51.9%（阈值: 50%）",
+    "action_target": "",
+    "read": false
+  },
+  {
     "id": "n_1785049253950_fda0",
     "ts": 1785049253.9508348,
     "level": "warning",

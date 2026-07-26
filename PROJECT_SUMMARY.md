@@ -1,6 +1,6 @@
 # BDS Manager Fluent —— 项目全貌
 
-> **版本**: v3.0.1 | **日期**: 2026-07-22 | **仓库**: `TussalZeus18028/bds_manager` (main 分支)
+> **版本**: v3.03.04 | **日期**: 2026-07-26 | **仓库**: `TussalZeus18028/bds_manager` (main 分支)
 >
 > 从旧版 PyQt5 单体文件 (~7500 行) 完全重写为 PySide6 + QFluentWidgets 模块化架构。
 

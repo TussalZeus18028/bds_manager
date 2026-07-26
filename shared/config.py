@@ -28,7 +28,8 @@ VERSION_CACHE_FILE = os.path.join(SCRIPT_DIR, "bds_version_cache.json")
 LOG_DIR = os.path.join(SCRIPT_DIR, "logs")
 CONFIG_BACKUP_DIR = os.path.join(SCRIPT_DIR, "backups", "config")
 CONFIG_MAX_BACKUPS = 5
-CONFIG_VERSION = "3.03.00"  # 当前配置 schema 版本
+
+from shared.version import CONFIG_VERSION  # noqa: E402 (after dir setup)
 
 
 def _get_default_bedrock_exe_name():

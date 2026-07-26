@@ -37,17 +37,15 @@ from shared.config import config_mgr, get_context, SCRIPT_DIR
 
 
 def _table_style() -> str:
-    """v3.02.01: QTableWidget 主题感知样式。"""
-    if isDarkTheme():
-        return "QTableWidget { background:#1e1e1e;color:#ccc;border:1px solid #3a3a3a;border-radius:6px;gridline-color:#3a3a3a; } QTableWidget::item{padding:4px 8px;} QHeaderView::section{background:#2a2a2a;color:#aaa;border:none;padding:6px 8px;font-weight:bold;}"
-    return "QTableWidget { background:#fff;color:#1a1a1a;border:1px solid #d0d0d0;border-radius:6px;gridline-color:#e8e8e8; } QTableWidget::item{padding:4px 8px;} QHeaderView::section{background:#f5f5f5;color:#555;border:none;padding:6px 8px;font-weight:bold;}"
+    """v3.03.04: 从 shared/theme.py 统一主题样式。"""
+    from shared.theme import table_style
+    return table_style()
 
 
 def _plaintext_style() -> str:
-    """v3.02.01: QPlainTextEdit 主题感知样式。"""
-    if isDarkTheme():
-        return "QPlainTextEdit{background:#1e1e1e;color:#ccc;border:1px solid #3a3a3a;border-radius:6px;padding:6px;font-family:Consolas,monospace;font-size:12px;}"
-    return "QPlainTextEdit{background:#fafafa;color:#1a1a1a;border:1px solid #d0d0d0;border-radius:6px;padding:6px;font-family:Consolas,monospace;font-size:12px;}"
+    """v3.03.04: 从 shared/theme.py 统一主题样式。"""
+    from shared.theme import plaintext_style
+    return plaintext_style()
 
 # ── 升级历史 ──
 UPGRADE_HISTORY_FILE = os.path.join(SCRIPT_DIR, ".upgrade_history.json")
@@ -852,7 +850,6 @@ class UpgradePage(QWidget):
             "data": self._results,
             "timestamp": int(time.time()),
         })
-        config_mgr.save()
         config_mgr.save()
 
     def _stop_scan(self):

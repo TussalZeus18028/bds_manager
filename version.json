@@ -2,8 +2,8 @@
     "version": "3.03.04",
     "release_date": "2026-07-26",
     "download_url": "https://github.com/TussalZeus18028/bds_manager/releases/download/v3.03.04/bds_manager_v3.03.04.zip",
-    "sha256": "26de399c5feb566cf66ebe991759df96cc7e37e0958d5bb7de4a793e18a0d8ea",
-    "file_size": 154254,
+    "sha256": "",
+    "file_size": 0,
     "min_compatible_version": "2.00.00",
-    "changelog": "## v3.03.04 (2026-07-26)\n\n### 新功能\n- 配置页 JSON 文件原生编辑器（白名单/权限/速率限制）：无边框 Fluent Design 弹窗\n- 高 DPI 缩放适配开关（设置页，默认关，PassThrough 策略，重启生效）\n- bds_manager.py 自动安装缺失依赖（PySide6/qfluentwidgets/psutil）\n\n### 主题\n- Win11 原生暗色标题栏（DWMWA_USE_IMMERSIVE_DARK_MODE）\n- 配置页提示标签深浅色双值\n- 编辑对话框完整深浅色适配 + 半透明 + 圆角\n\n### Bug 修复\n- 深色模式重启后丢失（6 处 config_mgr.set 缺 save）\n- 切换主题快捷键导致窗口最小化（删除错误的 SetWindowPos）\n- 部分 Windows SSL 证书缺失致 GitHub API 失败\n- 配置预设 _apply_preset 崩溃（解包顺序错误）\n- 配置保存日志刷屏（2 秒节流 + import time 修复）\n- 升级页状态文字变化后页面跳回顶部（滚动位置保存/恢复）\n- __version_info__ 未同步（停于 3.2.2）\n\n### 代码质量\n- 全项目 30+ 处 except Exception 窄化为精确类型（OSError/AttributeError/RuntimeError）\n- main.py 拆分：闪屏 → components/splash.py，服务器生命周期 → backend/server_lifecycle.py\n- console_search.py InfoBar → toast_success/error 统一\n- 4 个未用导入 + 1 处冗余本地 import 清理\n- wrap_scrollable 返回 scroll 对象供页面控制滚动\n- 控制台过滤标签与复选框间距修复\n- 设置页标签最大宽度 180→200 防截断\n- frpc.ini 编辑按钮最小宽度 96→110\n- .gitignore / README 更新至 v3.03.04"
+    "changelog": "## v3.03.04 (2026-07-26)\n\n### 新功能\n- 配置页 JSON 文件原生编辑器（白名单/权限/速率限制）：无边框 Fluent Design 弹窗 + 半透明\n- 高 DPI 缩放适配开关（设置页，PassThrough 策略，重启生效）\n- bds_manager.py 一键启动自动安装缺失依赖\n\n### 主题\n- Win11 原生暗色标题栏（DWMWA_USE_IMMERSIVE_DARK_MODE）\n- 编辑对话框完整深浅色适配 + 圆角 + 半透明\n- 深浅色样式表统一到 shared/theme.py\n\n### Bug 修复\n- 深色模式重启丢失（9 处 config_mgr.set 缺 save）\n- 切换主题最小化（删除错误的 SetWindowPos）\n- 部分 Windows SSL 证书缺失致 GitHub API 失败\n- 配置预设 _apply_preset 崩溃（解包顺序错误）\n- 保存日志刷屏（2 秒节流）\n- 升级页文字变化后跳回顶部（滚动位置保存/恢复）\n- 停止服务器无二次确认（加弹窗）\n- 端口检测无超时阻塞 GUI（加 3 秒 timeout）\n- frpc.ini 编辑按钮文字图标重叠 / 点击后失框\n- 控制台过滤标签与复选框重叠\n- 设置标签被截断（180→200px）\n\n### 代码质量\n- 30+ 处 except Exception 窄化为精确类型\n- main.py 拆分：splash / server_lifecycle\n- 重复样式/函数提取：shared/theme.py + shared/utils.py\n- 版本号集中到 shared/version.py 单一源\n- Toast 统一 / 导入整理 / 细节打磨（PEP 8 / 无冗余 import）\n- config_mgr.save 重复调用消除\n- bds_manager.py 依赖自检缓存"
 }

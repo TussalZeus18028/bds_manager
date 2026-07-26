@@ -24,22 +24,9 @@ import html as _hmod
 
 
 def _plaintext_style() -> str:
-    """v3.02.01: QPlainTextEdit 主题感知样式。"""
-    if isDarkTheme():
-        return """
-            QPlainTextEdit {
-                background: #1e1e1e; color: #ccc;
-                border: 1px solid #3a3a3a; border-radius: 6px;
-                padding: 6px; font-family: Consolas, monospace; font-size: 12px;
-            }
-        """
-    return """
-        QPlainTextEdit {
-            background: #fafafa; color: #1a1a1a;
-            border: 1px solid #d0d0d0; border-radius: 6px;
-            padding: 6px; font-family: Consolas, monospace; font-size: 12px;
-        }
-    """
+    """v3.03.04: 从 shared/theme.py 统一主题样式。"""
+    from shared.theme import plaintext_style
+    return plaintext_style(font_family="Consolas, monospace", font_size=12, padding=6)
 
 
 def _esc(text: str) -> str:

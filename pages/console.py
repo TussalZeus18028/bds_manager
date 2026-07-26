@@ -574,7 +574,14 @@ class ConsolePage(QWidget):
             send_webhook("server_started", "服务器启动", "BDS 已启动")
 
     def _on_stop(self):
-        self.window().stop_server()
+        win = self.window()
+        if win.is_server_running:
+            from PySide6.QtWidgets import QMessageBox
+            r = QMessageBox.question(win, "确认停止", "确定要停止 BDS 服务器吗？",
+                                     QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+            if r != QMessageBox.Yes:
+                return
+        win.stop_server()
 
     def _on_restart(self):
         win = self.window()
