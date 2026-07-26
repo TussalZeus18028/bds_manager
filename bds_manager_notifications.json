@@ -1,5 +1,275 @@
 [
   {
+    "id": "n_1785057684096_06c9",
+    "ts": 1785057684.096439,
+    "level": "warning",
+    "category": "toast",
+    "title": "内存告警",
+    "body": "内存使用率 50.1%（阈值: 50%）",
+    "action_target": "",
+    "read": false
+  },
+  {
+    "id": "n_1785057651654_4440",
+    "ts": 1785057651.6541054,
+    "level": "warning",
+    "category": "toast",
+    "title": "内存告警",
+    "body": "内存使用率 54.6%（阈值: 50%）",
+    "action_target": "",
+    "read": false
+  },
+  {
+    "id": "n_1785057621530_cb20",
+    "ts": 1785057621.530163,
+    "level": "warning",
+    "category": "toast",
+    "title": "内存告警",
+    "body": "内存使用率 54.5%（阈值: 50%）",
+    "action_target": "",
+    "read": false
+  },
+  {
+    "id": "n_1785057591534_a089",
+    "ts": 1785057591.5340044,
+    "level": "warning",
+    "category": "toast",
+    "title": "内存告警",
+    "body": "内存使用率 54.3%（阈值: 50%）",
+    "action_target": "",
+    "read": false
+  },
+  {
+    "id": "n_1785057561450_625b",
+    "ts": 1785057561.450904,
+    "level": "warning",
+    "category": "toast",
+    "title": "内存告警",
+    "body": "内存使用率 54.1%（阈值: 50%）",
+    "action_target": "",
+    "read": false
+  },
+  {
+    "id": "n_1785057531410_c17b",
+    "ts": 1785057531.4109638,
+    "level": "warning",
+    "category": "toast",
+    "title": "内存告警",
+    "body": "内存使用率 54.2%（阈值: 50%）",
+    "action_target": "",
+    "read": false
+  },
+  {
+    "id": "n_1785057501359_4896",
+    "ts": 1785057501.3599224,
+    "level": "warning",
+    "category": "toast",
+    "title": "内存告警",
+    "body": "内存使用率 54.0%（阈值: 50%）",
+    "action_target": "",
+    "read": false
+  },
+  {
+    "id": "n_1785057471321_db3d",
+    "ts": 1785057471.3210917,
+    "level": "warning",
+    "category": "toast",
+    "title": "内存告警",
+    "body": "内存使用率 54.1%（阈值: 50%）",
+    "action_target": "",
+    "read": false
+  },
+  {
+    "id": "n_1785057441160_765c",
+    "ts": 1785057441.1606653,
+    "level": "warning",
+    "category": "toast",
+    "title": "内存告警",
+    "body": "内存使用率 54.2%（阈值: 50%）",
+    "action_target": "",
+    "read": false
+  },
+  {
+    "id": "n_1785057411102_c003",
+    "ts": 1785057411.1022458,
+    "level": "warning",
+    "category": "toast",
+    "title": "内存告警",
+    "body": "内存使用率 54.1%（阈值: 50%）",
+    "action_target": "",
+    "read": false
+  },
+  {
+    "id": "n_1785057381082_6033",
+    "ts": 1785057381.0829594,
+    "level": "warning",
+    "category": "toast",
+    "title": "内存告警",
+    "body": "内存使用率 54.7%（阈值: 50%）",
+    "action_target": "",
+    "read": false
+  },
+  {
+    "id": "n_1785057351020_29a6",
+    "ts": 1785057351.0200024,
+    "level": "warning",
+    "category": "toast",
+    "title": "内存告警",
+    "body": "内存使用率 54.6%（阈值: 50%）",
+    "action_target": "",
+    "read": false
+  },
+  {
+    "id": "n_1785057320929_ec38",
+    "ts": 1785057320.9291315,
+    "level": "warning",
+    "category": "toast",
+    "title": "内存告警",
+    "body": "内存使用率 54.2%（阈值: 50%）",
+    "action_target": "",
+    "read": false
+  },
+  {
+    "id": "n_1785057290846_7281",
+    "ts": 1785057290.8468199,
+    "level": "warning",
+    "category": "toast",
+    "title": "内存告警",
+    "body": "内存使用率 55.7%（阈值: 50%）",
+    "action_target": "",
+    "read": false
+  },
+  {
+    "id": "n_1785057260790_d68a",
+    "ts": 1785057260.7903256,
+    "level": "warning",
+    "category": "toast",
+    "title": "内存告警",
+    "body": "内存使用率 50.9%（阈值: 50%）",
+    "action_target": "",
+    "read": false
+  },
+  {
+    "id": "n_1785057230713_7471",
+    "ts": 1785057230.7138977,
+    "level": "warning",
+    "category": "toast",
+    "title": "内存告警",
+    "body": "内存使用率 51.0%（阈值: 50%）",
+    "action_target": "",
+    "read": false
+  },
+  {
+    "id": "n_1785057200714_fbe5",
+    "ts": 1785057200.7146893,
+    "level": "warning",
+    "category": "toast",
+    "title": "内存告警",
+    "body": "内存使用率 52.5%（阈值: 50%）",
+    "action_target": "",
+    "read": false
+  },
+  {
+    "id": "n_1785057170782_47c7",
+    "ts": 1785057170.782783,
+    "level": "warning",
+    "category": "toast",
+    "title": "内存告警",
+    "body": "内存使用率 50.1%（阈值: 50%）",
+    "action_target": "",
+    "read": false
+  },
+  {
+    "id": "n_1785053035275_0841",
+    "ts": 1785053035.2755089,
+    "level": "warning",
+    "category": "toast",
+    "title": "安全关闭",
+    "body": "服务器 / 隧道 / 监控已全部停止，1 秒后退出",
+    "action_target": "",
+    "read": false
+  },
+  {
+    "id": "n_1785053035113_ea7a",
+    "ts": 1785053035.1136553,
+    "level": "warning",
+    "category": "system",
+    "title": "安全关闭",
+    "body": "服务器 / 隧道 / 监控已全部停止，1 秒后退出",
+    "action_target": "",
+    "read": false
+  },
+  {
+    "id": "n_1785053032472_cceb",
+    "ts": 1785053032.4729924,
+    "level": "success",
+    "category": "toast",
+    "title": "已保存",
+    "body": "allowlist.json 已更新",
+    "action_target": "",
+    "read": false
+  },
+  {
+    "id": "n_1785052976459_db54",
+    "ts": 1785052976.459237,
+    "level": "success",
+    "category": "toast",
+    "title": "服务器已启动",
+    "body": "bedrock_server.exe",
+    "action_target": "",
+    "read": false
+  },
+  {
+    "id": "n_1785052976378_f42e",
+    "ts": 1785052976.3784087,
+    "level": "success",
+    "category": "server",
+    "title": "服务器已启动",
+    "body": "bedrock_server.exe",
+    "action_target": "page:dashboard",
+    "read": false
+  },
+  {
+    "id": "n_1785052962806_c904",
+    "ts": 1785052962.806208,
+    "level": "warning",
+    "category": "toast",
+    "title": "内存告警",
+    "body": "内存使用率 50.0%（阈值: 50%）",
+    "action_target": "",
+    "read": false
+  },
+  {
+    "id": "n_1785052933760_90bd",
+    "ts": 1785052933.760275,
+    "level": "success",
+    "category": "toast",
+    "title": "已发送",
+    "body": "如未收到请检查 URL 与事件订阅",
+    "action_target": "",
+    "read": false
+  },
+  {
+    "id": "n_1785052772366_2c9e",
+    "ts": 1785052772.3666296,
+    "level": "warning",
+    "category": "toast",
+    "title": "内存告警",
+    "body": "内存使用率 50.1%（阈值: 50%）",
+    "action_target": "",
+    "read": false
+  },
+  {
+    "id": "n_1785052742305_79e6",
+    "ts": 1785052742.3055072,
+    "level": "warning",
+    "category": "toast",
+    "title": "内存告警",
+    "body": "内存使用率 50.0%（阈值: 50%）",
+    "action_target": "",
+    "read": false
+  },
+  {
     "id": "n_1785051487604_4b6a",
     "ts": 1785051487.6049764,
     "level": "warning",

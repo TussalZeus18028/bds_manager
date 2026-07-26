@@ -1,6 +1,6 @@
 {
-    "config_version": "3.03.00",
-    "theme": "light",
+    "config_version": "3.03.04",
+    "theme": "dark",
     "theme_color": "#FF8C00",
     "server_dir": "E:/Launcher/服务器/Bedrock/Server",
     "server_exe": "bedrock_server.exe",
@@ -10,11 +10,15 @@
     "backup_keep": 16,
     "backup_min_age_days": 0,
     "online_backup": false,
-    "webhook_url": "",
+    "webhook_url": "https://api.day.app/ye9uv3DjNRz82nbtZur4XP/",
     "webhook_events": [
         "backup",
         "crash",
-        "memory"
+        "memory",
+        "player_join",
+        "player_leave",
+        "command_executed",
+        "server_started"
     ],
     "frpc_path": "E:/Launcher/服务器/ChmlFrp/frpc.exe",
     "mem_warn_threshold": 50,

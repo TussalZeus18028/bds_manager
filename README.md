@@ -24,21 +24,21 @@ Minecraft Bedrock Dedicated Server 全功能管理器 —— 基于 **PySide6 + 
 
 ## 快速开始
 
-### 方式一：一键启动
+### 方式一：双击 run.bat
+
+直接双击 `run.bat`，无需任何命令。
+
+### 方式二：命令行启动
 
 ```bash
-python bds_manager.py
-```
-自动安装依赖 → 检查更新 → 启动。**零配置**。
-
-### 方式二：手动安装
-
-```bash
-pip install -r requirements.txt
 python main.py
 ```
 
-或双击 `run.bat`。
+首次运行会自动安装缺失依赖（PySide6 / qfluentwidgets / psutil）。
+
+### 方式三：从旧版升级
+
+旧版 Manager/ 执行升级后会自动调用 `bds_manager.py`——它会拉取最新 zip 解压覆盖，然后启动新版 main.py。
 
 ### 依赖
 
@@ -52,13 +52,12 @@ python main.py
 ```
 Manager_Fluent/
 ├── main.py              # 入口（FluentWindow + 托盘 + 主题 + 自更新）
-├── bds_manager.py       # 智能更新引导（自动装依赖 + 检查更新 + 启动）
-├── run.bat              # 启动脚本
+├── bds_manager.py       # 旧版升级桥接（自动下载解压 + 启动 main.py）
+├── run.bat              # 启动脚本（双击即用）
 ├── release.py           # 发布打包脚本
 ├── archive.py           # 代码快照脚本
 ├── requirements.txt
 ├── version.json         # 在线更新版本信息
-├── constants.py
 ├── pages/
 │   ├── dashboard.py     # 仪表盘
 │   ├── console.py       # 控制台
@@ -82,24 +81,28 @@ Manager_Fluent/
 │   ├── network.py       # 网络工具
 │   ├── shortcuts.py     # 快捷键管理
 │   ├── log_handler.py   # 日志轮转
-│   └── errors.py        # 全局异常处理
 ├── components/
 │   ├── notification_panel.py # 通知抽屉 + 铃铛按钮
 │   ├── splash.py         # 启动闪屏（圆角·半透明·动画）
+│   ├── widgets.py        # 通用组件（NoScrollSpinBox 等）
 │   └── key_capture.py   # 键位录制控件
 └── shared/
+    ├── version.py         # 唯一版本号源
     ├── config.py        # 配置管理（JSON + 迁移 + 备份恢复）
+    ├── theme.py          # 主题样式表统一管理
+    ├── utils.py          # 通用工具函数
     ├── workers.py       # 线程基类
     ├── toast.py         # 双模式 Toast 通知
-    └── retry.py         # 重试装饰器
+    ├── retry.py         # 重试装饰器
+    └── errors.py        # 全局异常处理
 ```
 
 ## 近期更新 (v3.03.04)
 
 ### 新功能
-- 配置 JSON 文件原生编辑器（白名单/权限）：无边框 Fluent Design + 深浅色 + 半透明
-- 高 DPI 缩放适配（设置页开关，重启生效）
-- `bds_manager.py` 一键启动自动装依赖
+- 配置 JSON 原生编辑器（白名单/权限）：无边框 Fluent Design + 深浅色 + 半透明
+- 高 DPI 缩放适配（设置页开关）
+- main.py 启动自动安装缺失依赖
 
 ### Bug 修复
 - 深色模式持久化 (9处) / 主题最小化 / SSL 证书 / 预设崩溃 / 停止确认 / 滚跳 / 标签截断 / frpc编辑按钮
