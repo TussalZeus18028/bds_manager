@@ -77,13 +77,13 @@ logging.basicConfig(
 )
 logger = logging.getLogger("bds_manager")
 
-__version__ = "3.03.03"
+__version__ = "3.03.04"
 # ⚠️ 工具版本固定写在这里，不在 bds_manager_config.json / bds_version_cache.json 等任何配置文件中。
 # 如果需要做配置兼容性检查，读取远端 version.json（自更新流程用）即可。
 # 格式规范：x.xx.xx —— Major 1 位、Minor 2 位（补零）、Patch 2 位（补零）
 # 例：3.1.0 → 3.01.00；3.10.5 → 3.10.05
 # 注意：旧项目（v2.x，Manager/）版本格式是 x.xx.xx.xx (4段)，compare_versions 已兼容任意段数。
-__version_info__ = (3, 2, 2)
+__version_info__ = (3, 3, 3)
 __release_date__ = "2026-07-24"
 
 # SSL: 部分 Windows 缺少根证书，关闭验证以访问 GitHub API
@@ -189,8 +189,8 @@ class BDSFluentWindow(FluentWindow):
             )
             if result == 0:  # S_OK
                 return
-        except Exception:
-            pass
+        except OSError:
+            pass  # DWM 不可用，降级 QRegion
         # 2) 降级：QRegion mask 模拟圆角（Win 10 / Win 8）
         self._rounded_mask_active = True
         self._update_rounded_mask()
@@ -223,7 +223,8 @@ class BDSFluentWindow(FluentWindow):
             # 冗余保存 width/height，让 _restore_window_state 的 fallback 总能生效
             config_mgr.set("window_width", self.width())
             config_mgr.set("window_height", self.height())
-        except Exception:
+            config_mgr.save()
+        except (UnicodeDecodeError, AttributeError, OSError):
             pass
 
     def _restore_window_state(self):
@@ -239,7 +240,7 @@ class BDSFluentWindow(FluentWindow):
                 ba = QByteArray.fromBase64(geom_b64.encode("ascii"))
                 if not ba.isEmpty() and self.restoreGeometry(ba):
                     return
-            except Exception:
+            except (RuntimeError, AttributeError, ValueError):
                 pass
         w = config_mgr.get("window_width", 1200)
         h = config_mgr.get("window_height", 800)
@@ -423,7 +424,7 @@ class BDSFluentWindow(FluentWindow):
                 app = QApplication.instance()
                 if app and hasattr(app, "styleHints"):
                     app.styleHints().colorSchemeChanged.connect(self._on_system_theme_changed)
-            except Exception:
+            except (RuntimeError, AttributeError, ValueError):
                 pass
 
     def _on_system_theme_changed(self, scheme):
@@ -489,8 +490,8 @@ class BDSFluentWindow(FluentWindow):
             cpu = psutil.cpu_percent()
             mem = psutil.virtual_memory().percent
             toast_info("系统资源", f"CPU {cpu:.0f}%  内存 {mem:.0f}%", self)
-        except Exception:
-            pass
+        except (AttributeError, OSError):
+            pass  # 监控未就绪或 psutil 不可用
 
         if os.path.exists(ctx.backup_dir):
             backups = [f for f in os.listdir(ctx.backup_dir) if f.endswith(".zip")]
@@ -586,8 +587,8 @@ class BDSFluentWindow(FluentWindow):
             self.stackedWidget.currentChanged.connect(self._on_page_changed_for_shortcuts)
             # 初始作用域
             self._on_page_changed_for_shortcuts(0)
-        except Exception:
-            pass
+        except (RuntimeError, AttributeError):
+            pass  # stackedWidget 未就绪
 
         # v3.02.00 fix: 刷新设置页的快捷键列表（init 时 ShortcutManager 才有内容）
         if hasattr(self, "settings_page") and hasattr(self.settings_page, "refresh_shortcut_card"):
@@ -665,7 +666,7 @@ class BDSFluentWindow(FluentWindow):
         if hasattr(self, "dashboard_page"):
             try:
                 self.dashboard_page.status_card.refresh_status()
-            except Exception:
+            except (RuntimeError, AttributeError, ValueError):
                 pass
 
     def _shortcut_safe_shutdown(self):
@@ -698,7 +699,7 @@ class BDSFluentWindow(FluentWindow):
                 self.tunnel_page.cleanup()
                 stopped_any = True
                 self.console_page._append_output("[系统] 安全关闭：隧道已停止", "#E65100")
-            except Exception:
+            except (RuntimeError, AttributeError, ValueError):
                 pass
 
         # 3. 停系统监控
@@ -751,7 +752,7 @@ class BDSFluentWindow(FluentWindow):
         setTheme(theme_map.get(theme, Theme.DARK))
         try:
             setThemeColor(QColor(accent_color))
-        except Exception:
+        except (AttributeError, ValueError):
             setThemeColor(QColor("#0DC5D4"))
 
         # ── Windows 11 原生暗色标题栏 ──
@@ -767,7 +768,7 @@ class BDSFluentWindow(FluentWindow):
                     hwnd, 20,  # DWMWA_USE_IMMERSIVE_DARK_MODE
                     ctypes.byref(ctypes.c_int(dark)), ctypes.sizeof(ctypes.c_int),
                 )
-            except Exception:
+            except (OSError, AttributeError):
                 pass
 
         # 通知铃铛图标跟随主题切换（FluentIcon.MESSAGE 有深/浅两套 SVG）
@@ -780,7 +781,7 @@ class BDSFluentWindow(FluentWindow):
         try:
             if hasattr(self, "_notif_drawer") and self._notif_drawer is not None:
                 self._notif_drawer.refresh_theme()
-        except Exception:
+        except (AttributeError, RuntimeError):
             pass
 
         # v3.02.01：同步刷新各页面里主题感知的硬编码颜色（status_badge/bds_card/tasks_card 等）
@@ -791,7 +792,7 @@ class BDSFluentWindow(FluentWindow):
             if page is not None and hasattr(page, "refresh_theme"):
                 try:
                     page.refresh_theme()
-                except Exception:
+                except (AttributeError, RuntimeError):
                     pass
 
         is_dark = theme_map.get(theme, Theme.DARK) != Theme.LIGHT

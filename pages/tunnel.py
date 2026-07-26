@@ -86,7 +86,7 @@ class TunnelPage(QWidget):
         self._running = False
         self._auto_scroll = True
 
-        inner, layout = wrap_scrollable(self, spacing=12)
+        inner, layout, _scroll = wrap_scrollable(self, spacing=12)
 
         # ── 路径设置 ──
         path_card = CardWidget(inner)
@@ -164,7 +164,7 @@ class TunnelPage(QWidget):
         self._edit_lock_btn = PushButton("点击编辑", cfg_card, FluentIcon.EDIT)
         self._edit_lock_btn.setCheckable(True)
         self._edit_lock_btn.toggled.connect(self._toggle_ini_edit)
-        self._edit_lock_btn.setMinimumWidth(96)
+        self._edit_lock_btn.setMinimumWidth(110)
         btn_row.addWidget(self._edit_lock_btn)
 
         save_btn = PrimaryPushButton("保存", cfg_card, FluentIcon.SAVE)
@@ -236,11 +236,9 @@ class TunnelPage(QWidget):
         if checked:
             self._edit_lock_btn.setText("编辑中")
             self._edit_lock_btn.setIcon(FluentIcon.PENCIL_INK)
-            self._edit_lock_btn.setStyleSheet("color: #E65100; font-weight: bold;")
         else:
             self._edit_lock_btn.setText("点击编辑")
             self._edit_lock_btn.setIcon(FluentIcon.EDIT)
-            self._edit_lock_btn.setStyleSheet("")
 
     def _load_ini_from_file(self):
         """从文件加载 frpc.ini（不清空，追加到编辑器）"""

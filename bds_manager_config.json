@@ -1,6 +1,6 @@
 {
     "config_version": "3.03.00",
-    "theme": "light",
+    "theme": "dark",
     "theme_color": "#FF8C00",
     "server_dir": "E:/Launcher/服务器/Bedrock/Server",
     "server_exe": "bedrock_server.exe",
@@ -50,6 +50,6 @@
     },
     "window_geometry": "AdnQywADAAAAAAHgAAAAvgAABZ8AAAMpAAAB4AAAAL4AAAWfAAADKQAAAAAAAAAABkAAAAHgAAAAvgAABZ8AAAMp",
     "close_to_tray": true,
-    "window_background_opacity": 100,
+    "window_background_opacity": 93,
     "high_dpi": false
 }

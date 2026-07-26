@@ -48,8 +48,8 @@ def get_server_dir():
                 return server_dir
             elif server_dir:
                 return os.path.join(SCRIPT_DIR, server_dir)
-        except Exception:
-            pass
+        except (KeyError, TypeError, AttributeError):
+            pass  # 用户目录键缺失，降级到默认
     default = os.path.join(SCRIPT_DIR, "Server")
     os.makedirs(default, exist_ok=True)
     return default

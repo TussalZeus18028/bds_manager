@@ -2,7 +2,7 @@
 
 Minecraft Bedrock Dedicated Server 全功能管理器 —— 基于 **PySide6 + QFluentWidgets Fluent Design**。
 
-[![Version](https://img.shields.io/badge/version-3.03.01-blue)](https://github.com/TussalZeus18028/bds_manager/releases)
+[![Version](https://img.shields.io/badge/version-3.03.04-blue)](https://github.com/TussalZeus18028/bds_manager/releases)
 [![Python](https://img.shields.io/badge/python-3.10+-green)](https://www.python.org/)
 [![License](https://img.shields.io/badge/license-MIT-orange)](LICENSE)
 
@@ -73,6 +73,7 @@ Manager_Fluent/
 │   └── about.py         # 关于
 ├── backend/
 │   ├── server.py        # 服务器进程管理（基岩版 save hold/resume）
+│   ├── server_lifecycle.py # 服务器生命周期（启停·崩溃自愈·RTT）
 │   ├── backup.py        # 备份/还原
 │   ├── monitor.py       # 系统资源监控
 │   ├── self_update.py   # 工具自更新
@@ -84,6 +85,7 @@ Manager_Fluent/
 │   └── errors.py        # 全局异常处理
 ├── components/
 │   ├── notification_panel.py # 通知抽屉 + 铃铛按钮
+│   ├── splash.py         # 启动闪屏（圆角·半透明·动画）
 │   └── key_capture.py   # 键位录制控件
 └── shared/
     ├── config.py        # 配置管理（JSON + 迁移 + 备份恢复）
@@ -92,23 +94,18 @@ Manager_Fluent/
     └── retry.py         # 重试装饰器
 ```
 
-## 近期更新 (v3.03.01)
+## 近期更新 (v3.03.04)
 
-### 主题
-- 深色/浅色模式完整适配：控制台着色、通知面板、快捷键按钮、包详情 badge
-- 默认主题改为浅色
-- 启动闪屏自动跟随主题（圆角 + 半透明）
+### 新功能
+- 配置 JSON 文件原生编辑器（白名单/权限）：无边框 Fluent Design + 深浅色 + 半透明
+- 高 DPI 缩放适配（设置页开关，重启生效）
+- `bds_manager.py` 一键启动自动装依赖
 
-### BDS 命令
-- 删除 save-all / save-on / save-off（Java 版命令）
-- 替换为基岩版原生命令：`save hold` / `save query` / `save resume`
-- 自动补全扩充 20+ 原生命令
+### Bug 修复
+- Win11 暗色标题栏 / 切换主题最小化 / SSL 证书 / 预设崩溃 / 保存刷屏 / 滚动跳回顶部
 
-### 界面
-- 窗口圆角反锯齿
-- 预设色板修复（WA_StyledBackground）
-- 升级页按钮行高修复
-- 包详情简约图标
+### 代码质量
+- 全项目 30+ 处异常类型窄化 / main.py 拆分至 1054 行 / Toast 统一 / 配置持久化修复 9 处
 
 ## License
 

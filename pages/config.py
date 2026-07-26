@@ -15,14 +15,16 @@ import os
 import re
 
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QTableWidget, QTableWidgetItem,
-    QHeaderView, QAbstractItemView, QFileDialog, QMessageBox, QLabel,
+    QHeaderView, QAbstractItemView, QFileDialog, QMessageBox,
+    QDialog, QPlainTextEdit, QPushButton,
 )
 from qfluentwidgets import (
     CardWidget, SubtitleLabel, StrongBodyLabel, BodyLabel, CaptionLabel,
     PrimaryPushButton, PushButton, LineEdit, ComboBox,
-    FluentIcon, ToggleButton, InfoBar, MessageBox,
+    FluentIcon, ToggleButton, InfoBar, MessageBox, isDarkTheme,
 )
 
 from shared.config import get_context
@@ -172,7 +174,7 @@ _PRESETS = {
 class ConfigPage(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
-        inner, layout = wrap_scrollable(self, spacing=12)
+        inner, layout, _scroll = wrap_scrollable(self, spacing=12)
 
         # ── 预设方案 ──
         preset_card = CardWidget(inner)
@@ -227,7 +229,8 @@ class ConfigPage(QWidget):
 
             # 说明
             hint_lbl = CaptionLabel(_HINTS.get(key, ""), prop_card)
-            hint_lbl.setStyleSheet("color: #888; font-size: 11px;")
+            hint_color = "#888" if isDarkTheme() else "#555"
+            hint_lbl.setStyleSheet(f"color: {hint_color}; font-size: 11px;")
             hint_lbl.setMaximumWidth(280)
             hint_lbl.setWordWrap(True)
             row.addWidget(hint_lbl)
@@ -394,8 +397,8 @@ class ConfigPage(QWidget):
                         continue
                     k, v = line.split("=", 1)
                     out[k] = v
-        except Exception:
-            pass
+        except (OSError, UnicodeDecodeError, ValueError):
+            pass  # 文件损坏或编码异常，返回空字典
         return out
 
     # ---------- Diff ----------
@@ -462,12 +465,131 @@ class ConfigPage(QWidget):
         if not os.path.exists(fp):
             toast_error("文件不存在", fp, self.window())
             return
+
         try:
-            os.startfile(fp)
-        except AttributeError:
-            import subprocess, sys
-            opener = "open" if sys.platform == "darwin" else "xdg-open"
-            subprocess.Popen([opener, fp])
+            with open(fp, "r", encoding="utf-8") as f:
+                original = f.read()
+        except (OSError, UnicodeDecodeError) as e:
+            toast_error("读取失败", str(e), self.window())
+            return
+
+        dark = isDarkTheme()
+
+        # ── 无边框对话框 ──
+        dlg = QDialog(self.window())
+        dlg.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
+        dlg.setAttribute(Qt.WA_TranslucentBackground)
+        dlg.setModal(True)
+        dlg.resize(700, 530)
+        dlg.setWindowOpacity(0.96)
+
+        # 外层：圆角容器背景
+        outer = QVBoxLayout(dlg)
+        outer.setContentsMargins(8, 8, 8, 8)
+
+        container = QWidget(dlg)
+        container.setObjectName("fileEditContainer")
+        container_layout = QVBoxLayout(container)
+        container_layout.setContentsMargins(20, 16, 20, 16)
+        container_layout.setSpacing(10)
+
+        if dark:
+            container.setStyleSheet("""
+                QWidget#fileEditContainer {
+                    background: #1e1e1e; border: 1px solid #3a3a3a; border-radius: 12px;
+                }
+            """)
+        else:
+            container.setStyleSheet("""
+                QWidget#fileEditContainer {
+                    background: #fafafa; border: 1px solid #d0d0d0; border-radius: 12px;
+                }
+            """)
+        outer.addWidget(container)
+
+        # ── 标题栏 ──
+        title_bar = QHBoxLayout()
+        title_lbl = BodyLabel(f"📄  {filename}", container)
+        title_lbl.setObjectName("fileEditTitle")
+        title_lbl.setStyleSheet(
+            "BodyLabel#fileEditTitle { color: #d4d4d4; font-size: 14px; font-weight: 600; }" if dark
+            else "BodyLabel#fileEditTitle { color: #333; font-size: 14px; font-weight: 600; }"
+        )
+        title_bar.addWidget(title_lbl)
+        title_bar.addStretch()
+        close_btn = QPushButton("✕", container)
+        close_btn.setFixedSize(28, 28)
+        close_btn.setCursor(Qt.PointingHandCursor)
+        close_btn.setStyleSheet(
+            "QPushButton { background: transparent; border: none; border-radius: 6px;"
+            " color: #888; font-size: 14px; }"
+            "QPushButton:hover { background: #e81123; color: #fff; }" if dark
+            else "QPushButton { background: transparent; border: none; border-radius: 6px;"
+            " color: #999; font-size: 14px; }"
+            "QPushButton:hover { background: #e81123; color: #fff; }"
+        )
+        close_btn.clicked.connect(dlg.reject)
+        title_bar.addWidget(close_btn)
+        container_layout.addLayout(title_bar)
+
+        # ── 分隔线 ──
+        sep = QWidget(container)
+        sep.setFixedHeight(1)
+        sep.setStyleSheet(
+            "background: #3a3a3a;" if dark
+            else "background: #e0e0e0;"
+        )
+        container_layout.addWidget(sep)
+
+        # ── 编辑器 ──
+        editor = QPlainTextEdit(container)
+        editor.setPlainText(original)
+        editor.setTabStopDistance(20)
+        editor.setMinimumHeight(300)
+        if dark:
+            editor.setStyleSheet("""
+                QPlainTextEdit {
+                    background: #1e1e1e; color: #ccc;
+                    border: 1px solid #3a3a3a; border-radius: 8px;
+                    padding: 12px; font-size: 13px; font-family: Consolas, monospace;
+                    selection-background-color: #264f78;
+                }
+            """)
+        else:
+            editor.setStyleSheet("""
+                QPlainTextEdit {
+                    background: #fafafa; color: #1a1a1a;
+                    border: 1px solid #d0d0d0; border-radius: 8px;
+                    padding: 12px; font-size: 13px; font-family: Consolas, monospace;
+                    selection-background-color: #cce5ff;
+                }
+            """)
+        container_layout.addWidget(editor)
+
+        # ── 按钮行 ──
+        btn_row = QHBoxLayout()
+        btn_row.addStretch()
+
+        cancel_btn = PushButton("取消", container, FluentIcon.CANCEL)
+        cancel_btn.clicked.connect(dlg.reject)
+        btn_row.addWidget(cancel_btn)
+
+        save_btn = PrimaryPushButton("保存", container, FluentIcon.SAVE)
+        save_btn.clicked.connect(lambda: _do_save(editor, fp, dlg))
+        btn_row.addWidget(save_btn)
+
+        container_layout.addLayout(btn_row)
+
+        def _do_save(ed, path, dialog):
+            try:
+                with open(path, "w", encoding="utf-8") as f:
+                    f.write(ed.toPlainText())
+                dialog.accept()
+                toast_success("已保存", f"{filename} 已更新", self.window())
+            except OSError as e:
+                toast_error("保存失败", str(e), self.window())
+
+        dlg.exec()
 
     def _check_ports(self):
         import socket

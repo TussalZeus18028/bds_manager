@@ -68,7 +68,8 @@ def wrap_scrollable(page_widget: QWidget, spacing: int = 12) -> tuple[QWidget, Q
     layout.setSpacing(spacing)
     scroll.setWidget(inner)
     outer.addWidget(scroll)
-    return inner, layout
+    # 返回 inner, layout, scroll — 方便页面保存/恢复滚动位置
+    return inner, layout, scroll
 
 
 # ---------- 资源曲线组件（QPainter 自绘）----------
@@ -555,7 +556,7 @@ class DashboardPage(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self._monitor = None  # 由 main.py 注入
-        inner, layout = wrap_scrollable(self)
+        inner, layout, _scroll = wrap_scrollable(self)
 
         self.status_card = StatusCard(inner)
         layout.addWidget(self.status_card)

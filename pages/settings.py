@@ -57,8 +57,8 @@ def _row(label_text: str, widget: QWidget, parent: QWidget, hint: str = "") -> Q
     row = QHBoxLayout()
     row.setSpacing(8)
     lbl = BodyLabel(label_text, parent)
-    lbl.setMinimumWidth(100)
-    lbl.setMaximumWidth(180)
+    lbl.setMinimumWidth(110)
+    lbl.setMaximumWidth(200)
     row.addWidget(lbl)
     row.addWidget(widget, 1)
     if hint:
@@ -98,7 +98,7 @@ class SettingsPage(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self._main_window = parent
-        inner, layout = wrap_scrollable(self, spacing=12)
+        inner, layout, _scroll = wrap_scrollable(self, spacing=12)
 
         # ═══ 外观 ═══
         theme_card = CardWidget(inner)

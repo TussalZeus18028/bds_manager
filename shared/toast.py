@@ -198,7 +198,7 @@ class ToastQueue:
                 try:
                     from main import _MAIN_WINDOW_REF
                     self._parent = _MAIN_WINDOW_REF[0]
-                except Exception:
+                except (ImportError, IndexError, RuntimeError):
                     self._timer_active = False
                     return
                 if self._parent is None:
@@ -300,5 +300,5 @@ def _sync_to_notification_center(level: str, title: str, content: str):
         bus = get_bus()
         bus.notification_added.emit(None)
         bus.unread_count_changed.emit(_STORE.get_unread_count())
-    except Exception:
-        pass
+    except (AttributeError, RuntimeError):
+        pass  # 通知总线未初始化

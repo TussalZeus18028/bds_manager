@@ -145,9 +145,6 @@ def _dump_snapshot_if_full(log, new_count: int, limit: int):
     if new_count >= limit and not _snapshot_dumped:
         _snapshot_dumped = True
         try:
-            from datetime import datetime
-            from shared.config import LOG_DIR
-            import os
             path = os.path.join(LOG_DIR, f"console_snapshot_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log")
             with open(path, "w", encoding="utf-8") as f:
                 f.write(log.toPlainText()[-100000:])
@@ -189,6 +186,7 @@ class LevelFilterBar(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(8)
         layout.addWidget(CaptionLabel("过滤:", self))
+        layout.addSpacing(4)
         self._filters: dict[str, CheckBox] = {}
         for label, key in [("信息", "info"), ("警告", "warn"),
                            ("错误", "error"), ("聊天", "chat")]:
@@ -216,7 +214,7 @@ class ConsolePage(QWidget):
         self._cmd_history_idx = -1
         self._crash_marker_visible = False
         self._show_timestamps = config_mgr.get("console_show_timestamps", True)
-        inner, layout = wrap_scrollable(self, spacing=12)
+        inner, layout, _scroll = wrap_scrollable(self, spacing=12)
 
         # ── 操作栏 ──
         ctrl_card = CardWidget(inner)
@@ -465,7 +463,10 @@ class ConsolePage(QWidget):
         # RTT 探测
         win = self.window()
         if hasattr(win, "check_lag_response"):
-            win.check_lag_response(text)
+            try:
+                win.check_lag_response(text)
+            except (AttributeError, RuntimeError):
+                pass
 
     def _track_player(self, text: str):
         m = self._PLAYER_JOIN.search(text)
@@ -540,6 +541,7 @@ class ConsolePage(QWidget):
     def _on_auto_scroll_toggle(self, v: bool):
         self._auto_scroll = v
         config_mgr.set("console_auto_scroll", v)
+        config_mgr.save()
 
     # ---------- 事件过滤（命令历史 + Tab）----------
     def eventFilter(self, obj, event):

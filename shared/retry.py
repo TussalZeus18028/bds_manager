@@ -64,8 +64,8 @@ def retry(
                     if on_retry:
                         try:
                             on_retry(attempt, e, delay)
-                        except Exception:
-                            pass
+                        except (TypeError, RuntimeError, OSError):
+                            pass  # on_retry 回调异常不影响重试
                     time.sleep(delay)
                     delay = min(delay * backoff, max_delay)
             # 理论上不会到这里

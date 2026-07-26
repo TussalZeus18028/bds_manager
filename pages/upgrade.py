@@ -10,8 +10,7 @@ v3.1 改进：
 - HEAD 扫描 memoize（已存在）
 """
 
-import os, re, time, json, shutil, tempfile, random, socket, ssl, urllib.request, urllib.error, logging
-from concurrent.futures import ThreadPoolExecutor, as_completed
+import os, re, time, json, shutil, random, socket, urllib.request, urllib.error, logging
 
 logger = logging.getLogger("bds_manager")
 
@@ -27,12 +26,14 @@ from qfluentwidgets import (
     ProgressBar, MessageBox, isDarkTheme,
 )
 
+import requests
+
 from shared.config import config_mgr, get_context, SCRIPT_DIR
 from shared.toast import toast_success, toast_error, toast_info
 from pages.dashboard import wrap_scrollable
-from components.widgets import NoScrollSpinBox  # v3.02.01: 滚轮防护
+from components.widgets import NoScrollSpinBox
 
-import requests
+from shared.config import config_mgr, get_context, SCRIPT_DIR
 
 
 def _table_style() -> str:
@@ -344,7 +345,7 @@ class HeadSizeWorker(QThread):
                 resp = urllib.request.urlopen(req, timeout=4)
                 size = int(resp.headers.get("content-length", 0))
                 size_text = f"{size/1024/1024:.1f} MB"
-            except Exception:
+            except (urllib.error.URLError, socket.timeout, ValueError, OSError):
                 size_text = "—"
             self.result.emit(row, size_text)
 
@@ -364,7 +365,7 @@ class UpgradePage(QWidget):
         self._github_attempt = 0          # 当前是第几次尝试
         self._github_silent = False       # True = 后台静默（不弹窗）
         self._pending_head_scan = False   # GitHub 全部失败后，等待用户点「启用 HEAD 嗅探」
-        inner, layout = wrap_scrollable(self, spacing=12)
+        inner, layout, self._scroll = wrap_scrollable(self, spacing=12)
 
         cached = config_mgr.get("version_list", {})
         if isinstance(cached, dict) and cached.get("data"):
@@ -664,28 +665,36 @@ class UpgradePage(QWidget):
 
     def _check_tool_update(self):
         from backend.self_update import CheckUpdateWorker, DownloadUpdateWorker, verify_sha256, is_valid_zip
+        # 保存滚动位置，避免 setText 触发布局刷新后跳回顶部
+        vpos = self._scroll.verticalScrollBar().value()
         self._tool_check_btn.setEnabled(False)
         self._tool_status.setText("正在检查更新...")
+        self._scroll.verticalScrollBar().setValue(vpos)
         self.__checker = CheckUpdateWorker(self)
         self.__checker.result.connect(lambda s, v, u, sh: self._on_tool_check_done(s, v, u, sh))
         self.__checker.start()
 
     def _on_tool_check_done(self, status, remote_ver, dl_url, sha256):
+        vpos = self._scroll.verticalScrollBar().value()
         self._tool_check_btn.setEnabled(True)
         import main
         if status == "error":
             self._tool_status.setText(f"检查失败: {remote_ver}")
+            self._scroll.verticalScrollBar().setValue(vpos)
             return
         if status == "latest":
             self._tool_status.setText(f"✅ 已是最新 v{main.__version__}")
+            self._scroll.verticalScrollBar().setValue(vpos)
             return
         if not dl_url:
             self._tool_status.setText("❌ 未找到下载链接")
+            self._scroll.verticalScrollBar().setValue(vpos)
             return
         self._tool_status.setText(f"发现 v{remote_ver}，正在下载...")
         self._tool_bar.setVisible(True)
         self._tool_bar.setRange(0, 100)
         self._tool_bar.setValue(0)
+        self._scroll.verticalScrollBar().setValue(vpos)
         from backend.self_update import DownloadUpdateWorker
         self.__dl = DownloadUpdateWorker(dl_url, remote_ver, self)
         self.__dl.progress.connect(self._tool_bar.setValue)

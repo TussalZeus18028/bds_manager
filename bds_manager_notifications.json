@@ -1,7 +1,7 @@
 [
   {
-    "id": "n_1784968089649_95ba",
-    "ts": 1784968089.6491075,
+    "id": "n_1785049253950_fda0",
+    "ts": 1785049253.9508348,
     "level": "warning",
     "category": "toast",
     "title": "安全关闭",
@@ -10,8 +10,8 @@
     "read": false
   },
   {
-    "id": "n_1784968089395_e03c",
-    "ts": 1784968089.3958051,
+    "id": "n_1785049252944_42c2",
+    "ts": 1785049252.9441316,
     "level": "warning",
     "category": "system",
     "title": "安全关闭",
@@ -20,538 +20,228 @@
     "read": false
   },
   {
-    "id": "n_1784967038245_6821",
-    "ts": 1784967038.245034,
-    "level": "warning",
-    "category": "toast",
-    "title": "安全关闭",
-    "body": "服务器 / 隧道 / 监控已全部停止，1 秒后退出",
-    "action_target": "",
-    "read": false
-  },
-  {
-    "id": "n_1784967037525_3db0",
-    "ts": 1784967037.5251162,
-    "level": "warning",
-    "category": "system",
-    "title": "安全关闭",
-    "body": "服务器 / 隧道 / 监控已全部停止，1 秒后退出",
-    "action_target": "",
-    "read": false
-  },
-  {
-    "id": "n_1784967022551_c629",
-    "ts": 1784967022.5518398,
-    "level": "info",
-    "category": "toast",
-    "title": "工具即将重启",
-    "body": "将在 1 秒后自动重启",
-    "action_target": "",
-    "read": false
-  },
-  {
-    "id": "n_1784966852320_7648",
-    "ts": 1784966852.3205414,
-    "level": "warning",
-    "category": "toast",
-    "title": "安全关闭",
-    "body": "服务器 / 隧道 / 监控已全部停止，1 秒后退出",
-    "action_target": "",
-    "read": false
-  },
-  {
-    "id": "n_1784966852279_89be",
-    "ts": 1784966852.2794333,
-    "level": "warning",
-    "category": "system",
-    "title": "安全关闭",
-    "body": "服务器 / 隧道 / 监控已全部停止，1 秒后退出",
-    "action_target": "",
-    "read": false
-  },
-  {
-    "id": "n_1784966735508_ab8d",
-    "ts": 1784966735.5089874,
+    "id": "n_1785049009612_1876",
+    "ts": 1785049009.6124065,
     "level": "error",
     "category": "toast",
     "title": "程序遇到未预期错误",
-    "body": "name 'time' is not defined\n\n请查看 logs/bds_manager.log 获取详细信息。",
+    "body": "name 'wrap_scrollable' is not defined\n\n请查看 logs/bds_manager.log 获取详细信息。",
     "action_target": "",
     "read": false
   },
   {
-    "id": "n_1784966706796_a673",
-    "ts": 1784966706.7965708,
+    "id": "n_1785048397453_7f48",
+    "ts": 1785048397.4530728,
+    "level": "warning",
+    "category": "toast",
+    "title": "安全关闭",
+    "body": "服务器 / 隧道 / 监控已全部停止，1 秒后退出",
+    "action_target": "",
+    "read": false
+  },
+  {
+    "id": "n_1785048397430_be2b",
+    "ts": 1785048397.430365,
+    "level": "warning",
+    "category": "system",
+    "title": "安全关闭",
+    "body": "服务器 / 隧道 / 监控已全部停止，1 秒后退出",
+    "action_target": "",
+    "read": false
+  },
+  {
+    "id": "n_1785048012509_acb5",
+    "ts": 1785048012.5090194,
+    "level": "warning",
+    "category": "toast",
+    "title": "安全关闭",
+    "body": "服务器 / 隧道 / 监控已全部停止，1 秒后退出",
+    "action_target": "",
+    "read": false
+  },
+  {
+    "id": "n_1785048012200_c53d",
+    "ts": 1785048012.2008338,
+    "level": "warning",
+    "category": "system",
+    "title": "安全关闭",
+    "body": "服务器 / 隧道 / 监控已全部停止，1 秒后退出",
+    "action_target": "",
+    "read": false
+  },
+  {
+    "id": "n_1785047897760_1a21",
+    "ts": 1785047897.760101,
+    "level": "warning",
+    "category": "toast",
+    "title": "安全关闭",
+    "body": "服务器 / 隧道 / 监控已全部停止，1 秒后退出",
+    "action_target": "",
+    "read": false
+  },
+  {
+    "id": "n_1785047897733_cc4f",
+    "ts": 1785047897.73392,
+    "level": "warning",
+    "category": "system",
+    "title": "安全关闭",
+    "body": "服务器 / 隧道 / 监控已全部停止，1 秒后退出",
+    "action_target": "",
+    "read": false
+  },
+  {
+    "id": "n_1785047878470_4b50",
+    "ts": 1785047878.4709435,
+    "level": "success",
+    "category": "toast",
+    "title": "已保存",
+    "body": "E:/Launcher/服务器/ChmlFrp\\frpc.ini",
+    "action_target": "",
+    "read": false
+  },
+  {
+    "id": "n_1785047877262_ed6d",
+    "ts": 1785047877.2623615,
+    "level": "success",
+    "category": "toast",
+    "title": "已加载",
+    "body": "E:/Launcher/服务器/ChmlFrp\\frpc.ini",
+    "action_target": "",
+    "read": false
+  },
+  {
+    "id": "n_1785047848112_fd37",
+    "ts": 1785047848.1121697,
+    "level": "success",
+    "category": "toast",
+    "title": "已保存",
+    "body": "E:/Launcher/服务器/ChmlFrp\\frpc.ini",
+    "action_target": "",
+    "read": false
+  },
+  {
+    "id": "n_1785047829742_a267",
+    "ts": 1785047829.742052,
+    "level": "info",
+    "category": "toast",
+    "title": "工具即将重启",
+    "body": "将在 1 秒后自动重启",
+    "action_target": "",
+    "read": false
+  },
+  {
+    "id": "n_1785047801822_987d",
+    "ts": 1785047801.822261,
+    "level": "warning",
+    "category": "toast",
+    "title": "内存告警",
+    "body": "内存使用率 50.2%（阈值: 50%）",
+    "action_target": "",
+    "read": false
+  },
+  {
+    "id": "n_1785047479308_691e",
+    "ts": 1785047479.3087373,
+    "level": "warning",
+    "category": "toast",
+    "title": "安全关闭",
+    "body": "服务器 / 隧道 / 监控已全部停止，1 秒后退出",
+    "action_target": "",
+    "read": false
+  },
+  {
+    "id": "n_1785047478744_f23d",
+    "ts": 1785047478.7446792,
+    "level": "warning",
+    "category": "system",
+    "title": "安全关闭",
+    "body": "服务器 / 隧道 / 监控已全部停止，1 秒后退出",
+    "action_target": "",
+    "read": false
+  },
+  {
+    "id": "n_1785047382067_ca54",
+    "ts": 1785047382.0679789,
+    "level": "warning",
+    "category": "toast",
+    "title": "安全关闭",
+    "body": "服务器 / 隧道 / 监控已全部停止，1 秒后退出",
+    "action_target": "",
+    "read": false
+  },
+  {
+    "id": "n_1785047382043_b62c",
+    "ts": 1785047382.0438907,
+    "level": "warning",
+    "category": "system",
+    "title": "安全关闭",
+    "body": "服务器 / 隧道 / 监控已全部停止，1 秒后退出",
+    "action_target": "",
+    "read": false
+  },
+  {
+    "id": "n_1785047262833_afd9",
+    "ts": 1785047262.8338113,
+    "level": "warning",
+    "category": "toast",
+    "title": "安全关闭",
+    "body": "服务器 / 隧道 / 监控已全部停止，1 秒后退出",
+    "action_target": "",
+    "read": false
+  },
+  {
+    "id": "n_1785047262567_824a",
+    "ts": 1785047262.5672157,
+    "level": "warning",
+    "category": "system",
+    "title": "安全关闭",
+    "body": "服务器 / 隧道 / 监控已全部停止，1 秒后退出",
+    "action_target": "",
+    "read": false
+  },
+  {
+    "id": "n_1785047224892_0fbd",
+    "ts": 1785047224.8927925,
+    "level": "success",
+    "category": "toast",
+    "title": "已保存",
+    "body": "allowlist.json 已更新",
+    "action_target": "",
+    "read": false
+  },
+  {
+    "id": "n_1785047148617_c9b7",
+    "ts": 1785047148.618544,
     "level": "error",
     "category": "toast",
     "title": "程序遇到未预期错误",
-    "body": "name 'time' is not defined\n\n请查看 logs/bds_manager.log 获取详细信息。",
+    "body": "PushButton.__init__() takes from 1 to 2 positional arguments but 3 were given\n\n请查看 logs/bds_manager.log 获取详细信息。",
     "action_target": "",
     "read": false
   },
   {
-    "id": "n_1784966452629_0117",
-    "ts": 1784966452.6298912,
-    "level": "warning",
-    "category": "toast",
-    "title": "安全关闭",
-    "body": "服务器 / 隧道 / 监控已全部停止，1 秒后退出",
-    "action_target": "",
-    "read": false
-  },
-  {
-    "id": "n_1784966452557_e454",
-    "ts": 1784966452.5571787,
-    "level": "warning",
-    "category": "system",
-    "title": "安全关闭",
-    "body": "服务器 / 隧道 / 监控已全部停止，1 秒后退出",
-    "action_target": "",
-    "read": false
-  },
-  {
-    "id": "n_1784966407487_080d",
-    "ts": 1784966407.4875922,
-    "level": "warning",
-    "category": "toast",
-    "title": "内存告警",
-    "body": "内存使用率 68.5%（阈值: 50%）",
-    "action_target": "",
-    "read": false
-  },
-  {
-    "id": "n_1784966377437_2770",
-    "ts": 1784966377.4377372,
-    "level": "warning",
-    "category": "toast",
-    "title": "内存告警",
-    "body": "内存使用率 69.5%（阈值: 50%）",
-    "action_target": "",
-    "read": false
-  },
-  {
-    "id": "n_1784966347204_6cb7",
-    "ts": 1784966347.2046273,
-    "level": "warning",
-    "category": "toast",
-    "title": "内存告警",
-    "body": "内存使用率 69.0%（阈值: 50%）",
-    "action_target": "",
-    "read": false
-  },
-  {
-    "id": "n_1784966317142_b14f",
-    "ts": 1784966317.1428235,
-    "level": "warning",
-    "category": "toast",
-    "title": "内存告警",
-    "body": "内存使用率 70.3%（阈值: 50%）",
-    "action_target": "",
-    "read": false
-  },
-  {
-    "id": "n_1784965845481_c287",
-    "ts": 1784965845.4813213,
-    "level": "warning",
-    "category": "toast",
-    "title": "安全关闭",
-    "body": "服务器 / 隧道 / 监控已全部停止，1 秒后退出",
-    "action_target": "",
-    "read": false
-  },
-  {
-    "id": "n_1784965845342_f1be",
-    "ts": 1784965845.3423977,
-    "level": "warning",
-    "category": "system",
-    "title": "安全关闭",
-    "body": "服务器 / 隧道 / 监控已全部停止，1 秒后退出",
-    "action_target": "",
-    "read": false
-  },
-  {
-    "id": "n_1784965843168_e5e1",
-    "ts": 1784965843.168275,
-    "level": "warning",
-    "category": "toast",
-    "title": "内存告警",
-    "body": "内存使用率 62.3%（阈值: 50%）",
-    "action_target": "",
-    "read": false
-  },
-  {
-    "id": "n_1784965813110_4333",
-    "ts": 1784965813.1107605,
-    "level": "warning",
-    "category": "toast",
-    "title": "内存告警",
-    "body": "内存使用率 62.3%（阈值: 50%）",
-    "action_target": "",
-    "read": false
-  },
-  {
-    "id": "n_1784965806022_15b4",
-    "ts": 1784965806.022827,
-    "level": "info",
-    "category": "toast",
-    "title": "工具即将重启",
-    "body": "将在 1 秒后自动重启",
-    "action_target": "",
-    "read": false
-  },
-  {
-    "id": "n_1784965782647_df4f",
-    "ts": 1784965782.6478586,
-    "level": "warning",
-    "category": "toast",
-    "title": "内存告警",
-    "body": "内存使用率 58.5%（阈值: 50%）",
-    "action_target": "",
-    "read": false
-  },
-  {
-    "id": "n_1784964748324_bee6",
-    "ts": 1784964748.3246584,
-    "level": "warning",
-    "category": "toast",
-    "title": "安全关闭",
-    "body": "服务器 / 隧道 / 监控已全部停止，1 秒后退出",
-    "action_target": "",
-    "read": false
-  },
-  {
-    "id": "n_1784964748295_0945",
-    "ts": 1784964748.2956882,
-    "level": "warning",
-    "category": "system",
-    "title": "安全关闭",
-    "body": "服务器 / 隧道 / 监控已全部停止，1 秒后退出",
-    "action_target": "",
-    "read": false
-  },
-  {
-    "id": "n_1784964744828_32bc",
-    "ts": 1784964744.8282373,
-    "level": "warning",
-    "category": "toast",
-    "title": "内存告警",
-    "body": "内存使用率 64.3%（阈值: 50%）",
-    "action_target": "",
-    "read": false
-  },
-  {
-    "id": "n_1784962330945_ee79",
-    "ts": 1784962330.9455695,
-    "level": "warning",
-    "category": "toast",
-    "title": "安全关闭",
-    "body": "服务器 / 隧道 / 监控已全部停止，1 秒后退出",
-    "action_target": "",
-    "read": false
-  },
-  {
-    "id": "n_1784962330920_c15f",
-    "ts": 1784962330.9205685,
-    "level": "warning",
-    "category": "system",
-    "title": "安全关闭",
-    "body": "服务器 / 隧道 / 监控已全部停止，1 秒后退出",
-    "action_target": "",
-    "read": false
-  },
-  {
-    "id": "n_1784962329039_2431",
-    "ts": 1784962329.0395548,
-    "level": "warning",
-    "category": "toast",
-    "title": "内存告警",
-    "body": "内存使用率 54.6%（阈值: 50%）",
-    "action_target": "",
-    "read": false
-  },
-  {
-    "id": "n_1784962322021_8f0a",
-    "ts": 1784962322.021776,
-    "level": "info",
-    "category": "toast",
-    "title": "工具即将重启",
-    "body": "将在 1 秒后自动重启",
-    "action_target": "",
-    "read": false
-  },
-  {
-    "id": "n_1784962317944_bc76",
-    "ts": 1784962317.9441495,
-    "level": "warning",
-    "category": "toast",
-    "title": "内存告警",
-    "body": "内存使用率 53.8%（阈值: 50%）",
-    "action_target": "",
-    "read": false
-  },
-  {
-    "id": "n_1784962310924_7802",
-    "ts": 1784962310.9243128,
-    "level": "info",
-    "category": "toast",
-    "title": "工具即将重启",
-    "body": "将在 1 秒后自动重启",
-    "action_target": "",
-    "read": false
-  },
-  {
-    "id": "n_1784962283770_2c6c",
-    "ts": 1784962283.7701054,
-    "level": "warning",
-    "category": "toast",
-    "title": "内存告警",
-    "body": "内存使用率 53.0%（阈值: 50%）",
-    "action_target": "",
-    "read": false
-  },
-  {
-    "id": "n_1784962276740_ea9d",
-    "ts": 1784962276.7402666,
-    "level": "info",
-    "category": "toast",
-    "title": "工具即将重启",
-    "body": "将在 1 秒后自动重启",
-    "action_target": "",
-    "read": false
-  },
-  {
-    "id": "n_1784962272007_df0e",
-    "ts": 1784962272.0071,
-    "level": "warning",
-    "category": "toast",
-    "title": "内存告警",
-    "body": "内存使用率 51.6%（阈值: 50%）",
-    "action_target": "",
-    "read": false
-  },
-  {
-    "id": "n_1784962133381_f238",
-    "ts": 1784962133.3817976,
-    "level": "warning",
-    "category": "toast",
-    "title": "安全关闭",
-    "body": "服务器 / 隧道 / 监控已全部停止，1 秒后退出",
-    "action_target": "",
-    "read": false
-  },
-  {
-    "id": "n_1784962133049_f930",
-    "ts": 1784962133.049462,
-    "level": "warning",
-    "category": "system",
-    "title": "安全关闭",
-    "body": "服务器 / 隧道 / 监控已全部停止，1 秒后退出",
-    "action_target": "",
-    "read": false
-  },
-  {
-    "id": "n_1784962128050_f020",
-    "ts": 1784962128.0506163,
-    "level": "warning",
-    "category": "toast",
-    "title": "内存告警",
-    "body": "内存使用率 51.7%（阈值: 50%）",
-    "action_target": "",
-    "read": false
-  },
-  {
-    "id": "n_1784962120554_2c78",
-    "ts": 1784962120.554051,
-    "level": "info",
-    "category": "toast",
-    "title": "工具即将重启",
-    "body": "将在 1 秒后自动重启",
-    "action_target": "",
-    "read": false
-  },
-  {
-    "id": "n_1784962110649_4f87",
-    "ts": 1784962110.6499171,
-    "level": "warning",
-    "category": "toast",
-    "title": "内存告警",
-    "body": "内存使用率 50.5%（阈值: 50%）",
-    "action_target": "",
-    "read": false
-  },
-  {
-    "id": "n_1784961846482_e71c",
-    "ts": 1784961846.4825926,
-    "level": "warning",
-    "category": "toast",
-    "title": "安全关闭",
-    "body": "服务器 / 隧道 / 监控已全部停止，1 秒后退出",
-    "action_target": "",
-    "read": false
-  },
-  {
-    "id": "n_1784961845746_3ed2",
-    "ts": 1784961845.7466357,
-    "level": "warning",
-    "category": "system",
-    "title": "安全关闭",
-    "body": "服务器 / 隧道 / 监控已全部停止，1 秒后退出",
-    "action_target": "",
-    "read": false
-  },
-  {
-    "id": "n_1784961843030_15fd",
-    "ts": 1784961843.0307705,
-    "level": "warning",
-    "category": "toast",
-    "title": "内存告警",
-    "body": "内存使用率 51.3%（阈值: 50%）",
-    "action_target": "",
-    "read": false
-  },
-  {
-    "id": "n_1784961835759_1d2d",
-    "ts": 1784961835.7591949,
-    "level": "info",
-    "category": "toast",
-    "title": "工具即将重启",
-    "body": "将在 1 秒后自动重启",
-    "action_target": "",
-    "read": false
-  },
-  {
-    "id": "n_1784961833187_1b4b",
-    "ts": 1784961833.187189,
-    "level": "success",
-    "category": "toast",
-    "title": "设置已保存",
-    "body": "所有配置已自动持久化",
-    "action_target": "",
-    "read": false
-  },
-  {
-    "id": "n_1784961829745_53fb",
-    "ts": 1784961829.7459214,
-    "level": "warning",
-    "category": "toast",
-    "title": "内存告警",
-    "body": "内存使用率 50.0%（阈值: 50%）",
-    "action_target": "",
-    "read": false
-  },
-  {
-    "id": "n_1784961760269_d5f7",
-    "ts": 1784961760.269043,
-    "level": "warning",
-    "category": "toast",
-    "title": "安全关闭",
-    "body": "服务器 / 隧道 / 监控已全部停止，1 秒后退出",
-    "action_target": "",
-    "read": false
-  },
-  {
-    "id": "n_1784961760230_22f0",
-    "ts": 1784961760.2300806,
-    "level": "warning",
-    "category": "system",
-    "title": "安全关闭",
-    "body": "服务器 / 隧道 / 监控已全部停止，1 秒后退出",
-    "action_target": "",
-    "read": false
-  },
-  {
-    "id": "n_1784961697194_92c0",
-    "ts": 1784961697.1941693,
-    "level": "warning",
-    "category": "toast",
-    "title": "安全关闭",
-    "body": "服务器 / 隧道 / 监控已全部停止，1 秒后退出",
-    "action_target": "",
-    "read": false
-  },
-  {
-    "id": "n_1784961697152_28ff",
-    "ts": 1784961697.152161,
-    "level": "warning",
-    "category": "system",
-    "title": "安全关闭",
-    "body": "服务器 / 隧道 / 监控已全部停止，1 秒后退出",
-    "action_target": "",
-    "read": false
-  },
-  {
-    "id": "n_1784961505377_2927",
-    "ts": 1784961505.3775434,
-    "level": "warning",
-    "category": "toast",
-    "title": "内存告警",
-    "body": "内存使用率 51.6%（阈值: 50%）",
-    "action_target": "",
-    "read": false
-  },
-  {
-    "id": "n_1784961475321_4902",
-    "ts": 1784961475.3211648,
-    "level": "warning",
-    "category": "toast",
-    "title": "内存告警",
-    "body": "内存使用率 51.5%（阈值: 50%）",
-    "action_target": "",
-    "read": false
-  },
-  {
-    "id": "n_1784961468220_91b5",
-    "ts": 1784961468.22083,
-    "level": "info",
-    "category": "toast",
-    "title": "工具即将重启",
-    "body": "将在 1 秒后自动重启",
-    "action_target": "",
-    "read": false
-  },
-  {
-    "id": "n_1784961463301_ed67",
-    "ts": 1784961463.3017676,
-    "level": "warning",
-    "category": "toast",
-    "title": "内存告警",
-    "body": "内存使用率 50.3%（阈值: 50%）",
-    "action_target": "",
-    "read": false
-  },
-  {
-    "id": "n_1784961280722_87c8",
-    "ts": 1784961280.7227616,
-    "level": "warning",
-    "category": "toast",
-    "title": "安全关闭",
-    "body": "服务器 / 隧道 / 监控已全部停止，1 秒后退出",
-    "action_target": "",
-    "read": false
-  },
-  {
-    "id": "n_1784961280693_95e4",
-    "ts": 1784961280.6933358,
-    "level": "warning",
-    "category": "system",
-    "title": "安全关闭",
-    "body": "服务器 / 隧道 / 监控已全部停止，1 秒后退出",
-    "action_target": "",
-    "read": false
-  },
-  {
-    "id": "n_1784961206326_fa33",
-    "ts": 1784961206.3266902,
+    "id": "n_1785047147332_7711",
+    "ts": 1785047147.332137,
     "level": "error",
     "category": "toast",
     "title": "程序遇到未预期错误",
-    "body": "name '_FI' is not defined\n\n请查看 logs/bds_manager.log 获取详细信息。",
+    "body": "PushButton.__init__() takes from 1 to 2 positional arguments but 3 were given\n\n请查看 logs/bds_manager.log 获取详细信息。",
     "action_target": "",
     "read": false
   },
   {
-    "id": "n_1784961029997_25b2",
-    "ts": 1784961029.997562,
+    "id": "n_1785047144548_9017",
+    "ts": 1785047144.5482087,
+    "level": "error",
+    "category": "toast",
+    "title": "程序遇到未预期错误",
+    "body": "PushButton.__init__() takes from 1 to 2 positional arguments but 3 were given\n\n请查看 logs/bds_manager.log 获取详细信息。",
+    "action_target": "",
+    "read": false
+  },
+  {
+    "id": "n_1785046915814_9ccc",
+    "ts": 1785046915.8147705,
     "level": "warning",
     "category": "toast",
     "title": "安全关闭",
@@ -560,8 +250,8 @@
     "read": false
   },
   {
-    "id": "n_1784961029970_d00b",
-    "ts": 1784961029.9700701,
+    "id": "n_1785046915780_0c48",
+    "ts": 1785046915.7807403,
     "level": "warning",
     "category": "system",
     "title": "安全关闭",
@@ -570,182 +260,82 @@
     "read": false
   },
   {
-    "id": "n_1784961014316_09c1",
-    "ts": 1784961014.3163931,
-    "level": "success",
+    "id": "n_1785046779119_18f5",
+    "ts": 1785046779.1195223,
+    "level": "warning",
     "category": "toast",
-    "title": "已是最新版本",
-    "body": "v3.03.00（远程: v3.03.00）",
+    "title": "安全关闭",
+    "body": "服务器 / 隧道 / 监控已全部停止，1 秒后退出",
     "action_target": "",
     "read": false
   },
   {
-    "id": "n_1784961006417_3dea",
-    "ts": 1784961006.417023,
+    "id": "n_1785046779085_2e92",
+    "ts": 1785046779.0855076,
+    "level": "warning",
+    "category": "system",
+    "title": "安全关闭",
+    "body": "服务器 / 隧道 / 监控已全部停止，1 秒后退出",
+    "action_target": "",
+    "read": false
+  },
+  {
+    "id": "n_1785046484462_5ebe",
+    "ts": 1785046484.4621642,
+    "level": "warning",
+    "category": "toast",
+    "title": "安全关闭",
+    "body": "服务器 / 隧道 / 监控已全部停止，1 秒后退出",
+    "action_target": "",
+    "read": false
+  },
+  {
+    "id": "n_1785046483578_3ab4",
+    "ts": 1785046483.5785084,
+    "level": "warning",
+    "category": "system",
+    "title": "安全关闭",
+    "body": "服务器 / 隧道 / 监控已全部停止，1 秒后退出",
+    "action_target": "",
+    "read": false
+  },
+  {
+    "id": "n_1785046452338_762a",
+    "ts": 1785046452.3400044,
     "level": "info",
     "category": "toast",
-    "title": "BDS Manager v3.03.00",
-    "body": "就绪，等待操作（Ctrl+K 打开命令面板）",
+    "title": "无变更",
+    "body": "当前设置与磁盘一致",
     "action_target": "",
     "read": false
   },
   {
-    "id": "n_1784961006402_73f5",
-    "ts": 1784961006.4022536,
+    "id": "n_1785046441795_0674",
+    "ts": 1785046441.7957025,
     "level": "info",
     "category": "toast",
-    "title": "备份状态",
-    "body": "最近: manual_onelife_20260723_231321.zip（共 1 个）",
+    "title": "无变更",
+    "body": "当前设置与磁盘一致",
     "action_target": "",
     "read": false
   },
   {
-    "id": "n_1784961006377_a5a5",
-    "ts": 1784961006.377966,
-    "level": "info",
+    "id": "n_1785046155639_0df7",
+    "ts": 1785046155.639914,
+    "level": "warning",
     "category": "toast",
-    "title": "系统资源",
-    "body": "CPU 21%  内存 43%",
+    "title": "安全关闭",
+    "body": "服务器 / 隧道 / 监控已全部停止，1 秒后退出",
     "action_target": "",
     "read": false
   },
   {
-    "id": "n_1784961006359_bf2a",
-    "ts": 1784961006.3592348,
-    "level": "info",
-    "category": "toast",
-    "title": "服务端: bedrock_server.exe",
-    "body": "可执行文件就绪",
-    "action_target": "",
-    "read": false
-  },
-  {
-    "id": "n_1784961006340_4f4f",
-    "ts": 1784961006.340198,
-    "level": "success",
-    "category": "toast",
-    "title": "服务器: Server",
-    "body": "目录就绪",
-    "action_target": "",
-    "read": false
-  },
-  {
-    "id": "n_1784960999147_88fd",
-    "ts": 1784960999.1474175,
-    "level": "info",
-    "category": "toast",
-    "title": "工具即将重启",
-    "body": "将在 1 秒后自动重启",
-    "action_target": "",
-    "read": false
-  },
-  {
-    "id": "n_1784960984575_d0d7",
-    "ts": 1784960984.575323,
-    "level": "info",
-    "category": "toast",
-    "title": "已重置",
-    "body": "打开命令面板 → Ctrl+K",
-    "action_target": "",
-    "read": false
-  },
-  {
-    "id": "n_1784960946614_8fed",
-    "ts": 1784960946.6140084,
-    "level": "success",
-    "category": "toast",
-    "title": "已是最新版本",
-    "body": "v3.03.00（远程: v3.03.00）",
-    "action_target": "",
-    "read": false
-  },
-  {
-    "id": "n_1784960940900_3213",
-    "ts": 1784960940.900505,
-    "level": "info",
-    "category": "toast",
-    "title": "BDS Manager v3.03.00",
-    "body": "就绪，等待操作（Ctrl+K 打开命令面板）",
-    "action_target": "",
-    "read": false
-  },
-  {
-    "id": "n_1784960940883_0aa1",
-    "ts": 1784960940.8834975,
-    "level": "info",
-    "category": "toast",
-    "title": "备份状态",
-    "body": "最近: manual_onelife_20260723_231321.zip（共 1 个）",
-    "action_target": "",
-    "read": false
-  },
-  {
-    "id": "n_1784960940860_648a",
-    "ts": 1784960940.860496,
-    "level": "info",
-    "category": "toast",
-    "title": "系统资源",
-    "body": "CPU 16%  内存 41%",
-    "action_target": "",
-    "read": false
-  },
-  {
-    "id": "n_1784960940841_a827",
-    "ts": 1784960940.8414748,
-    "level": "info",
-    "category": "toast",
-    "title": "服务端: bedrock_server.exe",
-    "body": "可执行文件就绪",
-    "action_target": "",
-    "read": false
-  },
-  {
-    "id": "n_1784960940185_0537",
-    "ts": 1784960940.185636,
-    "level": "success",
-    "category": "toast",
-    "title": "服务器: Server",
-    "body": "目录就绪",
-    "action_target": "",
-    "read": false
-  },
-  {
-    "id": "n_1784960933224_9950",
-    "ts": 1784960933.224682,
-    "level": "info",
-    "category": "toast",
-    "title": "工具即将重启",
-    "body": "将在 1 秒后自动重启",
-    "action_target": "",
-    "read": false
-  },
-  {
-    "id": "n_1784960818511_de7b",
-    "ts": 1784960818.511433,
-    "level": "success",
-    "category": "toast",
-    "title": "导出成功",
-    "body": "bds_manager_config_export.json",
-    "action_target": "",
-    "read": false
-  },
-  {
-    "id": "n_1784960810952_9a3b",
-    "ts": 1784960810.9521675,
-    "level": "success",
-    "category": "toast",
-    "title": "已更新",
-    "body": "刷新仪表盘 → Ctrl+Shift+F5",
-    "action_target": "",
-    "read": false
-  },
-  {
-    "id": "n_1784960795609_8a1c",
-    "ts": 1784960795.6091342,
-    "level": "success",
-    "category": "toast",
-    "title": "已更新",
-    "body": "清屏控制台 → Ctrl+Shift+L",
+    "id": "n_1785046155613_5bf9",
+    "ts": 1785046155.6136825,
+    "level": "warning",
+    "category": "system",
+    "title": "安全关闭",
+    "body": "服务器 / 隧道 / 监控已全部停止，1 秒后退出",
     "action_target": "",
     "read": false
   }

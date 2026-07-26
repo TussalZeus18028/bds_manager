@@ -13,7 +13,7 @@ def network_error_text(exc) -> tuple[str, str, str]:
         return "未知网络错误", "Unknown network error", "未知网络错误\n(Unknown network error)"
     try:
         msg = str(exc)
-    except Exception:
+    except (TypeError, UnicodeError):
         msg = repr(exc)
     lower = msg.lower()
     zh, en = "", ""

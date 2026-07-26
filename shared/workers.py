@@ -56,5 +56,6 @@ class SimpleWorker(BaseWorker):
             result = self._func()
             self.finished.emit(True, str(result) if result else "完成")
         except Exception:
+            # 通用 Worker: 捕获任意 func() 抛出的异常，上报后不崩溃
             self._emit_log(traceback.format_exc(), "ERROR")
             self.finished.emit(False, traceback.format_exc())

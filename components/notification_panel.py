@@ -15,6 +15,7 @@
 
 import time
 from datetime import datetime
+
 from PySide6.QtCore import Qt, Signal, QPoint, QRect, QEvent, QPropertyAnimation, QEasingCurve, QSize, QTimer
 from PySide6.QtGui import QPainter, QColor, QFont, QFontMetrics, QPen, QBrush, QIcon, QCursor
 from PySide6.QtWidgets import (
@@ -359,8 +360,8 @@ class NotificationDrawer(QWidget):
             # event.position() 是相对 obj（主窗口）的坐标（PySide6 推荐）
             try:
                 click_pos = event.position().toPoint()
-            except Exception:
-                click_pos = event.pos()
+            except (AttributeError, TypeError):
+                click_pos = event.pos()  # Qt5 降级
             drawer_topleft = self.mapTo(self.parent(), QPoint(0, 0))
             drawer_rect = QRect(drawer_topleft, self.size())
             if not drawer_rect.contains(click_pos):
@@ -565,8 +566,8 @@ class NotificationDrawer(QWidget):
             try:
                 from backend.notifications import _STORE
                 _STORE.mark_read(n.id)
-            except Exception:
-                pass
+            except (AttributeError, RuntimeError):
+                pass  # 通知存储未就绪
             n.read = True
         # v3.02.01: 单击不关闭抽屉，只展开详情；用户继续浏览其他通知
         # 双击或点箭头才跳转 + 关闭
@@ -582,7 +583,7 @@ class NotificationDrawer(QWidget):
                 from backend.notifications import _STORE
                 _STORE.mark_read(n.id)
                 n.read = True
-            except Exception:
+            except (ImportError, AttributeError, RuntimeError):
                 pass
         # 关闭抽屉
         self.hide_drawer()

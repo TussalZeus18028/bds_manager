@@ -95,7 +95,7 @@ class WorldPage(QWidget):
         self._initialized = False
         self._refresh_timer = None
         self._auto_backup_timer = None
-        inner, layout = wrap_scrollable(self, spacing=12)
+        inner, layout, _scroll = wrap_scrollable(self, spacing=12)
 
         # ── 世界详情卡 ──
         self._detail_card = CardWidget(inner)
@@ -124,7 +124,7 @@ class WorldPage(QWidget):
         self._auto_toggle = ToggleButton("自动备份", action_card)
         self._auto_toggle.setChecked(config_mgr.get("auto_backup_enabled", True))
         self._auto_toggle.toggled.connect(
-            lambda v: config_mgr.set("auto_backup_enabled", v)
+            lambda v: (config_mgr.set("auto_backup_enabled", v), config_mgr.save())
         )
         self._restore_btn = PushButton("还原选中", action_card, FluentIcon.CANCEL)
         self._restore_btn.setEnabled(False)
@@ -347,7 +347,7 @@ class WorldPage(QWidget):
                             info_lines.append(f"最大玩家: {v}")
                         elif k == "server-port":
                             info_lines.append(f"端口: {v}")
-            except Exception:
+            except (OSError, UnicodeDecodeError):
                 pass
         if not info_lines:
             info_lines.append("(未检测到 server.properties)")

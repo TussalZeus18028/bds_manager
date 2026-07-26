@@ -13,8 +13,9 @@ from datetime import datetime
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QTextCharFormat, QColor, QTextCursor, QTextDocument
 from PySide6.QtWidgets import QHBoxLayout, QFileDialog, QTextEdit
+from shared.toast import toast_success, toast_error
 from qfluentwidgets import (
-    FluentIcon, InfoBar, LineEdit, PushButton, CheckBox,
+    FluentIcon, LineEdit, PushButton, CheckBox,
 )
 
 from shared.config import LOG_DIR
@@ -143,6 +144,6 @@ class ConsoleSearchBar(QHBoxLayout):
             try:
                 with open(path, "w", encoding="utf-8") as f:
                     f.write(self._log.toPlainText())
-                InfoBar.success(title="导出完成", content=os.path.basename(path), parent=self._parent, duration=3000)
-            except Exception as e:
-                InfoBar.error(title="导出失败", content=str(e), parent=self._parent, duration=3000)
+                toast_success("导出完成", os.path.basename(path), self._parent)
+            except OSError as e:
+                toast_error("导出失败", str(e), self._parent)

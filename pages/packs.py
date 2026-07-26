@@ -125,8 +125,8 @@ def _get_world_path(cfg) -> str:
                     if line.startswith("level-name="):
                         level_name = line.split("=", 1)[1]
                         break
-        except Exception:
-            pass
+        except (OSError, UnicodeDecodeError):
+            pass  # server.properties 不可用，降级默认
     return os.path.join(ctx.worlds_dir, level_name)
 
 
@@ -232,8 +232,8 @@ class PackInfoDialog(QDialog):
                     hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE,
                     ctypes.byref(ctypes.c_int(1)), ctypes.sizeof(ctypes.c_int),
                 )
-            except Exception:
-                pass
+            except (OSError, AttributeError):
+                pass  # DWM 不可用（旧版 Windows）
 
         if isDarkTheme():
             bg, fg, sub, dim, card_bg, accent = "#1e1e1e", "#d4d4d4", "#888", "#666", "#25282d", "#0dc5d4"
@@ -352,7 +352,7 @@ class PacksPage(QWidget):
         self._initialized = False
         self._sections: dict = {}
         self._main_window = parent
-        inner, layout = wrap_scrollable(self, spacing=12)
+        inner, layout, _scroll = wrap_scrollable(self, spacing=12)
         for key, title in [("resource", "资源包"), ("behavior", "行为包")]:
             card = self._build_section(inner, key, title)
             layout.addWidget(card)
@@ -367,8 +367,8 @@ class PacksPage(QWidget):
                 if refresh_fn:
                     try:
                         refresh_fn()
-                    except Exception:
-                        pass
+                    except (AttributeError, RuntimeError):
+                        pass  # refresh_theme 不可用
         else:
             self._refresh_all_themes()
         super().showEvent(event)

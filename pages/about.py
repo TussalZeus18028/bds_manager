@@ -21,7 +21,7 @@ class AboutPage(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        inner, layout = wrap_scrollable(self, spacing=16)
+        inner, layout, _scroll = wrap_scrollable(self, spacing=16)
 
         # ── 标题 ──
         import main
