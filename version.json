@@ -2,8 +2,8 @@
     "version": "3.03.04",
     "release_date": "2026-07-26",
     "download_url": "https://github.com/TussalZeus18028/bds_manager/releases/download/v3.03.04/bds_manager_v3.03.04.zip",
-    "sha256": "",
-    "file_size": 0,
+    "sha256": "f19034d44227dc205320b5bf578469089979e4367bcae696fbbe14a293e2d50b",
+    "file_size": 154629,
     "min_compatible_version": "2.00.00",
     "changelog": "## v3.03.04 (2026-07-26)\n\n### 新功能\n- 配置页 JSON 文件原生编辑器（白名单/权限/速率限制）：无边框 Fluent Design 弹窗 + 半透明\n- 高 DPI 缩放适配开关（设置页，PassThrough 策略，重启生效）\n- bds_manager.py 一键启动自动安装缺失依赖\n\n### 主题\n- Win11 原生暗色标题栏（DWMWA_USE_IMMERSIVE_DARK_MODE）\n- 编辑对话框完整深浅色适配 + 圆角 + 半透明\n- 深浅色样式表统一到 shared/theme.py\n\n### Bug 修复\n- 深色模式重启丢失（9 处 config_mgr.set 缺 save）\n- 切换主题最小化（删除错误的 SetWindowPos）\n- 部分 Windows SSL 证书缺失致 GitHub API 失败\n- 配置预设 _apply_preset 崩溃（解包顺序错误）\n- 保存日志刷屏（2 秒节流）\n- 升级页文字变化后跳回顶部（滚动位置保存/恢复）\n- 停止服务器无二次确认（加弹窗）\n- 端口检测无超时阻塞 GUI（加 3 秒 timeout）\n- frpc.ini 编辑按钮文字图标重叠 / 点击后失框\n- 控制台过滤标签与复选框重叠\n- 设置标签被截断（180→200px）\n\n### 代码质量\n- 30+ 处 except Exception 窄化为精确类型\n- main.py 拆分：splash / server_lifecycle\n- 重复样式/函数提取：shared/theme.py + shared/utils.py\n- 版本号集中到 shared/version.py 单一源\n- Toast 统一 / 导入整理 / 细节打磨（PEP 8 / 无冗余 import）\n- config_mgr.save 重复调用消除\n- bds_manager.py 依赖自检缓存"
 }
