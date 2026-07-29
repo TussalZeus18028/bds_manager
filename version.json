@@ -2,8 +2,8 @@
     "version": "3.03.04",
     "release_date": "2026-07-29",
     "download_url": "https://github.com/TussalZeus18028/bds_manager/releases/download/v3.03.04/bds_manager_v3.03.04.zip",
-    "sha256": "",
-    "file_size": 0,
+    "sha256": "9511a4098414ae0cb9c321faaaf02bfab25b6724fb8140723aa48f03e34a587e",
+    "file_size": 168875,
     "min_compatible_version": "2.00.00",
     "changelog": "## v3.03.04 (2026-07-29)\n\n### 新功能\n- 首次启动安装引导：检测无服务器时自动弹窗，指引下载安装流程\n- 停服后输入 start 直接启动服务器\n- 升级页下载/安装拆分：下载完成不动，弹出安装卡片选路径，智能判断升级/新装\n- 安装后自动更新 server_dir 配置\n- 控制台命令预设改为 ComboBox 下拉\n- 命令历史持久化（重启保留）\n- 控制台输入框旁文件夹按钮（打开服务器目录）\n- 错误码溢出修复（0xC0000005 等 Windows 崩溃码）\n\n### Bug 修复\n- 资源包缺失致服务器启动崩溃（InstallWorker skip 逻辑修复）\n- 配置页 server.properties 编辑器加重新加载/重置按钮\n- 过滤栏行数统计 + 显示全部按钮\n- 阈值告警不弹窗修复\n- 数十处静默吞异常改为 logger 记录\n- ByteOrderMark / 配置落盘白名单缺失修复\n- 托盘关闭丢配置（加 config_mgr.save）\n- 手动停止后误触发自动重启\n- 优雅停服从未生效（graceful=False 写死）\n- shortcuts.py 安全键用 ApplicationShortcut\n- 控制台字号跟随全局设置\n- 主题选择器中文标签\n\n### UI 优化\n- 所有 Unicode emoji 替换为清洁文字\n- 导航栏标签显示快捷键 (Ctrl+1~7)\n- 设置页保存按钮重命名避免困惑\n- 下载确认弹窗防误触\n- 手动版本输入框加宽\n- QSplitter 手柄 6→10px\n- 模板警告措辞加强"
 }
