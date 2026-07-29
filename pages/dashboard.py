@@ -180,7 +180,7 @@ class StatusCard(CardWidget):
         header.addStretch()
         # v3.02.01 fix: 主题感知的次要文字色（之前 #888 写死，浅色主题下看不见）
         sub_color = "#888" if isDarkTheme() else "#666"
-        self._status_badge = BodyLabel("● 未运行", self)
+        self._status_badge = BodyLabel("未运行", self)
         self._status_badge.setStyleSheet(f"color: {sub_color};")
         header.addWidget(self._status_badge)
         layout.addLayout(header)
@@ -248,7 +248,7 @@ class StatusCard(CardWidget):
             if self._last_output_time > 0:
                 idle = time.time() - self._last_output_time
                 if idle > 60:
-                    self._stale_label.setText(f"⚠️ 已 {int(idle)}s 无输出，可能卡死")
+                    self._stale_label.setText(f"已 {int(idle)}s 无输出，可能卡死")
                     self._stale_label.setVisible(True)
                 else:
                     self._stale_label.setVisible(False)
@@ -285,7 +285,7 @@ class StatusCard(CardWidget):
 
     def set_running_ui(self, running: bool):
         if running:
-            self._status_badge.setText("● 运行中")
+            self._status_badge.setText("运行中")
             self._status_badge.setStyleSheet("color: #4CAF50;")
             self._start_btn.setEnabled(False)
             self._stop_btn.setEnabled(True)
@@ -293,7 +293,7 @@ class StatusCard(CardWidget):
             self._start_time = time.time()
             self._last_output_time = time.time()
         else:
-            self._status_badge.setText("● 未运行")
+            self._status_badge.setText("未运行")
             # v3.02.01 fix: 主题感知次要色
             sub_color = "#888" if isDarkTheme() else "#666"
             self._status_badge.setStyleSheet(f"color: {sub_color};")

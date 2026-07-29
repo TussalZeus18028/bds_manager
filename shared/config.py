@@ -44,7 +44,7 @@ def get_server_dir():
         try:
             with open(CONFIG_FILE, "r", encoding="utf-8") as f:
                 cfg = json.load(f)
-            server_dir = cfg.get("server_dir")
+            server_dir = cfg.get("server_dir", "")
             if server_dir and os.path.isabs(server_dir):
                 return server_dir
             elif server_dir:
@@ -58,74 +58,98 @@ def get_server_dir():
 
 # ---------- 服务器路径上下文 ----------
 class ServerContext:
-    """集中管理所有服务器文件路径。"""
+    """集中管理所有服务器文件路径，根据 server_type 动态切换 BDS / LL 目录。"""
 
-    def __init__(self, server_dir):
-        self.server_dir = server_dir
-        self.server_properties = os.path.join(server_dir, "server.properties")
-        self.allowlist_file = os.path.join(server_dir, "allowlist.json")
-        self.permissions_file = os.path.join(server_dir, "permissions.json")
-        self.packet_limit_file = os.path.join(server_dir, "packetlimitconfig.json")
-        self.worlds_dir = os.path.join(server_dir, "worlds")
-        self.resource_packs_dir = os.path.join(server_dir, "resource_packs")
-        self.behavior_packs_dir = os.path.join(server_dir, "behavior_packs")
-        self.backup_dir = os.path.join(server_dir, "backups")
+    def __init__(self, bds_dir: str, ll_dir: str = ""):
+        self._bds_dir = bds_dir
+        self._ll_dir = ll_dir or bds_dir  # 未配置 LL 则回退到 BDS 目录
 
-    def update(self, server_dir):
-        self.__init__(server_dir)
-        for d in [self.worlds_dir, self.resource_packs_dir, self.behavior_packs_dir, self.backup_dir]:
-            os.makedirs(d, exist_ok=True)
+    def _active_dir(self) -> str:
+        stype = config_mgr.get("server_type", "bds")  # 运行时读取，保证切换即时生效
+        return self._ll_dir if stype == "ll" else self._bds_dir
 
     @property
-    def SERVER_DIR(self):
-        return self.server_dir
+    def server_dir(self) -> str:
+        return self._active_dir()
 
     @property
-    def SERVER_PROPERTIES(self):
-        return self.server_properties
+    def server_properties(self) -> str:
+        return os.path.join(self._active_dir(), "server.properties")
 
     @property
-    def ALLOWLIST_FILE(self):
-        return self.allowlist_file
+    def allowlist_file(self) -> str:
+        return os.path.join(self._active_dir(), "allowlist.json")
 
     @property
-    def PERMISSIONS_FILE(self):
-        return self.permissions_file
+    def permissions_file(self) -> str:
+        return os.path.join(self._active_dir(), "permissions.json")
 
     @property
-    def PACKET_LIMIT_FILE(self):
-        return self.packet_limit_file
+    def packet_limit_file(self) -> str:
+        return os.path.join(self._active_dir(), "packetlimitconfig.json")
 
     @property
-    def WORLDS_DIR(self):
-        return self.worlds_dir
+    def worlds_dir(self) -> str:
+        return os.path.join(self._active_dir(), "worlds")
 
     @property
-    def RESOURCE_PACKS_DIR(self):
-        return self.resource_packs_dir
+    def resource_packs_dir(self) -> str:
+        return os.path.join(self._active_dir(), "resource_packs")
 
     @property
-    def BEHAVIOR_PACKS_DIR(self):
-        return self.behavior_packs_dir
+    def behavior_packs_dir(self) -> str:
+        return os.path.join(self._active_dir(), "behavior_packs")
 
     @property
-    def BACKUP_DIR(self):
-        return self.backup_dir
+    def backup_dir(self) -> str:
+        return os.path.join(self._active_dir(), "backups")
+
+    # ── 原始目录访问（脱离 server_type 判断时使用）──
+    @property
+    def bds_dir(self) -> str:
+        return self._bds_dir
+
+    @property
+    def ll_dir(self) -> str:
+        return self._ll_dir
 
 
 # 全局上下文实例（惰性加载，由 main.py 显式初始化）
 _ctx: ServerContext | None = None
 
 
-def init_context(server_dir: str | None = None):
-    """初始化全局 ServerContext。"""
+def _resolve_ll_dir(ll_dir: str) -> str:
+    """将相对/绝对 LL 目录解析为绝对路径。"""
+    if not ll_dir:
+        return ""
+    if os.path.isabs(ll_dir):
+        return ll_dir
+    return os.path.join(SCRIPT_DIR, ll_dir)
+
+
+def init_context(server_dir: str | None = None, ll_dir: str | None = None):
+    """初始化全局 ServerContext（支持 BDS + LL 双目录）。"""
     global _ctx
     if server_dir is None:
         server_dir = get_server_dir()
-    _ctx = ServerContext(server_dir)
-    logger.info("服务器目录: %s", _ctx.server_dir)
+    if ll_dir is None:
+        ll_dir = config_mgr.get("ll_server_dir", "")
+    ll_abs = _resolve_ll_dir(ll_dir)
+    _ctx = ServerContext(server_dir, ll_abs)
+    stype = config_mgr.get("server_type", "bds")
+    if ll_abs and stype == "ll":
+        logger.info("服务器目录: %s (LL: %s)", _ctx._bds_dir, ll_abs)
+    else:
+        logger.info("服务器目录: %s (%s)", _ctx._bds_dir, "BDS+LL" if stype == "ll" else "BDS")
     os.makedirs(LOG_DIR, exist_ok=True)
     return _ctx
+
+
+def refresh_context_from_config():
+    """根据当前配置重新初始化 ServerContext（用于 server_type 切换后刷新路径）。"""
+    bds = get_server_dir()
+    ll = config_mgr.get("ll_server_dir", "")
+    init_context(bds, ll)
 
 
 def get_context() -> ServerContext:
@@ -154,6 +178,7 @@ DEFAULT_CONFIG = {
     "frpc_path": "",
     "mem_warn_threshold": 70,
     "max_restart_retries": 5,
+    "first_launch_done": False,         # 首次启动引导
     "auto_check_update": True,
     "multi_dl_enabled": True,
     "show_startup_toasts": True,
@@ -168,6 +193,9 @@ DEFAULT_CONFIG = {
     "window_height": 800,
     "github_auth_enabled": False,
     "github_token": "",
+    "server_root_dir": "",            # lip/BDS 一键部署目标目录
+    "ll_server_dir": "",              # LeviLamina 服务器目录（含 bedrock_server_mod.exe）
+    "server_type": "bds",             # 服务器类型: "bds" 或 "ll"
     # 新增（v3.1）
     "font_size": 12,                 # 全局 UI 字号
     "follow_system_theme": False,    # 监听 OS 主题变化
@@ -209,12 +237,14 @@ BOOL_FIELDS = {
     "multi_dl_enabled", "show_startup_toasts", "github_auth_enabled",
     "follow_system_theme", "console_show_timestamps",
     "enable_bds_process_monitor", "graceful_shutdown",
-    "console_auto_scroll", "close_to_tray",
+    "console_auto_scroll", "close_to_tray", "first_launch_done",
 }
+# 注意：server_root_dir / ll_server_dir / server_type 是字符串，不是 bool
 
 STR_CHOICES = {
     "theme": {"dark", "light", "auto"},
     "toast_style": {"original", "modern"},
+    "server_type": {"bds", "ll"},
 }
 
 
@@ -310,6 +340,7 @@ class ConfigManager:
             "toast_duration_success", "toast_duration_info",
             "toast_queue_delay", "toast_opacity", "toast_style",
             "window_width", "window_height",
+            "server_root_dir", "ll_server_dir", "server_type",
             "github_auth_enabled", "github_token",
             # v3.1 新增
             "font_size", "follow_system_theme",
@@ -323,6 +354,8 @@ class ConfigManager:
             "close_to_tray", "window_background_opacity",
             # v3.03.02 新增
             "high_dpi",
+            # v3.03.04 新增
+            "first_launch_done", "cmd_history",
         ]
         data = {k: self.values.get(k, DEFAULT_CONFIG.get(k)) for k in keys}
         os.makedirs(SCRIPT_DIR, exist_ok=True)

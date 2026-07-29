@@ -27,9 +27,23 @@ from qfluentwidgets import (
     FluentIcon, ToggleButton, InfoBar, MessageBox, isDarkTheme,
 )
 
-from shared.config import get_context
+from shared.config import config_mgr, get_context, SCRIPT_DIR
 from shared.toast import toast_success, toast_error, toast_info, toast_warning
 from components.widgets import NoScrollSpinBox  # v3.02.01: 滚轮防护
+
+def _get_config_dir() -> str:
+    """返回配置文件所在目录（LL 模式用 LL 目录，否则用 BDS 目录）。"""
+    import os
+    stype = config_mgr.get("server_type", "bds")
+    if stype == "ll":
+        d = config_mgr.get("ll_server_dir", "")
+        if d:
+            return os.path.join(SCRIPT_DIR, d) if not os.path.isabs(d) else d
+    return get_context().server_dir
+
+
+def _get_server_properties_path() -> str:
+    return os.path.join(_get_config_dir(), "server.properties")
 
 # 默认 server.properties 模板
 _DEFAULT_PROPERTIES = """#server.properties
@@ -302,15 +316,12 @@ class ConfigPage(QWidget):
 
     # ---------- 加载 ----------
     def _load_properties(self):
-        ctx = get_context()
-        fp = ctx.server_properties
+        fp = _get_server_properties_path()
         if not os.path.exists(fp):
-            w = MessageBox("配置文件不存在",
-                f"server.properties 不存在：\n{fp}\n\n是否创建默认配置文件？",
-                self.window())
-            w.yesSignal.connect(lambda: (self._create_default_properties(), self._load_properties()))
-            w.cancelSignal.connect(w.close)
-            w.show()
+            # 不弹窗、不自动创建——服务器首次启动会自动生成
+            stype = config_mgr.get("server_type", "bds")
+            label = "BDS + LL" if stype == "ll" else "纯 BDS"
+            toast_warning("配置文件未找到", f"{label} 的 server.properties 不存在\n启动一次服务器即可自动生成", self.window())
             return
         try:
             with open(fp, "r", encoding="utf-8") as f:
@@ -332,7 +343,8 @@ class ConfigPage(QWidget):
             widget.setText(value)
         elif typ == "int":
             try: widget.setValue(int(value))
-            except (ValueError, TypeError): pass
+            except (ValueError, TypeError):
+                logger.debug("配置项 int 转换失败: value=%r", value)
         elif typ == "bool":
             val = value if isinstance(value, bool) else str(value).lower() == "true"
             widget.setChecked(val)
@@ -344,7 +356,10 @@ class ConfigPage(QWidget):
 
     def _create_default_properties(self):
         ctx = get_context()
-        fp = ctx.server_properties
+        fp = _get_server_properties_path()
+        if not fp or not os.path.isabs(fp):
+            toast_error("服务器目录未配置", "请先在设置 → 服务器 中配置目录", self.window())
+            return
         try:
             os.makedirs(os.path.dirname(fp), exist_ok=True)
             with open(fp, "w", encoding="utf-8") as f:
@@ -387,18 +402,18 @@ class ConfigPage(QWidget):
         """读取磁盘上当前 server.properties 的所有 key -> 值。"""
         ctx = get_context()
         out = {}
-        if not os.path.exists(ctx.server_properties):
+        if not os.path.exists(_get_server_properties_path()):
             return out
         try:
-            with open(ctx.server_properties, encoding="utf-8") as f:
+            with open(_get_server_properties_path(), encoding="utf-8") as f:
                 for line in f:
                     line = line.strip()
                     if not line or line.startswith("#") or "=" not in line:
                         continue
                     k, v = line.split("=", 1)
                     out[k] = v
-        except (OSError, UnicodeDecodeError, ValueError):
-            pass  # 文件损坏或编码异常，返回空字典
+        except (OSError, UnicodeDecodeError, ValueError) as e:
+            logger.warning("server.properties 读取失败: %s", e)
         return out
 
     # ---------- Diff ----------
@@ -422,7 +437,7 @@ class ConfigPage(QWidget):
     def _save(self, apply: bool = False):
         ok, err = self._validate()
         if not ok:
-            self._error_label.setText(f"❌ {err}")
+            self._error_label.setText(f"{err}")
             toast_error("配置校验失败", err, self.window())
             return
         self._error_label.setText("")
@@ -435,7 +450,7 @@ class ConfigPage(QWidget):
             if key in values:
                 lines.append(f"{key}={values[key]}")
         try:
-            with open(ctx.server_properties, "w", encoding="utf-8") as f:
+            with open(_get_server_properties_path(), "w", encoding="utf-8") as f:
                 f.write("# server.properties\n" + "\n".join(lines) + "\n")
         except Exception as e:
             toast_error("保存失败", str(e), self.window())
@@ -460,8 +475,8 @@ class ConfigPage(QWidget):
             toast_success("保存成功", "server.properties 已更新，重启服务器后生效", self.window())
 
     def _open_file(self, filename: str):
-        ctx = get_context()
-        fp = os.path.join(ctx.server_dir, filename)
+        cfg_dir = _get_config_dir()
+        fp = os.path.join(cfg_dir, filename)
         if not os.path.exists(fp):
             toast_error("文件不存在", fp, self.window())
             return
@@ -604,7 +619,7 @@ class ConfigPage(QWidget):
                 sock.settimeout(3)
                 sock.bind(("0.0.0.0", port))
                 sock.close()
-                msgs.append(f"✅ {label} {port}: 可用")
+                msgs.append(f"{label} {port}: 可用")
             except OSError:
                 free = None
                 for offset in range(1, 200):
@@ -618,9 +633,9 @@ class ConfigPage(QWidget):
                     except OSError:
                         pass
                 if free:
-                    msgs.append(f"❌ {label} {port}: 已占用 → 推荐 {free}")
+                    msgs.append(f"{label} {port}: 已占用 → 推荐 {free}")
                 else:
-                    msgs.append(f"❌ {label} {port}: 已占用（附近无空闲端口）")
+                    msgs.append(f"{label} {port}: 已占用（附近无空闲端口）")
 
         mb = MessageBox("端口检测", "\n".join(msgs), self.window())
         mb.exec()

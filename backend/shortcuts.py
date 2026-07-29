@@ -47,6 +47,10 @@ class ShortcutRecord:
 
 
 # ---------- 单例 ----------
+# 安全关键快捷键：必须在任何控件获得焦点时都能触发
+_CRITICAL_ACTIONS = {"stop_server", "safe_shutdown", "restart_server"}
+
+
 class ShortcutManager(QObject):
     """快捷键管理器单例。"""
 
@@ -216,7 +220,9 @@ class ShortcutManager(QObject):
         except Exception as e:
             logger.warning("创建 QShortcut 失败 [%s]: %s", action_id, e)
             return
-        sc.setContext(Qt.WindowShortcut)
+        # 安全关键操作：ApplicationShortcut 优先级 > 任何焦点控件
+        context = Qt.ApplicationShortcut if action_id in _CRITICAL_ACTIONS else Qt.WindowShortcut
+        sc.setContext(context)
         sc.activated.connect(callback)
         sc.setEnabled(rec.scope in ("global", self._current_scope))
         self._shortcuts[action_id] = sc

@@ -13,7 +13,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtGui import QTextCursor
 from qfluentwidgets import (
     CardWidget, SubtitleLabel, StrongBodyLabel, BodyLabel, CaptionLabel,
-    PrimaryPushButton, PushButton, LineEdit, FluentIcon, ToggleButton, isDarkTheme,
+    PrimaryPushButton, PushButton, LineEdit, FluentIcon, ToggleButton, isDarkTheme, MessageBox,
 )
 
 from shared.config import config_mgr
@@ -212,7 +212,7 @@ class TunnelPage(QWidget):
             os.makedirs(os.path.dirname(cfg), exist_ok=True)
             with open(cfg, "w", encoding="utf-8") as f:
                 f.write(self._cfg_edit.toPlainText())
-            self._append_log(f"✅ frpc.ini 已保存: {cfg}", "#4CAF50")
+            self._append_log(f"frpc.ini 已保存: {cfg}", "#4CAF50")
             toast_success("已保存", cfg, self.window())
         except Exception as e:
             toast_error("保存失败", str(e), self.window())
@@ -272,10 +272,10 @@ class TunnelPage(QWidget):
             "# remote_port = 外网端口\n"
         )
         w = MessageBox("加载模板",
-            "将用模板替换当前编辑内容，是否继续？\n\n"
+            "⚠ 将清除并替换当前所有编辑内容，是否继续？\n\n"
             "提示：请前往 https://www.chmlfrp.net/ 创建隧道。",
             self.window())
-        w.yesSignal.connect(lambda: self._cfg_edit.setPlainText(template))
+        w.cancelSignal.connect(lambda: self._cfg_edit.setPlainText(template))
         w.cancelSignal.connect(w.close)
         w.show()
 

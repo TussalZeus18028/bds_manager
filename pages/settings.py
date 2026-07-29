@@ -108,7 +108,7 @@ class SettingsPage(QWidget):
 
         # 主题模式
         self._theme_combo = ComboBox(theme_card)
-        self._theme_combo.addItems(["Dark", "Light", "Auto"])
+        self._theme_combo.addItems(["深色", "浅色", "自动（跟随系统）"])
         current = config_mgr.get("theme", "dark")
         self._theme_combo.setCurrentText({"dark":"Dark","light":"Light","auto":"Auto"}.get(current, "Dark"))
         self._theme_combo.currentTextChanged.connect(self._on_theme_changed)
@@ -188,16 +188,82 @@ class SettingsPage(QWidget):
         sl.setContentsMargins(16, 12, 16, 16); sl.setSpacing(8)
         sl.addWidget(SubtitleLabel("服务器", svr))
 
+        # ═══ 纯 BDS ═══
+        sl.addWidget(BodyLabel("纯 BDS 服务器", svr))
+
         self._dir_edit = LineEdit(svr)
         self._dir_edit.setText(config_mgr.get("server_dir", "Server"))
-        browse = PushButton("浏览", svr, FluentIcon.FOLDER)
-        browse.clicked.connect(self._browse_dir)
-        dr = QHBoxLayout(); dr.addWidget(self._dir_edit, 1); dr.addWidget(browse)
-        sl.addLayout(dr)
+        bds_browse = PushButton("浏览", svr, FluentIcon.FOLDER)
+        bds_browse.clicked.connect(self._browse_dir)
+        dr = QHBoxLayout(); dr.addWidget(self._dir_edit, 1); dr.addWidget(bds_browse)
+        dr_w = QWidget(svr); dr_w.setLayout(dr)
+        sl.addLayout(_row("目录", dr_w, svr))
 
         self._exe_edit = LineEdit(svr)
         self._exe_edit.setText(config_mgr.get("server_exe", "bedrock_server.exe"))
-        sl.addLayout(_row("可执行文件", self._exe_edit, svr))
+        self._exe_browse = PushButton("浏览", svr, FluentIcon.FOLDER)
+        self._exe_browse.clicked.connect(self._browse_bds_exe)
+        exe_r = QHBoxLayout(); exe_r.addWidget(self._exe_edit, 1); exe_r.addWidget(self._exe_browse)
+        exe_w = QWidget(svr); exe_w.setLayout(exe_r)
+        sl.addLayout(_row("启动文件", exe_w, svr, "默认为 bedrock_server.exe"))
+
+        # ═══ BDS + LeviLamina ═══
+        sep1 = QWidget(svr); sep1.setFixedHeight(1)
+        sep1.setStyleSheet("background: #3a3a3a;" if isDarkTheme() else "background: #e0e0e0;")
+        sl.addWidget(sep1)
+        sl.addWidget(BodyLabel("LeviLamina 服务器", svr))
+
+        self._ll_dir_edit = LineEdit(svr)
+        ll_dir = config_mgr.get("ll_server_dir", "")
+        if not ll_dir:
+            srv_abs = os.path.join(SCRIPT_DIR, config_mgr.get("server_dir", "Server"))
+            if os.path.isfile(os.path.join(srv_abs, "bedrock_server_mod.exe")):
+                ll_dir = config_mgr.get("server_dir", "Server")
+                config_mgr.set("ll_server_dir", ll_dir)
+                config_mgr.save()  # 持久化自动检测结果
+        self._ll_dir_edit.setText(ll_dir)
+        self._ll_dir_edit.setPlaceholderText("未配置")
+        ll_browse = PushButton("浏览", svr, FluentIcon.FOLDER)
+        ll_browse.clicked.connect(self._browse_ll_dir)
+        llr = QHBoxLayout(); llr.addWidget(self._ll_dir_edit, 1); llr.addWidget(ll_browse)
+        llr_w = QWidget(svr); llr_w.setLayout(llr)
+        sl.addLayout(_row("目录", llr_w, svr, "含 bedrock_server_mod.exe"))
+
+        self._ll_exe_edit = LineEdit(svr)
+        self._ll_exe_edit.setText("bedrock_server_mod.exe")
+        self._ll_exe_edit.setReadOnly(True)
+        self._ll_exe_edit.setStyleSheet("color: #888;")
+        sl.addLayout(_row("启动文件", self._ll_exe_edit, svr, "固定为 bedrock_server_mod.exe"))
+
+        # lip 部署目录
+        self._deploy_dir_edit = LineEdit(svr)
+        self._deploy_dir_edit.setText(config_mgr.get("server_root_dir", ""))
+        self._deploy_dir_edit.setPlaceholderText("留空 = 使用上方 LL 目录")
+        deploy_browse = PushButton("浏览", svr, FluentIcon.FOLDER)
+        deploy_browse.clicked.connect(self._browse_deploy_dir)
+        dr2 = QHBoxLayout(); dr2.addWidget(self._deploy_dir_edit, 1); dr2.addWidget(deploy_browse)
+        dr2_w = QWidget(svr); dr2_w.setLayout(dr2)
+        sl.addLayout(_row("lip 部署目录", dr2_w, svr, "一键安装 BDS + LeviLamina 的目标"))
+
+        # lip 状态
+        from backend.lip_utils import lip_installed, find_lip_exe
+        self._lip_path_edit = LineEdit(svr)
+        lip_path = find_lip_exe() or ("(未检测到)" if not lip_installed() else "lip")
+        self._lip_path_edit.setText(lip_path)
+        self._lip_path_edit.setReadOnly(True)
+        self._lip_path_edit.setStyleSheet("color: #888;")
+        lip_status = CaptionLabel("已安装" if lip_installed() else "未安装", svr)
+        if lip_installed():
+            lip_status.setStyleSheet("color: #4caf50;")
+        else:
+            lip_status.setStyleSheet("color: #e81123;")
+        lip_row = QHBoxLayout()
+        lip_row.addWidget(self._lip_path_edit, 1)
+        lip_row.addWidget(lip_status)
+        lip_w = QWidget(svr); lip_w.setLayout(lip_row)
+        sl.addLayout(_row("lip 工具", lip_w, svr, "winget install futrime.lip"))
+
+        # ═══ 通用 ═══
 
         # 优雅停服
         self._graceful = ToggleButton("启用优雅停服（先 save hold 再 stop）", svr)
@@ -394,7 +460,7 @@ class SettingsPage(QWidget):
         layout.addLayout(io_row)
 
         sr = QHBoxLayout(); sr.addStretch()
-        save_btn = PrimaryPushButton("保存设置", inner, FluentIcon.SAVE)
+        save_btn = PrimaryPushButton("设置已自动保存 — 点此确认", inner, FluentIcon.SAVE)
         save_btn.clicked.connect(self._on_save)
         sr.addWidget(save_btn)
         layout.addLayout(sr)
@@ -406,7 +472,9 @@ class SettingsPage(QWidget):
     def _connect_auto_save(self):
         """将所有控件的 change 信号连接到静默保存。"""
         s = self  # shorthand
-        def _sa(key, v): s._silent_save(key, v)
+        def _sa(key, v):
+            try: s._silent_save(key, v)
+            except Exception: logger.debug("静默保存失败 [%s]", key, exc_info=True)
 
         # ── 外观 ──
         s._follow_system.toggled.connect(lambda v: _sa("follow_system_theme", v))
@@ -452,7 +520,9 @@ class SettingsPage(QWidget):
 
         # ── LineEdit（失焦时保存） ──
         for le, key in [(s._dir_edit, "server_dir"), (s._exe_edit, "server_exe"),
-                         (s._webhook_url, "webhook_url"), (s._gh_token, "github_token")]:
+                         (s._webhook_url, "webhook_url"), (s._gh_token, "github_token"),
+                         (s._deploy_dir_edit, "server_root_dir"),
+                         (s._ll_dir_edit, "ll_server_dir")]:
             le.editingFinished.connect(lambda k=key, w=le: _sa(k, w.text()))
 
     # ── 快捷键 (v3.02.00) ──
@@ -631,6 +701,9 @@ class SettingsPage(QWidget):
 
     # ── 主题 ──
     def _on_theme_changed(self, text: str):
+        # 中英文映射
+        _theme_map = {"深色": "dark", "浅色": "light", "自动（跟随系统）": "auto"}
+        text = _theme_map.get(text, text)
         theme = {"Dark":"dark","Light":"light","Auto":"auto"}.get(text, "dark")
         color = config_mgr.get("theme_color", "#0DC5D4")
         self._silent_save("theme", theme)
@@ -702,7 +775,36 @@ class SettingsPage(QWidget):
     def _browse_dir(self):
         d = QFileDialog.getExistingDirectory(self, "选择服务器文件夹", SCRIPT_DIR)
         if d:
-            self._dir_edit.setText(os.path.relpath(d, SCRIPT_DIR) if d.startswith(SCRIPT_DIR) else d)
+            val = os.path.relpath(d, SCRIPT_DIR) if d.startswith(SCRIPT_DIR) else d
+            self._dir_edit.setText(val)
+            self._silent_save("server_dir", val)
+
+    def _browse_bds_exe(self):
+        d = QFileDialog.getOpenFileName(self, "选择 BDS 可执行文件",
+                                        os.path.join(SCRIPT_DIR, config_mgr.get("server_dir", "Server")),
+                                        "可执行文件 (*.exe)")
+        if d[0]:
+            self._exe_edit.setText(os.path.basename(d[0]))
+            self._silent_save("server_exe", os.path.basename(d[0]))
+            srv_dir = os.path.dirname(d[0])
+            if srv_dir != os.path.join(SCRIPT_DIR, config_mgr.get("server_dir", "Server")):
+                val = os.path.relpath(srv_dir, SCRIPT_DIR) if srv_dir.startswith(SCRIPT_DIR) else srv_dir
+                self._dir_edit.setText(val)
+                self._silent_save("server_dir", val)
+
+    def _browse_deploy_dir(self):
+        d = QFileDialog.getExistingDirectory(self, "选择 lip 部署目录", SCRIPT_DIR)
+        if d:
+            val = os.path.relpath(d, SCRIPT_DIR) if d.startswith(SCRIPT_DIR) else d
+            self._deploy_dir_edit.setText(val)
+            self._silent_save("server_root_dir", val)
+
+    def _browse_ll_dir(self):
+        d = QFileDialog.getExistingDirectory(self, "选择 LL 服务器目录", SCRIPT_DIR)
+        if d:
+            val = os.path.relpath(d, SCRIPT_DIR) if d.startswith(SCRIPT_DIR) else d
+            self._ll_dir_edit.setText(val)
+            self._silent_save("ll_server_dir", val)
 
     def _on_test_webhook(self):
         url = self._webhook_url.text().strip()

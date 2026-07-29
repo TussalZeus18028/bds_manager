@@ -272,33 +272,33 @@ class BDSFluentWindow(FluentWindow):
 
         self.dashboard_page = DashboardPage(self)
         self.dashboard_page.setObjectName("dashboard")
-        self.addSubInterface(self.dashboard_page, FluentIcon.HOME, "仪表盘")
+        self.addSubInterface(self.dashboard_page, FluentIcon.HOME, "仪表盘 (Ctrl+1)")
 
         self.console_page = ConsolePage(self)
         self.console_page.setObjectName("console")
-        self.addSubInterface(self.console_page, FluentIcon.COMMAND_PROMPT, "控制台")
+        self.addSubInterface(self.console_page, FluentIcon.COMMAND_PROMPT, "控制台 (Ctrl+2)")
 
         self.world_page = WorldPage(self)
         self.world_page.setObjectName("world")
         # 监听备份完成 → 更新 Dashboard 最近备份时间
         self.world_page.backup_completed.connect(self._on_backup_completed)
-        self.addSubInterface(self.world_page, FluentIcon.SAVE, "世界")
+        self.addSubInterface(self.world_page, FluentIcon.SAVE, "世界 (Ctrl+3)")
 
         self.packs_page = PacksPage(self)
         self.packs_page.setObjectName("packs")
-        self.addSubInterface(self.packs_page, FluentIcon.FOLDER, "资源包")
+        self.addSubInterface(self.packs_page, FluentIcon.FOLDER, "资源包 (Ctrl+4)")
 
         self.config_page = ConfigPage(self)
         self.config_page.setObjectName("config")
-        self.addSubInterface(self.config_page, FluentIcon.EDIT, "配置")
+        self.addSubInterface(self.config_page, FluentIcon.EDIT, "配置 (Ctrl+5)")
 
         self.upgrade_page = UpgradePage(self)
         self.upgrade_page.setObjectName("upgrade")
-        self.addSubInterface(self.upgrade_page, FluentIcon.SYNC, "升级")
+        self.addSubInterface(self.upgrade_page, FluentIcon.SYNC, "升级 (Ctrl+6)")
 
         self.tunnel_page = TunnelPage(self)
         self.tunnel_page.setObjectName("tunnel")
-        self.addSubInterface(self.tunnel_page, FluentIcon.LINK, "隧道")
+        self.addSubInterface(self.tunnel_page, FluentIcon.LINK, "隧道 (Ctrl+7)")
 
         self.about_page = AboutPage(self)
         self.about_page.setObjectName("about")
@@ -411,6 +411,10 @@ class BDSFluentWindow(FluentWindow):
         if config_mgr.get("show_startup_toasts", True):
             QTimer.singleShot(800, self._startup_toasts)
 
+        # 首次启动引导
+        if not config_mgr.get("first_launch_done", True):
+            QTimer.singleShot(2000, self._show_onboarding)
+
         # 监听系统主题变化
         if config_mgr.get("follow_system_theme", False):
             try:
@@ -456,6 +460,60 @@ class BDSFluentWindow(FluentWindow):
         except Exception as e:
             logger.debug("更新最近备份时间失败: %s", e)
 
+    def _show_onboarding(self):
+        """首次启动引导：检查服务器状态，指引用户安装。"""
+        from qfluentwidgets import MessageBox
+        ctx = get_context()
+        has_bds = os.path.isfile(os.path.join(ctx.bds_dir, "bedrock_server.exe"))
+        has_ll = bool(config_mgr.get("ll_server_dir", "")) and                  os.path.isfile(os.path.join(ctx.ll_dir, "bedrock_server_mod.exe"))
+
+        target_page = "console"
+        if not has_bds and not has_ll:
+            steps = [
+                "1. 切换到「升级」页面",
+                "2. 点「浏览可用版本」查看 BDS 列表",
+                "3. 选择一个版本点「下载」",
+                "4. 下载完成后选择安装目录并点「开始安装」",
+                "5. 回到「控制台」点「启动服务器」",
+            ]
+            target_page = "upgrade"
+        elif has_bds and not has_ll:
+            steps = [
+                "BDS 已安装，可正常使用。",
+                "如需 LeviLamina：切换到「升级」页 → lip 卡片一键部署。",
+                "回到「控制台」即可启动服务器。",
+            ]
+        else:
+            steps = ["服务器已就绪，直接去「控制台」启动吧！"]
+
+        w = MessageBox(
+            "欢迎使用 BDS Manager",
+            "这是你第一次运行。\n\n" + "\n".join(steps) + "\n\n完成后点「开始使用」",
+            self,
+        )
+        w.yesButton.setText("开始使用")
+        w.cancelButton.hide()
+        _tp = target_page
+        w.yesSignal.connect(lambda: (
+            config_mgr.set("first_launch_done", True),
+            config_mgr.save(),
+            self._navigate_to(_tp),
+            w.close(),
+        ))
+        w.show()
+
+    def _navigate_to(self, page_name: str):
+        """切换到指定页面。"""
+        _map = {
+            "dashboard": self.dashboard_page,
+            "console": self.console_page,
+            "upgrade": self.upgrade_page,
+            "settings": self.settings_page,
+        }
+        target = _map.get(page_name)
+        if target:
+            self.stackedWidget.setCurrentWidget(target)
+
     def _startup_toasts(self):
         # 防御：防止重复触发（_startup_toasts 一次会话只跑一次）
         if getattr(self, "_toasted", False):
@@ -465,19 +523,25 @@ class BDSFluentWindow(FluentWindow):
         from shared.toast import toast_success, toast_error, toast_warning, toast_info
 
         ctx = get_context()
-        server_dir = ctx.server_dir
+        stype = config_mgr.get("server_type", "bds")
+        server_dir = ctx.server_dir  # ServerContext.server_dir 已根据 server_type 动态返回
 
         if os.path.isdir(server_dir):
-            toast_success(f"服务器: {os.path.basename(server_dir)}", "目录就绪", self)
+            label = "LL 服务器" if stype == "ll" else "BDS 服务器"
+            toast_success(f"{label}: {os.path.basename(server_dir)}", "目录就绪", self)
         else:
             toast_error("服务器目录不存在", server_dir, self, duration=8000)
 
-        exe_name = config_mgr.get("server_exe", "bedrock_server.exe")
+        if stype == "ll":
+            exe_name = "bedrock_server_mod.exe"
+        else:
+            exe_name = config_mgr.get("server_exe", "bedrock_server.exe")
         exe_path = os.path.join(server_dir, exe_name)
         if os.path.exists(exe_path):
             toast_info(f"服务端: {exe_name}", "可执行文件就绪", self)
         else:
-            toast_warning(f"服务端: {exe_name}", "未找到，请先安装 BDS", self, duration=6000)
+            hint = "请先用 lip 部署或手动安装" if stype == "ll" else "请先安装 BDS"
+            toast_warning(f"服务端: {exe_name}", f"未找到，{hint}", self, duration=6000)
 
         try:
             cpu = psutil.cpu_percent()
@@ -526,6 +590,8 @@ class BDSFluentWindow(FluentWindow):
             return
         if self._tray and self._tray.isVisible() and config_mgr.get("close_to_tray", True):
             event.ignore()
+            self._save_geometry()
+            config_mgr.save()
             self.hide()
             return
         self.stop_server()

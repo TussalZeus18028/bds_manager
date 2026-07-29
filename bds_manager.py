@@ -3,7 +3,7 @@
 """
 bds_manager.py — 伪装为旧版入口名的智能更新 + 启动脚本
 
-⚠️ 重要：这不是 Manager_Fluent 项目的主入口。
+ 重要：这不是 Manager_Fluent 项目的主入口。
    - 主入口是 main.py（run.bat 调用）
    - 这个文件叫 bds_manager.py 是为了「伪装」
 
@@ -132,7 +132,7 @@ def download_zip(remote_ver: str, dl_url: str, expected_sha: str) -> str | None:
     """下载 zip 到 _update_v<ver>.zip，校验 SHA256，返回路径或 None。"""
     zip_path = os.path.join(SCRIPT_DIR, f"_update_v{remote_ver}.zip")
     try:
-        log(f"⬇️  下载: {dl_url[:80]}...")
+        log(f"⬇  下载: {dl_url[:80]}...")
         req = urllib.request.Request(dl_url, headers={"User-Agent": USER_AGENT})
         with urllib.request.urlopen(req, timeout=60) as resp:
             with open(zip_path, "wb") as f:
@@ -145,16 +145,16 @@ def download_zip(remote_ver: str, dl_url: str, expected_sha: str) -> str | None:
                     h.update(chunk)
             actual = h.hexdigest()
             if actual.lower() != expected_sha.lower():
-                log(f"  ❌ SHA256 不匹配（期望 {expected_sha[:16]}... 实际 {actual[:16]}...）")
+                log(f"   SHA256 不匹配（期望 {expected_sha[:16]}... 实际 {actual[:16]}...）")
                 try:
                     os.remove(zip_path)
                 except OSError:
                     pass
                 return None
-            log(f"  ✅ SHA256 校验通过")
+            log(f"   SHA256 校验通过")
         return zip_path
     except Exception as e:
-        log(f"  ❌ 下载失败: {e}")
+        log(f"   下载失败: {e}")
         try:
             os.remove(zip_path)
         except OSError:
@@ -190,10 +190,10 @@ def extract_zip(zip_path: str) -> bool:
             os.remove(zip_path)
         except OSError:
             pass
-        log("  ✅ 解压完成")
+        log("   解压完成")
         return True
     except Exception as e:
-        log(f"  ❌ 解压失败: {e}")
+        log(f"   解压失败: {e}")
         return False
 
 
@@ -222,7 +222,7 @@ def launch_main_py() -> None:
     """detached 启动 main.py（让 bds_manager.py 退出不影响 main.py）。"""
     main_py = os.path.join(SCRIPT_DIR, "main.py")
     if not os.path.exists(main_py):
-        log(f"  ❌ main.py 不存在: {main_py}")
+        log(f"   main.py 不存在: {main_py}")
         log(f"  请手动从 https://github.com/{GITHUB_REPO_OWNER}/{GITHUB_REPO_NAME}/releases 下载完整 zip 解压")
         sys.exit(1)
     log(f"🚀 启动主程序: main.py")
@@ -280,9 +280,9 @@ def ensure_dependencies() -> None:
             [sys.executable, "-m", "pip", "install", "--upgrade"] + missing,
             stdout=_sp.DEVNULL, stderr=_sp.STDOUT,
         )
-        log("✅ 依赖安装完成")
+        log(" 依赖安装完成")
     except _sp.CalledProcessError as e:
-        log(f"❌ 依赖安装失败（退出码 {e.returncode}），请手动安装：\n"
+        log(f" 依赖安装失败（退出码 {e.returncode}），请手动安装：\n"
             f"   pip install {' '.join(missing)}")
         sys.exit(1)
 
@@ -298,24 +298,24 @@ def auto_update_then_launch() -> int:
     try:
         data = fetch_remote_version_json()
         if not data:
-            log("⚠️ 无法获取远端版本，跳过更新（直接启动主程序）")
+            log(" 无法获取远端版本，跳过更新（直接启动主程序）")
         else:
             remote_ver = data.get("version", "")
             remote = parse_version_tuple(remote_ver)
             if not remote_ver or remote <= local:
-                log(f"✅ 已是最新（远端 {'.'.join(map(str, remote)) or remote_ver}）")
+                log(f" 已是最新（远端 {'.'.join(map(str, remote)) or remote_ver}）")
             else:
                 log(f"📥 发现新版本: {'.'.join(map(str, remote))}（当前 {'.'.join(map(str, local))}）")
                 dl_url = data.get("download_url", "")
                 sha256 = data.get("sha256", "")
                 if not dl_url:
-                    log("  ⚠️ version.json 缺少 download_url，跳过")
+                    log("   version.json 缺少 download_url，跳过")
                 else:
                     zip_path = download_zip(remote_ver, dl_url, sha256)
                     if zip_path and extract_zip(zip_path):
                         log("🎉 自动更新完成")
     except Exception as e:
-        log(f"⚠️ 更新检查出错（不影响启动）: {e}")
+        log(f" 更新检查出错（不影响启动）: {e}")
 
     # 2. 启动主程序
     launch_main_py()

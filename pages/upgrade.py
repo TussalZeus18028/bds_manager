@@ -11,6 +11,8 @@ v3.1 改进：
 """
 
 import os, re, time, json, shutil, random, socket, urllib.request, urllib.error, logging
+import html as _html_lip
+import html as _html_mod
 
 logger = logging.getLogger("bds_manager")
 
@@ -19,7 +21,7 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QTableWidget, QTableWidgetItem,
     QHeaderView, QAbstractItemView, QPlainTextEdit,
 )
-from PySide6.QtGui import QTextCursor, QColor
+from PySide6.QtGui import QTextCursor, QColor, QFont
 from qfluentwidgets import (
     CardWidget, SubtitleLabel, StrongBodyLabel, BodyLabel, CaptionLabel,
     PrimaryPushButton, PushButton, LineEdit, FluentIcon,
@@ -284,9 +286,15 @@ class InstallWorker(QThread):
                         shutil.copy2(src, os.path.join(self.backup_dir, fn))
 
             self.log.emit("正在解压更新包...")
-            skip = {"worlds/", "resource_packs/", "behavior_packs/",
-                    "config/", "server.properties", "allowlist.json",
-                    "permissions.json", "backups/"}
+            # 判断是否首次安装：bedrock_server.exe 不存在 → 完整解压（含资源包）
+            is_upgrade = self.do_backup and os.path.exists(
+                os.path.join(self.server_dir, "bedrock_server.exe"))
+            if is_upgrade:
+                skip = {"worlds/", "resource_packs/", "behavior_packs/",
+                        "config/", "server.properties", "allowlist.json",
+                        "permissions.json", "backups/"}
+            else:
+                skip = set()
             server_real = os.path.realpath(self.server_dir)
             with zipfile.ZipFile(self.zip_path) as zf:
                 names = [n.replace("\\", "/") for n in zf.namelist()]
@@ -314,10 +322,10 @@ class InstallWorker(QThread):
             if self.target_version and self.backup_dir:
                 _record_upgrade(self.target_version, self.from_version, self.backup_dir)
 
-            self.log.emit("✅ 安装完成")
+            self.log.emit("安装完成")
             self.finished.emit(True, "安装完成")
         except Exception as e:
-            self.log.emit(f"❌ 安装失败: {e}")
+            self.log.emit(f"安装失败: {e}")
             self.finished.emit(False, str(e))
 
 
@@ -348,6 +356,47 @@ class HeadSizeWorker(QThread):
             self.result.emit(row, size_text)
 
 
+
+_ANSI_RE = re.compile(r'\x1b\[([0-9;]*)m')
+_ANSI_COLORS = {
+    "30": "#000", "31": "#f55", "32": "#5f5", "33": "#ff5",
+    "34": "#55f", "35": "#f5f", "36": "#5ff", "37": "#ccc",
+    "90": "#888", "91": "#f88", "92": "#8f8", "93": "#ff8",
+    "94": "#88f", "95": "#f8f", "96": "#8ff", "97": "#fff",
+}
+
+def _ansi_to_html_lip(text: str) -> str:
+    parts, stack, last = [], [], 0
+    for m in _ANSI_RE.finditer(text):
+        if m.start() > last:
+            parts.append(_html_lip.escape(text[last:m.start()]))
+        codes = m.group(1).split(";") if m.group(1) else ["0"]
+        style = ""
+        i = 0
+        while i < len(codes):
+            c = codes[i]
+            if c == "0": stack = []
+            elif c == "1": style += "font-weight:bold;"
+            elif c == "38" and i+2 < len(codes) and codes[i+1] == "2":
+                r = codes[i+2]; g = codes[i+3] if i+3 < len(codes) else "0"; b = codes[i+4] if i+4 < len(codes) else "0"
+                style += f"color:rgb({r},{g},{b});"; i += 4
+            elif c == "48" and i+2 < len(codes) and codes[i+1] == "2":
+                r = codes[i+2]; g = codes[i+3] if i+3 < len(codes) else "0"; b = codes[i+4] if i+4 < len(codes) else "0"
+                style += f"background:rgb({r},{g},{b});"; i += 4
+            elif c in _ANSI_COLORS:
+                style += f"color:{_ANSI_COLORS[c]};"
+            elif c == "39": style += "color:inherit;"
+            i += 1
+        if style:
+            stack.append(style); parts.append(f'<span style="{style}">')
+        else:
+            for _ in stack: parts.append("</span>")
+            stack = []
+        last = m.end()
+    if last < len(text): parts.append(_html_lip.escape(text[last:]))
+    for _ in stack: parts.append("</span>")
+    return "".join(parts)
+
 class UpgradePage(QWidget):
     # GitHub 重试配置：失败时先重试 N 次，最后才提示用户启用 HEAD 嗅探（最后手段）
     GITHUB_MAX_RETRIES = 3
@@ -375,19 +424,42 @@ class UpgradePage(QWidget):
         il.setContentsMargins(16, 12, 16, 16); il.setSpacing(6)
         il.addWidget(SubtitleLabel("当前状态", info_card))
         ctx = get_context()
-        exe_name = config_mgr.get("server_exe", "bedrock_server.exe")
-        self._server_exe_path = os.path.join(ctx.server_dir, exe_name)
-        self._server_installed = os.path.exists(self._server_exe_path)
+        stype = config_mgr.get("server_type", "bds")
 
-        if self._server_installed:
-            self._info = BodyLabel(f"✅ BDS 已安装 — {ctx.server_dir}", info_card)
-            il.addWidget(self._info)
+        # 检测纯 BDS（始终检查 BDS 目录）
+        bds_dir = ctx.bds_dir if hasattr(ctx, "bds_dir") else ctx.server_dir
+        bds_exe = os.path.join(bds_dir, config_mgr.get("server_exe", "bedrock_server.exe"))
+        bds_ok = os.path.exists(bds_exe)
+
+        # 检测 LL 服务器
+        ll_dir = config_mgr.get("ll_server_dir", "")
+        if ll_dir:
+            ll_abs = os.path.join(SCRIPT_DIR, ll_dir) if not os.path.isabs(ll_dir) else ll_dir
         else:
-            self._info = BodyLabel(f"❌ 未检测到 BDS — 请先安装服务器", info_card)
+            ll_abs = ctx.bds_dir if hasattr(ctx, "bds_dir") else ctx.server_dir
+        ll_exe = os.path.join(ll_abs, "bedrock_server_mod.exe")
+        ll_ok = os.path.exists(ll_exe)
+
+        if bds_ok:
+            il.addWidget(BodyLabel(f"已安装 BDS — {bds_dir}", info_card))
+            if ll_ok:
+                il.addWidget(CaptionLabel(f"已安装 LL — {ll_abs}", info_card))
+            else:
+                il.addWidget(CaptionLabel("LL 未安装 — 点击上方 lip 卡片部署", info_card))
+        elif ll_ok:
+            il.addWidget(BodyLabel(f"已安装 LeviLamina — {ll_abs}", info_card))
+            il.addWidget(CaptionLabel(f"纯 BDS 未安装（仅 LL 模式）", info_card))
+        else:
+            self._info = BodyLabel("未安装任何服务器", info_card)
             self._info.setStyleSheet("color: #E65100;")
             il.addWidget(self._info)
-            il.addWidget(CaptionLabel(f"预期路径: {self._server_exe_path}", info_card))
+            il.addWidget(CaptionLabel(f"BDS 路径: {bds_exe}", info_card))
+            il.addWidget(CaptionLabel(f"LL 路径: {ll_exe}", info_card))
+
         layout.addWidget(info_card)
+
+        # ═══ lip 一键部署 (BDS + LeviLamina) ═══
+        self._setup_lip_section(inner, layout)
 
         # 版本列表
         ver_card = CardWidget(inner)
@@ -478,7 +550,36 @@ class UpgradePage(QWidget):
         hl.addWidget(self._history_table)
         layout.addWidget(history_card)
 
-        # 进度
+        # ── 安装区 (下载完成后出现) ──
+        self._install_card = CardWidget(inner)
+        il2 = QVBoxLayout(self._install_card)
+        il2.setContentsMargins(16, 12, 16, 16); il2.setSpacing(8)
+        il2.addWidget(SubtitleLabel("安装", self._install_card))
+        self._install_info = BodyLabel("请先下载一个版本", self._install_card)
+        self._install_info.setWordWrap(True)
+        il2.addWidget(self._install_info)
+        path_row = QHBoxLayout(); path_row.setSpacing(6)
+        path_row.addWidget(CaptionLabel("安装到:", self._install_card))
+        self._install_dir = LineEdit(self._install_card)
+        self._install_dir.setPlaceholderText("选择服务器安装目录...")
+        path_row.addWidget(self._install_dir, 1)
+        browse2 = PushButton("浏览", self._install_card, FluentIcon.FOLDER)
+        browse2.clicked.connect(self._browse_install_dir)
+        path_row.addWidget(browse2)
+        il2.addLayout(path_row)
+        self._install_status = CaptionLabel("", self._install_card)
+        il2.addWidget(self._install_status)
+        self._install_progress = ProgressBar(self._install_card)
+        self._install_progress.setVisible(False)
+        il2.addWidget(self._install_progress)
+        self._install_btn = PushButton("开始安装", self._install_card, FluentIcon.SAVE)
+        self._install_btn.clicked.connect(self._do_install)
+        self._install_btn.setEnabled(False)
+        il2.addWidget(self._install_btn)
+        self._install_card.setVisible(False)
+        layout.addWidget(self._install_card)
+
+        # 进度（下载用）
         prog_card = CardWidget(inner)
         pl = QVBoxLayout(prog_card)
         pl.setContentsMargins(16, 12, 16, 16); pl.setSpacing(6)
@@ -552,12 +653,314 @@ class UpgradePage(QWidget):
         self._refresh_history()
         self._auto_refreshed = False  # 首次 showEvent 触发后台刷新
 
+    # ── lip 一键部署 ──
+    def _setup_lip_section(self, inner, layout):
+        from backend.lip_utils import lip_installed, find_lip_exe, InstallLipWorker, LipCmdWorker
+
+        # ═══ 部署控制卡 ═══
+        ctrl_card = CardWidget(inner)
+        cc = QVBoxLayout(ctrl_card)
+        cc.setContentsMargins(16, 12, 16, 12)
+        cc.setSpacing(6)
+
+        hdr = QHBoxLayout()
+        hdr.addWidget(SubtitleLabel("lip  快速部署 (BDS + LeviLamina)", ctrl_card))
+        self._lip_status = CaptionLabel("", ctrl_card)
+        self._lip_status.setStyleSheet("color: #888;")
+        hdr.addWidget(self._lip_status)
+        hdr.addStretch()
+
+        self._lip_install_btn = PushButton("安装 lip", ctrl_card, FluentIcon.DOWNLOAD)
+        self._lip_install_btn.clicked.connect(self._on_install_lip)
+        self._lip_install_btn.setMinimumWidth(88)
+        hdr.addWidget(self._lip_install_btn)
+
+        self._mirror_btn = PushButton("加速源", ctrl_card, FluentIcon.SYNC)
+        self._mirror_btn.clicked.connect(self._on_lip_mirrors)
+        self._mirror_btn.setMinimumWidth(72)
+        hdr.addWidget(self._mirror_btn)
+        cc.addLayout(hdr)
+
+        deploy_row = QHBoxLayout()
+        deploy_row.setSpacing(6)
+        self._deploy_dir = LineEdit(ctrl_card)
+        deploy_root = config_mgr.get("server_root_dir") or get_context().server_dir
+        self._deploy_dir.setText(deploy_root)
+        self._deploy_dir.setPlaceholderText("部署目录")
+        deploy_row.addWidget(self._deploy_dir, 1)
+        btn_browse = PushButton("浏览", ctrl_card, FluentIcon.FOLDER)
+        btn_browse.clicked.connect(self._on_lip_browse)
+        btn_browse.setMinimumWidth(60)
+        deploy_row.addWidget(btn_browse)
+        self._ll_ver = LineEdit(ctrl_card)
+        self._ll_ver.setPlaceholderText("LL 版本 (可选)")
+        self._ll_ver.setFixedWidth(100)
+        deploy_row.addWidget(self._ll_ver)
+        self._deploy_btn = PrimaryPushButton("安装 BDS + LL", ctrl_card, FluentIcon.PLAY)
+        self._deploy_btn.clicked.connect(self._on_lip_deploy)
+        self._deploy_btn.setMinimumWidth(130)
+        deploy_row.addWidget(self._deploy_btn)
+        cc.addLayout(deploy_row)
+
+        self._lip_progress = ProgressBar(ctrl_card)
+        self._lip_progress.setVisible(False)
+        self._lip_progress.setFixedHeight(4)
+        cc.addWidget(self._lip_progress)
+
+        layout.addWidget(ctrl_card)
+
+        # ═══ 终端卡 ═══
+        term_card = CardWidget(inner)
+        tc = QVBoxLayout(term_card)
+        tc.setContentsMargins(12, 8, 12, 8)
+        tc.setSpacing(4)
+
+        t_hdr = QHBoxLayout()
+        t_hdr.addWidget(BodyLabel("lip 终端", term_card))
+        t_hdr.addStretch()
+        t_hdr.addWidget(CaptionLabel("输入命令后回车执行", term_card))
+        tc.addLayout(t_hdr)
+
+        self._lip_term = QPlainTextEdit(term_card)
+        self._lip_term.setReadOnly(True)
+        self._lip_term.setFont(QFont("Consolas", 11))
+        self._lip_term.setMinimumHeight(200)
+
+        self._lip_cmd = LineEdit(term_card)
+        self._lip_cmd.setPlaceholderText("lip install github.com/LiteLDev/LeviLamina")
+        self._lip_cmd.returnPressed.connect(self._on_lip_cmd)
+
+        tc.addWidget(self._lip_term)
+        tc.addWidget(self._lip_cmd)
+        layout.addWidget(term_card)
+
+        # 初始化
+        self._lip_worker: LipCmdWorker | None = None
+        self._lip_installer: InstallLipWorker | None = None
+        self._apply_lip_term_theme()
+        self._check_lip_status()
+
+    def _check_lip_status(self):
+        from backend.lip_utils import lip_installed
+        if lip_installed():
+            self._lip_status.setText("已安装")
+            self._lip_install_btn.setVisible(False)
+            self._deploy_btn.setEnabled(True)
+        else:
+            self._lip_status.setText("未安装")
+            self._lip_install_btn.setVisible(True)
+            self._deploy_btn.setEnabled(False)
+
+    def _on_install_lip(self):
+        from backend.lip_utils import InstallLipWorker
+        self._lip_install_btn.setEnabled(False)
+        self._lip_install_btn.setText("安装中...")
+        self._lip_progress.setVisible(True)
+        self._lip_progress.setRange(0, 0)
+        self._lip_installer = InstallLipWorker()
+        self._lip_installer.line.connect(lambda t: None)  # 输出重定向至下方日志
+        self._lip_installer.done.connect(self._on_lip_installed)
+        self._lip_installer.start()
+
+    def _on_lip_installed(self, ok: bool):
+        self._lip_install_btn.setEnabled(True)
+        self._lip_install_btn.setText("安装 lip")
+        self._lip_progress.setVisible(False)
+        self._check_lip_status()
+        if ok:
+            toast_success("lip 就绪", "已安装 lip，可以部署 BDS + LeviLamina", self.window())
+
+    def _on_lip_mirrors(self):
+        from backend.lip_utils import lip_installed, find_lip_exe, LipCmdWorker
+        if not lip_installed():
+            toast_error("请先安装 lip", "", self.window())
+            return
+        self._mirror_btn.setEnabled(False)
+        self._mirror_btn.setText("配置中...")
+        lip = find_lip_exe() or "lip"
+
+        def _done(code):
+            self._mirror_btn.setEnabled(True)
+            if code == 0:
+                self._mirror_btn.setText("已加速")
+                try:
+                    toast_success("加速源就绪", "GitHub + Go 代理已配置", self.window())
+                except Exception:
+                    pass
+            else:
+                self._mirror_btn.setText("加速源")
+                try:
+                    toast_error("配置失败", f"lip 退出码 {code}", self.window())
+                except Exception:
+                    pass
+
+        # 串行执行两条 config 命令
+        def _step2(code):
+            _done(code)
+
+        def _step1(code):
+            if code == 0:
+                w2 = LipCmdWorker([lip, "config", "set", "go_module_proxy", "https://goproxy.cn"])
+                w2.finished.connect(_step2)
+                w2.start()
+            else:
+                _done(code)
+
+        w1 = LipCmdWorker([lip, "config", "set", "github_proxy", "https://github.bibk.top"])
+        w1.finished.connect(_step1)
+        w1.start()
+
+    def _on_lip_browse(self):
+        from PySide6.QtWidgets import QFileDialog
+        d = QFileDialog.getExistingDirectory(self, "选择部署目录")
+        if d:
+            # 防止选到子目录——向上查找含 bedrock_server_mod.exe 的根
+            import os
+            bd = os.path.basename(d)
+            sub_folders = ("behavior_packs", "resource_packs", "worlds", "config", "plugins", "definitions", "data")
+            while bd in sub_folders:
+                d = os.path.dirname(d)
+                bd = os.path.basename(d)
+            self._deploy_dir.setText(d)
+            config_mgr.set("server_root_dir", d)
+            config_mgr.save()
+
+    def _on_lip_deploy(self):
+        from backend.lip_utils import lip_installed, find_lip_exe, LipCmdWorker
+        if not lip_installed():
+            toast_error("请先安装 lip", "", self.window())
+            return
+        deploy_dir = self._deploy_dir.text().strip() or get_context().server_dir
+        # 防护：拒绝明显的子目录（如 behavior_packs）
+        basename = os.path.basename(deploy_dir)
+        if basename in ("behavior_packs", "resource_packs", "worlds", "config", "plugins", "definitions", "data"):
+            toast_error("部署目录无效", f"不能部署到 {basename}/ 子目录，请选择服务器根目录", self.window())
+            return
+        if not os.path.isdir(deploy_dir):
+            os.makedirs(deploy_dir, exist_ok=True)
+        ver = self._ll_ver.text().strip()
+        pkg = "github.com/LiteLDev/LeviLamina"
+        # 检测是否已安装——已安装用 update，未安装用 install
+        already = os.path.isfile(os.path.join(deploy_dir, "bedrock_server_mod.exe"))
+        if already:
+            args = ["install", "--upgrade"]
+            self._append_lip_term("检测到已安装，升级模式\n", "#ff8c00")
+        else:
+            args = ["install"]
+        if ver:
+            args.append(f"{pkg}@{ver}")
+        else:
+            args.append(pkg)
+
+        self._deploy_btn.setEnabled(False)
+        self._deploy_btn.setText("部署中...")
+        self._lip_progress.setVisible(True)
+        self._lip_progress.setRange(0, 0)
+
+        # 终端输出 + toast
+        self._append_lip_term(f"\n═══ 开始部署 BDS + LeviLamina ═══\n", "#0DC5D4")
+        self._append_lip_term(f"目录: {deploy_dir}\n", "#888")
+        toast_info("lip 部署中", f"正在安装 BDS + LeviLamina 到 {deploy_dir}", self.window())
+
+        lip = find_lip_exe() or "lip"
+        self._lip_worker = LipCmdWorker([lip] + args, deploy_dir)
+        self._lip_worker.output.connect(self._on_lip_term_output)
+        self._lip_worker.finished.connect(self._on_lip_deploy_done)
+        self._lip_worker.start()
+
+    def _append_lip_term(self, text: str, color: str = "#ccc"):
+        for line in text.split("\n"):
+            if "\r" in line:
+                line = line.split("\r")[-1]
+            if not line:
+                continue
+            content = _ansi_to_html_lip(line) if "\x1b" in line else _html_lip.escape(line)
+            self._lip_term.appendHtml(
+                f'<span style="color:{color}; white-space:pre-wrap; font-family:Consolas,monospace;">{content}</span>'
+            )
+        sb = self._lip_term.verticalScrollBar()
+        sb.setValue(sb.maximum())
+    def _on_lip_deploy_done(self, code: int):
+        self._deploy_btn.setEnabled(True)
+        self._deploy_btn.setText("安装 BDS + LL")
+        self._lip_progress.setVisible(False)
+        if code == 0:
+            d = self._deploy_dir.text().strip() or get_context().server_dir
+            # 自动配置: 更新 LL 目录 + 切换服务器类型
+            rel = os.path.relpath(d, SCRIPT_DIR) if os.path.isabs(d) else d
+            config_mgr.set("ll_server_dir", rel)
+            config_mgr.set("server_type", "ll")
+            config_mgr.save()
+            self._append_lip_term("✅ 部署完成！已自动切换为 LL 服务器\n", "#4caf50")
+            self._append_lip_term(f"> 运行 bedrock_server_mod.exe 启动\n", "#888")
+            toast_success("部署完成", f"BDS + LeviLamina 已安装到 {d}\n已自动切换为 LL 服务器", self.window())
+        else:
+            self._append_lip_term(f"❌ 部署失败 (退出码 {code})\n", "#e81123")
+            toast_error("部署失败", f"lip 退出码 {code}，请查看终端输出", self.window())
+
+    def _on_lip_cmd(self):
+        cmd = self._lip_cmd.text().strip()
+        if not cmd:
+            return
+        if cmd == "clear":
+            self._lip_term.clear()
+            self._lip_cmd.clear()
+            return
+        # 回显
+        tc = self._lip_term.textCursor()
+        tc.movePosition(QTextCursor.End)
+        fmt = tc.charFormat()
+        fmt.setForeground(QColor("#0DC5D4"))
+        tc.setCharFormat(fmt)
+        tc.insertText(f"{self._deploy_dir.text().strip()}> {cmd}\n")
+        self._lip_term.setTextCursor(tc)
+        self._lip_cmd.clear()
+
+        from backend.lip_utils import LipCmdWorker, find_lip_exe
+        cwd = self._deploy_dir.text().strip() or get_context().server_dir
+        lip = find_lip_exe()
+        if not lip:
+            lip = "lip"
+        # 用户可能输入 "lip install ..." 或 "install ..."
+        parts = cmd.split()
+        if parts and parts[0] == "lip":
+            parts = parts[1:]
+        self._lip_worker = LipCmdWorker([lip] + parts, cwd)
+        self._lip_worker.output.connect(self._on_lip_term_output)
+        self._lip_worker.start()
+
+    def _on_lip_term_output(self, stdout: str, stderr: str):
+        text = stdout or stderr
+        if not text:
+            return
+        for line in text.split("\n"):
+            if "\r" in line:
+                line = line.split("\r")[-1]
+            if not line.strip():
+                continue
+            content = _ansi_to_html_lip(line) if "\x1b" in line else _html_lip.escape(line)
+            self._lip_term.appendHtml(
+                f'<span style="color:#ccc; white-space:pre-wrap; font-family:Consolas,monospace;">{content}</span>'
+            )
+        sb = self._lip_term.verticalScrollBar()
+        sb.setValue(sb.maximum())
+    def _apply_lip_term_theme(self):
+        dark = isDarkTheme()
+        self._lip_term.setStyleSheet(
+            f"QPlainTextEdit {{ background: {'#0d0d0d' if dark else '#fafafa'};"
+            f" color: {'#0f0' if dark else '#1a1a1a'};"
+            f" border: 1px solid {'#3a3a3a' if dark else '#d0d0d0'}; border-radius: 6px;"
+            f" padding: 8px; font-family: Consolas, monospace; font-size: 12px; }}"
+        )
+
     def refresh_theme(self):
         """v3.02.01: 主题切换后重新设置表格/日志/标签样式。"""
         self._ver_table.setStyleSheet(_table_style())
         self._history_table.setStyleSheet(_table_style())
         self._log.setStyleSheet(_plaintext_style())
         self._scan_status.setStyleSheet(f"color: {'#888' if isDarkTheme() else '#666'};")
+        if hasattr(self, "_lip_term"):
+            self._apply_lip_term_theme()
 
     def showEvent(self, event):
         """首次显示页面时，如果缓存过期则后台静默刷新（不打断用户）。"""
@@ -681,11 +1084,11 @@ class UpgradePage(QWidget):
             self._scroll.verticalScrollBar().setValue(vpos)
             return
         if status == "latest":
-            self._tool_status.setText(f"✅ 已是最新 v{main.__version__}")
+            self._tool_status.setText(f"已是最新 v{main.__version__}")
             self._scroll.verticalScrollBar().setValue(vpos)
             return
         if not dl_url:
-            self._tool_status.setText("❌ 未找到下载链接")
+            self._tool_status.setText("未找到下载链接")
             self._scroll.verticalScrollBar().setValue(vpos)
             return
         self._tool_status.setText(f"发现 v{remote_ver}，正在下载...")
@@ -703,22 +1106,22 @@ class UpgradePage(QWidget):
     def _on_tool_dl_done(self, success, msg, path, sha256):
         self._tool_bar.setVisible(False)
         if not success:
-            self._tool_status.setText(f"❌ 下载失败: {msg}")
+            self._tool_status.setText(f"下载失败: {msg}")
             toast_error("更新下载失败", msg, self.window())
             return
-        self._tool_status.setText(f"✅ 下载完成: v{remote_ver}，准备安装...")
+        self._tool_status.setText(f"下载完成: v{remote_ver}，准备安装...")
         toast_success("更新就绪", f"BDS Manager v{remote_ver} 下载完成", self.window())
         from backend.self_update import verify_sha256, is_valid_zip
         if not is_valid_zip(path):
-            self._tool_status.setText("❌ 下载文件无效")
+            self._tool_status.setText("下载文件无效")
             try: os.remove(path)
-            except OSError: pass
+            except OSError as e: logger.debug("清理无效 zip 失败: %s", e)
             return
         ok, sha_msg = verify_sha256(path, sha256)
         if not ok:
             self._tool_status.setText(f"❌ SHA256 校验失败: {sha_msg}")
             try: os.remove(path)
-            except OSError: pass
+            except OSError as e: logger.debug("清理校验失败 zip: %s", e)
             return
         self._tool_zip = path
         self._tool_status.setText(f"✅ 就绪: {os.path.basename(path)} | {sha_msg}")
@@ -907,7 +1310,7 @@ class UpgradePage(QWidget):
             item.setForeground(QColor("#4CAF50" if is_stable else "#ff9800"))
             self._ver_table.setItem(i, 1, item)
             self._ver_table.setItem(i, 2, QTableWidgetItem("—"))
-            btn = PushButton("下载安装", self._ver_table)
+            btn = PushButton("下载", self._ver_table)
             btn.setMinimumHeight(30)
             btn.setMaximumHeight(34)
             btn.clicked.connect(lambda checked, u=url, v=ver: self._install(u, v))
@@ -946,6 +1349,19 @@ class UpgradePage(QWidget):
 
     def _install(self, url: str, version: str):
         ctx = get_context()
+        # 下载确认
+        from qfluentwidgets import MessageBox
+        if not hasattr(self, "_skip_confirm"):
+            w = MessageBox("确认下载", f"即将下载 BDS {version}\n\n当前服务器文件将自动备份。\n是否继续？", self.window())
+            w.yesSignal.connect(lambda: self._install_after_confirm(url, version, True))
+            w.cancelSignal.connect(w.close)
+            w.show()
+            return
+        self._install_after_confirm(url, version, False)
+
+    def _install_after_confirm(self, url: str, version: str, skip_next: bool):
+        if skip_next:
+            self._skip_confirm = True
         self._dl_bar.setVisible(True)
         self._dl_bar.setRange(0, 100)
         self._dl_bar.setValue(0)
@@ -961,39 +1377,95 @@ class UpgradePage(QWidget):
         toast_info("下载中", f"BDS {version} 正在下载...", self.window())
 
     def _on_dl_done(self, ok: bool, msg: str, zip_path: str, version: str):
+        self._dl_bar.setVisible(False)
         if not ok:
-            self._dl_bar.setVisible(False)
             toast_error("下载失败", msg, self.window())
-            self._log_line(f"❌ 下载失败: {msg}")
+            self._log_line(f"下载失败: {msg}")
             return
-        self._log_line("下载完成，开始安装...")
-        toast_success("下载完成", f"BDS {version} 下载完成", self.window())
-        ctx = get_context()
-        # 检测当前版本
-        from_version = ""
-        try:
-            ver_path = os.path.join(ctx.server_dir, "valid_known_packs.json")
-            # 用文件存在性粗略判断
-            if os.path.exists(os.path.join(ctx.server_dir, "bedrock_server.exe")):
-                from_version = "current"
-        except OSError:
-            pass
+        self._log_line(f"下载完成: {os.path.basename(zip_path)}")
+        toast_success("下载完成", f"BDS {version} 下载完成，请选择安装路径", self.window())
+        # 保存状态，等待用户选择安装路径
+        self._pending_zip = zip_path
+        self._pending_version = version
+        # 显示安装区，填充当前 BDS 目录
+        ctx_dl = get_context()
+        self._install_dir.setText(ctx_dl.bds_dir if hasattr(ctx_dl, "bds_dir") else ctx_dl.server_dir)
+        self._install_info.setText(f"已下载 BDS {version}，请选择安装路径后点击 [开始安装]")
+        self._install_btn.setEnabled(True)
+        self._install_card.setVisible(True)
+        self._update_install_status()
+        # 滚动到安装区
+        from PySide6.QtCore import QTimer
+        QTimer.singleShot(100, lambda: self._scroll.ensureWidgetVisible(self._install_card))
+
+    def _browse_install_dir(self):
+        from PySide6.QtWidgets import QFileDialog
+        d = QFileDialog.getExistingDirectory(self, "选择 BDS 安装目录", self._install_dir.text() or SCRIPT_DIR)
+        if d:
+            self._install_dir.setText(d)
+            self._update_install_status()
+
+    def _update_install_status(self):
+        d = self._install_dir.text()
+        if not d or not os.path.isdir(d):
+            self._install_status.setText("请选择一个有效的目录")
+            return
+        has_exe = os.path.isfile(os.path.join(d, "bedrock_server.exe"))
+        if has_exe:
+            self._install_status.setText("检测到已有服务器 — 将备份后再升级")
+        else:
+            self._install_status.setText("空目录 — 将完整安装")
+
+    def _do_install(self):
+        if not hasattr(self, "_pending_zip") or not os.path.exists(self._pending_zip):
+            toast_error("安装失败", "未找到已下载的安装包", self.window())
+            return
+        target = self._install_dir.text()
+        if not target or not os.path.isdir(target):
+            toast_error("安装失败", "请选择有效的安装目录", self.window())
+            return
+
+        version = self._pending_version
+        zip_path = self._pending_zip
+        is_upgrade = os.path.isfile(os.path.join(target, "bedrock_server.exe"))
+
+        self._log_line(f"{'升级' if is_upgrade else '新装'} BDS {version} → {target}")
+        self._install_btn.setEnabled(False)
+        self._install_progress.setVisible(True)
+        self._install_progress.setRange(0, 0)  # 不确定进度
+
         self._install_worker = InstallWorker(
-            zip_path, ctx.server_dir, True, version, from_version, self
+            zip_path, target, is_upgrade, version, "", self
         )
         self._install_worker.log.connect(self._log_line)
-        self._install_worker.finished.connect(lambda s, m: self._on_install_done(s, m, zip_path))
+        self._install_worker.finished.connect(lambda s, m: self._on_install_done(s, m, zip_path, target, is_upgrade))
         self._install_worker.start()
 
-    def _on_install_done(self, success: bool, msg: str, zip_path: str):
-        self._dl_bar.setVisible(False)
+    def _on_install_done(self, success: bool, msg: str, zip_path: str, target: str = "", is_upgrade: bool = False):
+        self._install_progress.setVisible(False)
+        self._install_card.setVisible(False)
         try:
             if os.path.exists(zip_path):
                 os.remove(zip_path)
-        except OSError:
-            pass  # zip 可能已被工作线程清理
+        except OSError as e:
+            logger.debug("清理安装包失败 (%s): %s", zip_path, e)
+        if hasattr(self, "_pending_zip"):
+            del self._pending_zip
+            del self._pending_version
+        self._install_btn.setEnabled(False)
         if success:
-            toast_success("安装完成", "BDS 已更新，请重新启动服务器", self.window())
+            # 安装成功 → 自动更新 server_dir 配置
+            ctx = get_context()
+            current_dir = ctx.bds_dir if hasattr(ctx, "bds_dir") else ctx.server_dir
+            if os.path.abspath(target) != os.path.abspath(current_dir):
+                config_mgr.set("server_dir", target)
+                config_mgr.save()
+                from shared.config import refresh_context_from_config
+                refresh_context_from_config()
+                toast_success("安装完成", f"BDS 已安装到 {target}\n已自动切换服务器目录", self.window())
+            else:
+                toast_success("安装完成", f"BDS 已{'更新' if is_upgrade else '安装'}到 {target}\n请重新启动服务器", self.window())
             self._refresh_history()
         else:
             toast_error("安装失败", msg, self.window())
+            self._install_btn.setEnabled(True)

@@ -14,11 +14,75 @@ v3.1 改进：
 import os
 import re
 import html
+import re
+
+# ── ANSI → HTML 转换 ──
+_ANSI_RE = re.compile(r'\x1b\[([0-9;]*)m')
+_ANSI_COLORS = {
+    "30": "#000", "31": "#f55", "32": "#5f5", "33": "#ff5",
+    "34": "#55f", "35": "#f5f", "36": "#5ff", "37": "#fff",
+    "90": "#888", "91": "#f88", "92": "#8f8", "93": "#ff8",
+    "94": "#88f", "95": "#f8f", "96": "#8ff", "97": "#fff",
+}
+
+def _ansi_to_html(text: str) -> str:
+    """将 ANSI 转义序列转换为 HTML span 标签。裸文本其余部分 html.escape。"""
+    parts = []
+    stack = []
+    last = 0
+    for m in _ANSI_RE.finditer(text):
+        # 未匹配的前缀
+        if m.start() > last:
+            parts.append(html.escape(text[last:m.start()]))
+        codes = m.group(1).split(";") if m.group(1) else ["0"]
+        style = ""
+        i = 0
+        while i < len(codes):
+            c = codes[i]
+            if c == "0":
+                stack = []
+            elif c == "1":
+                style += "font-weight:bold;"
+            elif c == "4":
+                style += "text-decoration:underline;"
+            elif c == "38" and i + 2 < len(codes) and codes[i + 1] == "2":
+                # 24bit 前景色
+                r, g, b = codes[i + 2], codes[i + 3] if i + 3 < len(codes) else "0", codes[i + 4] if i + 4 < len(codes) else "0"
+                style += f"color:rgb({r},{g},{b});"
+                i += 4
+            elif c == "48" and i + 2 < len(codes) and codes[i + 1] == "2":
+                # 24bit 背景色
+                r, g, b = codes[i + 2], codes[i + 3] if i + 3 < len(codes) else "0", codes[i + 4] if i + 4 < len(codes) else "0"
+                style += f"background:rgb({r},{g},{b});"
+                i += 4
+            elif c in _ANSI_COLORS:
+                style += f"color:{_ANSI_COLORS[c]};"
+            elif c in ("39",):  # default fg
+                style += "color:inherit;"
+            elif c in ("49",):  # default bg
+                style += "background:inherit;"
+            i += 1
+        if style:
+            stack.append(style)
+            parts.append(f'<span style="{style}">')
+        else:
+            # 关闭标签
+            for _ in stack:
+                parts.append("</span>")
+            stack = []
+        last = m.end()
+    # 尾部
+    if last < len(text):
+        parts.append(html.escape(text[last:]))
+    # 关闭所有
+    for _ in stack:
+        parts.append("</span>")
+    return "".join(parts)
 import time
 from datetime import datetime
 from threading import Lock
 
-from PySide6.QtCore import Qt, QTimer, QStringListModel
+from PySide6.QtCore import Qt, QTimer, QStringListModel, Signal
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QScrollArea, QFrame,
     QPlainTextEdit, QCompleter,
@@ -27,7 +91,7 @@ from PySide6.QtGui import QTextCursor, QTextCharFormat, QColor
 from qfluentwidgets import (
     CardWidget, SubtitleLabel, StrongBodyLabel, BodyLabel, CaptionLabel,
     PrimaryPushButton, PushButton, LineEdit, FluentIcon,
-    ToggleButton, CheckBox, isDarkTheme,
+    ToggleButton, CheckBox, ComboBox, isDarkTheme,
 )
 
 from pages.dashboard import wrap_scrollable
@@ -72,8 +136,8 @@ def _write_log(text: str):
             _log_write_count += 1
             if _log_write_count % 50 == 0:
                 _log_file.flush()
-    except OSError:
-        pass  # 日志文件写入失败（磁盘满等）
+    except OSError as e:
+        logger.debug("控制台日志写入磁盘失败: %s", e)
 
 
 def _close_log_file():
@@ -91,14 +155,15 @@ def _close_log_file():
 # ── 暗色日志 ──
 def _log_style() -> str:
     """v3.02.01: 控制台日志 QPlainTextEdit 主题感知样式。"""
+    size = config_mgr.get("font_size", 12)
     if isDarkTheme():
-        return """
-            QPlainTextEdit { background:#1e1e1e; color:#ccc; border:1px solid #3a3a3a;
-                border-radius:6px; padding:6px; font-family:Consolas,"Microsoft YaHei",monospace; font-size:12px; }
+        return f"""
+            QPlainTextEdit {{ background:#1e1e1e; color:#ccc; border:1px solid #3a3a3a;
+                border-radius:6px; padding:6px; font-family:Consolas,"Microsoft YaHei",monospace; font-size:{size}px; }}
         """
-    return """
-        QPlainTextEdit { background:#fafafa; color:#1a1a1a; border:1px solid #d0d0d0;
-            border-radius:6px; padding:6px; font-family:Consolas,"Microsoft YaHei",monospace; font-size:12px; }
+    return f"""
+        QPlainTextEdit {{ background:#fafafa; color:#1a1a1a; border:1px solid #d0d0d0;
+            border-radius:6px; padding:6px; font-family:Consolas,"Microsoft YaHei",monospace; font-size:{size}px; }}
     """
 
 
@@ -148,8 +213,8 @@ def _dump_snapshot_if_full(log, new_count: int, limit: int):
             path = os.path.join(LOG_DIR, f"console_snapshot_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log")
             with open(path, "w", encoding="utf-8") as f:
                 f.write(log.toPlainText()[-100000:])
-        except OSError:
-            pass  # 快照写入失败（磁盘满等）
+        except OSError as e:
+            logger.debug("控制台快照写入失败: %s", e)
 
 
 # ---------- 玩家列表 ----------
@@ -180,6 +245,8 @@ class PlayerListWidget(QWidget):
 class LevelFilterBar(QWidget):
     """4 个 CheckBox 用于过滤显示哪些级别的日志。"""
 
+    changed = Signal()
+
     def __init__(self, parent=None):
         super().__init__(parent)
         layout = QHBoxLayout(self)
@@ -192,15 +259,36 @@ class LevelFilterBar(QWidget):
                            ("错误", "error"), ("聊天", "chat")]:
             cb = CheckBox(label, self)
             cb.setChecked(True)
+            cb.toggled.connect(lambda: self.changed.emit())
             self._filters[key] = cb
             layout.addWidget(cb)
+        self._filter_count = CaptionLabel("", self)
+        layout.addWidget(self._filter_count)
+        self._show_all = PushButton("显示全部", self)
+        self._show_all.setFixedWidth(72)
+        self._show_all.clicked.connect(self._show_all_filters)
+        self._show_all.hide()
+        layout.addWidget(self._show_all)
         layout.addStretch()
+
+    def _show_all_filters(self):
+        for cb in self._filters.values():
+            cb.setChecked(True)
+        self._show_all.hide()
 
     def is_enabled(self, level: str) -> bool:
         return self._filters.get(level, CheckBox(self)).isChecked()
 
     def levels_enabled(self) -> set[str]:
         return {k for k, cb in self._filters.items() if cb.isChecked()}
+
+    def set_visible_count(self, visible: int, total: int):
+        if visible < total:
+            self._filter_count.setText(f"({visible}/{total})")
+            self._show_all.show()
+        else:
+            self._filter_count.setText("")
+            self._show_all.hide()
 
 
 # ---------- 控制台页面 ----------
@@ -210,7 +298,7 @@ class ConsolePage(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self._auto_scroll = config_mgr.get("console_auto_scroll", True)
-        self._cmd_history: list[str] = []
+        self._cmd_history: list[str] = config_mgr.get("cmd_history", [])
         self._cmd_history_idx = -1
         self._crash_marker_visible = False
         self._show_timestamps = config_mgr.get("console_show_timestamps", True)
@@ -228,6 +316,23 @@ class ConsolePage(QWidget):
         self._stop_btn = PushButton("停止", ctrl_card, FluentIcon.CANCEL)
         self._stop_btn.setEnabled(False)
         self._stop_btn.clicked.connect(self._on_stop)
+        self._stop_btn.setMinimumWidth(60)
+
+        # 服务器类型选择
+        self._server_type = ComboBox(ctrl_card)
+        self._server_type.addItems(["纯 BDS", "BDS + LL"])
+        self._server_type.currentIndexChanged.connect(self._on_server_type_changed)
+        self._server_type.setMinimumWidth(100)  # 先占位
+
+        # 延迟设置选中项：确保在 SettingsPage _connect_auto_save 之后执行
+        def _apply_saved_type():
+            stype = config_mgr.get("server_type", "bds")
+            self._server_type.blockSignals(True)
+            self._server_type.setCurrentIndex(1 if stype == "ll" else 0)
+            self._server_type.blockSignals(False)
+            self._start_btn.setText("启动 (LL)" if stype == "ll" else "启动服务器")
+        QTimer.singleShot(50, _apply_saved_type)
+
         self._restart_btn = PushButton("重启", ctrl_card, FluentIcon.SYNC)
         self._restart_btn.setEnabled(False)
         self._restart_btn.clicked.connect(self._on_restart)
@@ -238,9 +343,15 @@ class ConsolePage(QWidget):
 
         ctrl_layout.addWidget(self._start_btn)
         ctrl_layout.addWidget(self._stop_btn)
+        ctrl_layout.addWidget(self._server_type)
         ctrl_layout.addWidget(self._restart_btn)
         ctrl_layout.addStretch()
-        self._status_label = BodyLabel("● 未运行", ctrl_card)
+
+        self._folder_btn = PushButton("目录", ctrl_card, FluentIcon.FOLDER)
+        self._folder_btn.clicked.connect(self._open_server_dir)
+        ctrl_layout.addWidget(self._folder_btn)
+
+        self._status_label = BodyLabel("未运行", ctrl_card)
         self._status_label.setStyleSheet("color: #888;")
         ctrl_layout.addWidget(self._status_label)
         ctrl_layout.addStretch()
@@ -319,21 +430,25 @@ class ConsolePage(QWidget):
         preset_layout = QHBoxLayout(preset_card)
         preset_layout.setContentsMargins(16, 8, 16, 8)
         preset_layout.setSpacing(6)
-        preset_layout.addWidget(CaptionLabel("命令预设:", preset_card))
+        preset_layout.addWidget(CaptionLabel("命令:", preset_card))
+        self._preset_combo = ComboBox(preset_card)
+        self._preset_combo.setMinimumWidth(120)
         for label, cmd in [
-            ("保存世界", "save hold"),
-            ("查询保存", "save query"),
-            ("恢复保存", "save resume"),
-            ("玩家列表", "list"),
-            ("停服", "stop"),
-            ("白名单开", "whitelist on"),
-            ("天气晴", "weather clear"),
-            ("白天", "time set day"),
+            ("保存世界 - save hold", "save hold"),
+            ("查询保存 - save query", "save query"),
+            ("恢复保存 - save resume", "save resume"),
+            ("玩家列表 - list", "list"),
+            ("停服 - stop", "stop"),
+            ("白名单开 - whitelist on", "whitelist on"),
+            ("天气晴 - weather clear", "weather clear"),
+            ("白天 - time set day", "time set day"),
         ]:
-            b = PushButton(label, preset_card)
-            b.setMinimumWidth(70)
-            b.clicked.connect(lambda checked, c=cmd: self._send_command(c))
-            preset_layout.addWidget(b)
+            self._preset_combo.addItem(label, cmd)
+        self._preset_combo.currentIndexChanged.connect(
+            lambda idx: self._send_command(self._preset_combo.currentData()) if idx >= 0 else None)
+        self._preset_combo.setCurrentIndex(-1)
+        self._preset_combo.setPlaceholderText("选择预设命令...")
+        preset_layout.addWidget(self._preset_combo)
         preset_layout.addStretch()
         layout.addWidget(preset_card)
 
@@ -448,15 +563,14 @@ class ConsolePage(QWidget):
             return
         if color == "#ccc":
             color = self._color_for_line(text)
-        # 拼接前缀（时间戳）
+        # ANSI → HTML + 拼接前缀
         if self._show_timestamps:
             prefix = f'[{datetime.now().strftime("%H:%M:%S")}] '
         else:
             prefix = ""
-        # HTML 转义后插入
-        safe = html.escape(prefix + text)
+        content = _ansi_to_html(prefix + text) if "\x1b" in text else html.escape(prefix + text)
         self._log.appendHtml(
-            f'<span style="color:{color}; white-space:pre-wrap;">{safe}</span>'
+            f'<span style="color:{color}; white-space:pre-wrap;">{content}</span>'
         )
         if self._auto_scroll:
             self._log.moveCursor(QTextCursor.End)
@@ -466,7 +580,7 @@ class ConsolePage(QWidget):
             try:
                 win.check_lag_response(text)
             except (AttributeError, RuntimeError):
-                pass
+                pass  # check_lag_response 不可用
 
     def _track_player(self, text: str):
         m = self._PLAYER_JOIN.search(text)
@@ -526,22 +640,44 @@ class ConsolePage(QWidget):
         if not cmd:
             return
         win = self.window()
-        if win and win.is_server_running:
-            win._server.send_command(cmd)
-            self._append_output(f"> {cmd}", "#0DC5D4")
-            from backend.webhook import send_webhook
-            send_webhook("command_executed", "执行命令", cmd)
-        else:
-            toast_warning("提示", "服务器未运行", win or self)
+        cmd_lower = cmd.strip().lower()
+        if not win.is_server_running:
+            if cmd_lower == "start":
+                from backend.server_lifecycle import start_server
+                start_server(win)
+                self._append_output(f"> start（启动服务器）", "#0DC5D4")
+                self._save_cmd_history()
+                self._cmd_input.clear()
+                return
+            toast_warning("提示", "服务器未运行，输入 start 可启动", win or self)
+            self._cmd_history.append(cmd)
+            self._save_cmd_history()
+            return
+        win._server.send_command(cmd)
+        self._append_output(f"> {cmd}", "#0DC5D4")
+        from backend.webhook import send_webhook
+        send_webhook("command_executed", "执行命令", cmd)
         self._cmd_history.append(cmd)
+        self._save_cmd_history()
+        self._cmd_history_idx = -1
+
+    def _save_cmd_history(self):
+        """持久化最近 50 条命令历史。"""
         if len(self._cmd_history) > 100:
             self._cmd_history = self._cmd_history[-100:]
-        self._cmd_history_idx = -1
+        config_mgr.set("cmd_history", self._cmd_history[-50:])
+        config_mgr.save()
 
     def _on_auto_scroll_toggle(self, v: bool):
         self._auto_scroll = v
         config_mgr.set("console_auto_scroll", v)
         config_mgr.save()
+
+    def _open_server_dir(self):
+        from shared.config import get_context
+        import webbrowser
+        ctx = get_context()
+        webbrowser.open(ctx.server_dir)
 
     # ---------- 事件过滤（命令历史 + Tab）----------
     def eventFilter(self, obj, event):
@@ -564,6 +700,16 @@ class ConsolePage(QWidget):
         return super().eventFilter(obj, event)
 
     # ---------- 按钮 ----------
+    def _on_server_type_changed(self, idx):
+        stype = "ll" if idx == 1 else "bds"
+        config_mgr.set("server_type", stype)
+        config_mgr.save()
+        # 刷新 ServerContext，所有 ctx.* 路径跟随切换
+        from shared.config import refresh_context_from_config
+        refresh_context_from_config()
+        # 更新按钮文字
+        self._start_btn.setText("启动 (LL)" if stype == "ll" else "启动服务器")
+
     def _on_start(self):
         win = self.window()
         err = win.start_server()
@@ -576,12 +722,11 @@ class ConsolePage(QWidget):
     def _on_stop(self):
         win = self.window()
         if win.is_server_running:
-            from PySide6.QtWidgets import QMessageBox
-            r = QMessageBox.question(win, "确认停止", "确定要停止 BDS 服务器吗？",
-                                     QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
-            if r != QMessageBox.Yes:
-                return
-        win.stop_server()
+            from PySide6.QtWidgets import QDialog, QVBoxLayout, QLabel
+            from qfluentwidgets import MessageBox
+            if MessageBox("确认停止", "确定要停止服务器吗？", win).exec():
+                win.stop_server()
+            return
 
     def _on_restart(self):
         win = self.window()
@@ -607,9 +752,9 @@ class ConsolePage(QWidget):
 
     def _on_status_changed(self, running: bool):
         if running:
-            self._status_label.setText("● 运行中")
+            self._status_label.setText("运行中")
             self._status_label.setStyleSheet("color: #4CAF50;")
         else:
-            self._status_label.setText("● 未运行")
+            self._status_label.setText("未运行")
             hint = "#888" if isDarkTheme() else "#666"
             self._status_label.setStyleSheet(f"color: {hint};")

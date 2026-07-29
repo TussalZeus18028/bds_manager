@@ -153,7 +153,7 @@ class WorldPage(QWidget):
         list_outer.addWidget(StrongBodyLabel("备份列表（点击查看内容）", list_card))
 
         splitter = QSplitter(Qt.Horizontal, list_card)
-        splitter.setHandleWidth(6)
+        splitter.setHandleWidth(10)
 
         # 左：表格
         self._table = QTableWidget(0, 5, splitter)
@@ -347,8 +347,8 @@ class WorldPage(QWidget):
                             info_lines.append(f"最大玩家: {v}")
                         elif k == "server-port":
                             info_lines.append(f"端口: {v}")
-            except (OSError, UnicodeDecodeError):
-                pass
+            except (OSError, UnicodeDecodeError) as e:
+                logger.debug("读取 server.properties 失败: %s", e)
         if not info_lines:
             info_lines.append("(未检测到 server.properties)")
         info_lines.append("磁盘占用: <b>正在计算…</b>")
@@ -399,7 +399,7 @@ class WorldPage(QWidget):
             import main
             bds_ver = main.__version__
         except (ImportError, AttributeError):
-            pass
+            bds_ver = "unknown"
 
         self._worker = BackupWorker(
             level, world_path, ctx.backup_dir, parent=self, prefix="manual_",
@@ -428,8 +428,8 @@ class WorldPage(QWidget):
             try:
                 from backend.notifications import notify
                 notify("error", "backup", "备份失败", message, "page:world")
-            except (ImportError, OSError, AttributeError):
-                pass  # 通知中心不可用时静默
+            except (ImportError, OSError, AttributeError) as e:
+                logger.warning("通知中心不可用，备份结果略过: %s", e)
         self._refresh_list()
 
     def _cleanup_backups(self):

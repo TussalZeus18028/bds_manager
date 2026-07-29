@@ -306,7 +306,7 @@ class PackInfoDialog(QDialog):
             row.addWidget(val, 1)
             fl.addLayout(row)
 
-        _section("● 基本信息")
+        _section("基本信息")
         _field("路径", pack_info["dirname"])
         _field("UUID", pack_info["uuid"])
         _field("版本", pack_info["version"])
@@ -495,7 +495,7 @@ class PacksPage(QWidget):
                     p["uuid"][:12] + "..." if p["uuid"] else "—"))
 
                 # 状态列：✓ 已激活 / — 未激活
-                status_item = QTableWidgetItem("✅ 已激活" if p["is_active"] else "— 未激活")
+                status_item = QTableWidgetItem("已激活" if p["is_active"] else "— 未激活")
                 status_item.setForeground(
                     QColor("#4CAF50") if p["is_active"] else
                     (QColor("#555") if not isDarkTheme() else QColor("#888")))

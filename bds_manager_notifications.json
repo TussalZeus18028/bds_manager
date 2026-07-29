@@ -1,187 +1,7 @@
 [
   {
-    "id": "n_1785057684096_06c9",
-    "ts": 1785057684.096439,
-    "level": "warning",
-    "category": "toast",
-    "title": "内存告警",
-    "body": "内存使用率 50.1%（阈值: 50%）",
-    "action_target": "",
-    "read": false
-  },
-  {
-    "id": "n_1785057651654_4440",
-    "ts": 1785057651.6541054,
-    "level": "warning",
-    "category": "toast",
-    "title": "内存告警",
-    "body": "内存使用率 54.6%（阈值: 50%）",
-    "action_target": "",
-    "read": false
-  },
-  {
-    "id": "n_1785057621530_cb20",
-    "ts": 1785057621.530163,
-    "level": "warning",
-    "category": "toast",
-    "title": "内存告警",
-    "body": "内存使用率 54.5%（阈值: 50%）",
-    "action_target": "",
-    "read": false
-  },
-  {
-    "id": "n_1785057591534_a089",
-    "ts": 1785057591.5340044,
-    "level": "warning",
-    "category": "toast",
-    "title": "内存告警",
-    "body": "内存使用率 54.3%（阈值: 50%）",
-    "action_target": "",
-    "read": false
-  },
-  {
-    "id": "n_1785057561450_625b",
-    "ts": 1785057561.450904,
-    "level": "warning",
-    "category": "toast",
-    "title": "内存告警",
-    "body": "内存使用率 54.1%（阈值: 50%）",
-    "action_target": "",
-    "read": false
-  },
-  {
-    "id": "n_1785057531410_c17b",
-    "ts": 1785057531.4109638,
-    "level": "warning",
-    "category": "toast",
-    "title": "内存告警",
-    "body": "内存使用率 54.2%（阈值: 50%）",
-    "action_target": "",
-    "read": false
-  },
-  {
-    "id": "n_1785057501359_4896",
-    "ts": 1785057501.3599224,
-    "level": "warning",
-    "category": "toast",
-    "title": "内存告警",
-    "body": "内存使用率 54.0%（阈值: 50%）",
-    "action_target": "",
-    "read": false
-  },
-  {
-    "id": "n_1785057471321_db3d",
-    "ts": 1785057471.3210917,
-    "level": "warning",
-    "category": "toast",
-    "title": "内存告警",
-    "body": "内存使用率 54.1%（阈值: 50%）",
-    "action_target": "",
-    "read": false
-  },
-  {
-    "id": "n_1785057441160_765c",
-    "ts": 1785057441.1606653,
-    "level": "warning",
-    "category": "toast",
-    "title": "内存告警",
-    "body": "内存使用率 54.2%（阈值: 50%）",
-    "action_target": "",
-    "read": false
-  },
-  {
-    "id": "n_1785057411102_c003",
-    "ts": 1785057411.1022458,
-    "level": "warning",
-    "category": "toast",
-    "title": "内存告警",
-    "body": "内存使用率 54.1%（阈值: 50%）",
-    "action_target": "",
-    "read": false
-  },
-  {
-    "id": "n_1785057381082_6033",
-    "ts": 1785057381.0829594,
-    "level": "warning",
-    "category": "toast",
-    "title": "内存告警",
-    "body": "内存使用率 54.7%（阈值: 50%）",
-    "action_target": "",
-    "read": false
-  },
-  {
-    "id": "n_1785057351020_29a6",
-    "ts": 1785057351.0200024,
-    "level": "warning",
-    "category": "toast",
-    "title": "内存告警",
-    "body": "内存使用率 54.6%（阈值: 50%）",
-    "action_target": "",
-    "read": false
-  },
-  {
-    "id": "n_1785057320929_ec38",
-    "ts": 1785057320.9291315,
-    "level": "warning",
-    "category": "toast",
-    "title": "内存告警",
-    "body": "内存使用率 54.2%（阈值: 50%）",
-    "action_target": "",
-    "read": false
-  },
-  {
-    "id": "n_1785057290846_7281",
-    "ts": 1785057290.8468199,
-    "level": "warning",
-    "category": "toast",
-    "title": "内存告警",
-    "body": "内存使用率 55.7%（阈值: 50%）",
-    "action_target": "",
-    "read": false
-  },
-  {
-    "id": "n_1785057260790_d68a",
-    "ts": 1785057260.7903256,
-    "level": "warning",
-    "category": "toast",
-    "title": "内存告警",
-    "body": "内存使用率 50.9%（阈值: 50%）",
-    "action_target": "",
-    "read": false
-  },
-  {
-    "id": "n_1785057230713_7471",
-    "ts": 1785057230.7138977,
-    "level": "warning",
-    "category": "toast",
-    "title": "内存告警",
-    "body": "内存使用率 51.0%（阈值: 50%）",
-    "action_target": "",
-    "read": false
-  },
-  {
-    "id": "n_1785057200714_fbe5",
-    "ts": 1785057200.7146893,
-    "level": "warning",
-    "category": "toast",
-    "title": "内存告警",
-    "body": "内存使用率 52.5%（阈值: 50%）",
-    "action_target": "",
-    "read": false
-  },
-  {
-    "id": "n_1785057170782_47c7",
-    "ts": 1785057170.782783,
-    "level": "warning",
-    "category": "toast",
-    "title": "内存告警",
-    "body": "内存使用率 50.1%（阈值: 50%）",
-    "action_target": "",
-    "read": false
-  },
-  {
-    "id": "n_1785053035275_0841",
-    "ts": 1785053035.2755089,
+    "id": "n_1785299966664_68bd",
+    "ts": 1785299966.664394,
     "level": "warning",
     "category": "toast",
     "title": "安全关闭",
@@ -190,8 +10,8 @@
     "read": false
   },
   {
-    "id": "n_1785053035113_ea7a",
-    "ts": 1785053035.1136553,
+    "id": "n_1785299966614_c432",
+    "ts": 1785299966.6143632,
     "level": "warning",
     "category": "system",
     "title": "安全关闭",
@@ -200,38 +20,8 @@
     "read": false
   },
   {
-    "id": "n_1785053032472_cceb",
-    "ts": 1785053032.4729924,
-    "level": "success",
-    "category": "toast",
-    "title": "已保存",
-    "body": "allowlist.json 已更新",
-    "action_target": "",
-    "read": false
-  },
-  {
-    "id": "n_1785052976459_db54",
-    "ts": 1785052976.459237,
-    "level": "success",
-    "category": "toast",
-    "title": "服务器已启动",
-    "body": "bedrock_server.exe",
-    "action_target": "",
-    "read": false
-  },
-  {
-    "id": "n_1785052976378_f42e",
-    "ts": 1785052976.3784087,
-    "level": "success",
-    "category": "server",
-    "title": "服务器已启动",
-    "body": "bedrock_server.exe",
-    "action_target": "page:dashboard",
-    "read": false
-  },
-  {
-    "id": "n_1785052962806_c904",
-    "ts": 1785052962.806208,
+    "id": "n_1785298664433_1d74",
+    "ts": 1785298664.4333534,
     "level": "warning",
     "category": "toast",
     "title": "内存告警",
@@ -240,188 +30,8 @@
     "read": false
   },
   {
-    "id": "n_1785052933760_90bd",
-    "ts": 1785052933.760275,
-    "level": "success",
-    "category": "toast",
-    "title": "已发送",
-    "body": "如未收到请检查 URL 与事件订阅",
-    "action_target": "",
-    "read": false
-  },
-  {
-    "id": "n_1785052772366_2c9e",
-    "ts": 1785052772.3666296,
-    "level": "warning",
-    "category": "toast",
-    "title": "内存告警",
-    "body": "内存使用率 50.1%（阈值: 50%）",
-    "action_target": "",
-    "read": false
-  },
-  {
-    "id": "n_1785052742305_79e6",
-    "ts": 1785052742.3055072,
-    "level": "warning",
-    "category": "toast",
-    "title": "内存告警",
-    "body": "内存使用率 50.0%（阈值: 50%）",
-    "action_target": "",
-    "read": false
-  },
-  {
-    "id": "n_1785051487604_4b6a",
-    "ts": 1785051487.6049764,
-    "level": "warning",
-    "category": "toast",
-    "title": "安全关闭",
-    "body": "服务器 / 隧道 / 监控已全部停止，1 秒后退出",
-    "action_target": "",
-    "read": false
-  },
-  {
-    "id": "n_1785051487347_1954",
-    "ts": 1785051487.3471966,
-    "level": "warning",
-    "category": "system",
-    "title": "安全关闭",
-    "body": "服务器 / 隧道 / 监控已全部停止，1 秒后退出",
-    "action_target": "",
-    "read": false
-  },
-  {
-    "id": "n_1785051469660_ca8f",
-    "ts": 1785051469.6609597,
-    "level": "warning",
-    "category": "toast",
-    "title": "内存告警",
-    "body": "内存使用率 51.9%（阈值: 50%）",
-    "action_target": "",
-    "read": false
-  },
-  {
-    "id": "n_1785049253950_fda0",
-    "ts": 1785049253.9508348,
-    "level": "warning",
-    "category": "toast",
-    "title": "安全关闭",
-    "body": "服务器 / 隧道 / 监控已全部停止，1 秒后退出",
-    "action_target": "",
-    "read": false
-  },
-  {
-    "id": "n_1785049252944_42c2",
-    "ts": 1785049252.9441316,
-    "level": "warning",
-    "category": "system",
-    "title": "安全关闭",
-    "body": "服务器 / 隧道 / 监控已全部停止，1 秒后退出",
-    "action_target": "",
-    "read": false
-  },
-  {
-    "id": "n_1785049009612_1876",
-    "ts": 1785049009.6124065,
-    "level": "error",
-    "category": "toast",
-    "title": "程序遇到未预期错误",
-    "body": "name 'wrap_scrollable' is not defined\n\n请查看 logs/bds_manager.log 获取详细信息。",
-    "action_target": "",
-    "read": false
-  },
-  {
-    "id": "n_1785048397453_7f48",
-    "ts": 1785048397.4530728,
-    "level": "warning",
-    "category": "toast",
-    "title": "安全关闭",
-    "body": "服务器 / 隧道 / 监控已全部停止，1 秒后退出",
-    "action_target": "",
-    "read": false
-  },
-  {
-    "id": "n_1785048397430_be2b",
-    "ts": 1785048397.430365,
-    "level": "warning",
-    "category": "system",
-    "title": "安全关闭",
-    "body": "服务器 / 隧道 / 监控已全部停止，1 秒后退出",
-    "action_target": "",
-    "read": false
-  },
-  {
-    "id": "n_1785048012509_acb5",
-    "ts": 1785048012.5090194,
-    "level": "warning",
-    "category": "toast",
-    "title": "安全关闭",
-    "body": "服务器 / 隧道 / 监控已全部停止，1 秒后退出",
-    "action_target": "",
-    "read": false
-  },
-  {
-    "id": "n_1785048012200_c53d",
-    "ts": 1785048012.2008338,
-    "level": "warning",
-    "category": "system",
-    "title": "安全关闭",
-    "body": "服务器 / 隧道 / 监控已全部停止，1 秒后退出",
-    "action_target": "",
-    "read": false
-  },
-  {
-    "id": "n_1785047897760_1a21",
-    "ts": 1785047897.760101,
-    "level": "warning",
-    "category": "toast",
-    "title": "安全关闭",
-    "body": "服务器 / 隧道 / 监控已全部停止，1 秒后退出",
-    "action_target": "",
-    "read": false
-  },
-  {
-    "id": "n_1785047897733_cc4f",
-    "ts": 1785047897.73392,
-    "level": "warning",
-    "category": "system",
-    "title": "安全关闭",
-    "body": "服务器 / 隧道 / 监控已全部停止，1 秒后退出",
-    "action_target": "",
-    "read": false
-  },
-  {
-    "id": "n_1785047878470_4b50",
-    "ts": 1785047878.4709435,
-    "level": "success",
-    "category": "toast",
-    "title": "已保存",
-    "body": "E:/Launcher/服务器/ChmlFrp\\frpc.ini",
-    "action_target": "",
-    "read": false
-  },
-  {
-    "id": "n_1785047877262_ed6d",
-    "ts": 1785047877.2623615,
-    "level": "success",
-    "category": "toast",
-    "title": "已加载",
-    "body": "E:/Launcher/服务器/ChmlFrp\\frpc.ini",
-    "action_target": "",
-    "read": false
-  },
-  {
-    "id": "n_1785047848112_fd37",
-    "ts": 1785047848.1121697,
-    "level": "success",
-    "category": "toast",
-    "title": "已保存",
-    "body": "E:/Launcher/服务器/ChmlFrp\\frpc.ini",
-    "action_target": "",
-    "read": false
-  },
-  {
-    "id": "n_1785047829742_a267",
-    "ts": 1785047829.742052,
+    "id": "n_1785298655521_4372",
+    "ts": 1785298655.5219157,
     "level": "info",
     "category": "toast",
     "title": "工具即将重启",
@@ -430,8 +40,8 @@
     "read": false
   },
   {
-    "id": "n_1785047801822_987d",
-    "ts": 1785047801.822261,
+    "id": "n_1785298627513_763d",
+    "ts": 1785298627.5139325,
     "level": "warning",
     "category": "toast",
     "title": "内存告警",
@@ -440,8 +50,8 @@
     "read": false
   },
   {
-    "id": "n_1785047479308_691e",
-    "ts": 1785047479.3087373,
+    "id": "n_1785298617112_cc52",
+    "ts": 1785298617.1120336,
     "level": "warning",
     "category": "toast",
     "title": "安全关闭",
@@ -450,8 +60,8 @@
     "read": false
   },
   {
-    "id": "n_1785047478744_f23d",
-    "ts": 1785047478.7446792,
+    "id": "n_1785298616899_06c2",
+    "ts": 1785298616.899372,
     "level": "warning",
     "category": "system",
     "title": "安全关闭",
@@ -460,8 +70,18 @@
     "read": false
   },
   {
-    "id": "n_1785047382067_ca54",
-    "ts": 1785047382.0679789,
+    "id": "n_1785298609951_4fc2",
+    "ts": 1785298609.9510522,
+    "level": "warning",
+    "category": "toast",
+    "title": "内存告警",
+    "body": "内存使用率 50.1%（阈值: 50%）",
+    "action_target": "",
+    "read": false
+  },
+  {
+    "id": "n_1785298456895_dfaf",
+    "ts": 1785298456.8954482,
     "level": "warning",
     "category": "toast",
     "title": "安全关闭",
@@ -470,8 +90,8 @@
     "read": false
   },
   {
-    "id": "n_1785047382043_b62c",
-    "ts": 1785047382.0438907,
+    "id": "n_1785298455997_6c24",
+    "ts": 1785298455.9975932,
     "level": "warning",
     "category": "system",
     "title": "安全关闭",
@@ -480,8 +100,18 @@
     "read": false
   },
   {
-    "id": "n_1785047262833_afd9",
-    "ts": 1785047262.8338113,
+    "id": "n_1785298443515_3342",
+    "ts": 1785298443.5154047,
+    "level": "warning",
+    "category": "toast",
+    "title": "内存告警",
+    "body": "内存使用率 50.3%（阈值: 50%）",
+    "action_target": "",
+    "read": false
+  },
+  {
+    "id": "n_1785298315402_6701",
+    "ts": 1785298315.4025924,
     "level": "warning",
     "category": "toast",
     "title": "安全关闭",
@@ -490,8 +120,8 @@
     "read": false
   },
   {
-    "id": "n_1785047262567_824a",
-    "ts": 1785047262.5672157,
+    "id": "n_1785298314626_e47c",
+    "ts": 1785298314.6269133,
     "level": "warning",
     "category": "system",
     "title": "安全关闭",
@@ -500,128 +130,218 @@
     "read": false
   },
   {
-    "id": "n_1785047224892_0fbd",
-    "ts": 1785047224.8927925,
+    "id": "n_1785294900275_021c",
+    "ts": 1785294900.2755902,
+    "level": "warning",
+    "category": "toast",
+    "title": "安全关闭",
+    "body": "服务器 / 隧道 / 监控已全部停止，1 秒后退出",
+    "action_target": "",
+    "read": false
+  },
+  {
+    "id": "n_1785294900235_e33c",
+    "ts": 1785294900.2355123,
+    "level": "warning",
+    "category": "system",
+    "title": "安全关闭",
+    "body": "服务器 / 隧道 / 监控已全部停止，1 秒后退出",
+    "action_target": "",
+    "read": false
+  },
+  {
+    "id": "n_1785294869460_b7ad",
+    "ts": 1785294869.4609268,
     "level": "success",
     "category": "toast",
-    "title": "已保存",
-    "body": "allowlist.json 已更新",
+    "title": "服务器已启动",
+    "body": "bedrock_server.exe",
     "action_target": "",
     "read": false
   },
   {
-    "id": "n_1785047148617_c9b7",
-    "ts": 1785047148.618544,
+    "id": "n_1785294869418_f738",
+    "ts": 1785294869.4189153,
+    "level": "success",
+    "category": "server",
+    "title": "服务器已启动",
+    "body": "bedrock_server.exe",
+    "action_target": "page:dashboard",
+    "read": false
+  },
+  {
+    "id": "n_1785294838955_7d79",
+    "ts": 1785294838.9558394,
+    "level": "success",
+    "category": "toast",
+    "title": "服务器已启动",
+    "body": "bedrock_server_mod.exe",
+    "action_target": "",
+    "read": false
+  },
+  {
+    "id": "n_1785294838907_1a32",
+    "ts": 1785294838.9078093,
+    "level": "success",
+    "category": "server",
+    "title": "服务器已启动",
+    "body": "bedrock_server_mod.exe",
+    "action_target": "page:dashboard",
+    "read": false
+  },
+  {
+    "id": "n_1785294832163_e19d",
+    "ts": 1785294832.1633995,
     "level": "error",
     "category": "toast",
-    "title": "程序遇到未预期错误",
-    "body": "PushButton.__init__() takes from 1 to 2 positional arguments but 3 were given\n\n请查看 logs/bds_manager.log 获取详细信息。",
+    "title": "启动失败",
+    "body": "未找到服务器可执行文件: bedrock_server.exe",
     "action_target": "",
     "read": false
   },
   {
-    "id": "n_1785047147332_7711",
-    "ts": 1785047147.332137,
+    "id": "n_1785294832117_b6dd",
+    "ts": 1785294832.1171463,
     "level": "error",
     "category": "toast",
-    "title": "程序遇到未预期错误",
-    "body": "PushButton.__init__() takes from 1 to 2 positional arguments but 3 were given\n\n请查看 logs/bds_manager.log 获取详细信息。",
+    "title": "服务器启动失败",
+    "body": "未找到服务器可执行文件: bedrock_server.exe",
     "action_target": "",
     "read": false
   },
   {
-    "id": "n_1785047144548_9017",
-    "ts": 1785047144.5482087,
+    "id": "n_1785294831991_4c7a",
+    "ts": 1785294831.991466,
+    "level": "error",
+    "category": "server",
+    "title": "服务器启动失败",
+    "body": "未找到服务器可执行文件: bedrock_server.exe",
+    "action_target": "page:dashboard",
+    "read": false
+  },
+  {
+    "id": "n_1785294807190_453f",
+    "ts": 1785294807.190672,
     "level": "error",
     "category": "toast",
-    "title": "程序遇到未预期错误",
-    "body": "PushButton.__init__() takes from 1 to 2 positional arguments but 3 were given\n\n请查看 logs/bds_manager.log 获取详细信息。",
+    "title": "启动失败",
+    "body": "未找到服务器可执行文件: bedrock_server.exe",
     "action_target": "",
     "read": false
   },
   {
-    "id": "n_1785046915814_9ccc",
-    "ts": 1785046915.8147705,
-    "level": "warning",
+    "id": "n_1785294807151_4abd",
+    "ts": 1785294807.1510358,
+    "level": "error",
     "category": "toast",
-    "title": "安全关闭",
-    "body": "服务器 / 隧道 / 监控已全部停止，1 秒后退出",
+    "title": "服务器启动失败",
+    "body": "未找到服务器可执行文件: bedrock_server.exe",
     "action_target": "",
     "read": false
   },
   {
-    "id": "n_1785046915780_0c48",
-    "ts": 1785046915.7807403,
-    "level": "warning",
-    "category": "system",
-    "title": "安全关闭",
-    "body": "服务器 / 隧道 / 监控已全部停止，1 秒后退出",
-    "action_target": "",
+    "id": "n_1785294807112_226d",
+    "ts": 1785294807.1123762,
+    "level": "error",
+    "category": "server",
+    "title": "服务器启动失败",
+    "body": "未找到服务器可执行文件: bedrock_server.exe",
+    "action_target": "page:dashboard",
     "read": false
   },
   {
-    "id": "n_1785046779119_18f5",
-    "ts": 1785046779.1195223,
-    "level": "warning",
+    "id": "n_1785294792306_fc6c",
+    "ts": 1785294792.3064818,
+    "level": "error",
     "category": "toast",
-    "title": "安全关闭",
-    "body": "服务器 / 隧道 / 监控已全部停止，1 秒后退出",
+    "title": "启动失败",
+    "body": "未找到服务器可执行文件: bedrock_server.exe",
     "action_target": "",
     "read": false
   },
   {
-    "id": "n_1785046779085_2e92",
-    "ts": 1785046779.0855076,
-    "level": "warning",
-    "category": "system",
-    "title": "安全关闭",
-    "body": "服务器 / 隧道 / 监控已全部停止，1 秒后退出",
-    "action_target": "",
-    "read": false
-  },
-  {
-    "id": "n_1785046484462_5ebe",
-    "ts": 1785046484.4621642,
-    "level": "warning",
+    "id": "n_1785294792291_5085",
+    "ts": 1785294792.2913644,
+    "level": "error",
     "category": "toast",
-    "title": "安全关闭",
-    "body": "服务器 / 隧道 / 监控已全部停止，1 秒后退出",
+    "title": "服务器启动失败",
+    "body": "未找到服务器可执行文件: bedrock_server.exe",
     "action_target": "",
     "read": false
   },
   {
-    "id": "n_1785046483578_3ab4",
-    "ts": 1785046483.5785084,
-    "level": "warning",
-    "category": "system",
-    "title": "安全关闭",
-    "body": "服务器 / 隧道 / 监控已全部停止，1 秒后退出",
-    "action_target": "",
+    "id": "n_1785294792275_992d",
+    "ts": 1785294792.2753649,
+    "level": "error",
+    "category": "server",
+    "title": "服务器启动失败",
+    "body": "未找到服务器可执行文件: bedrock_server.exe",
+    "action_target": "page:dashboard",
     "read": false
   },
   {
-    "id": "n_1785046452338_762a",
-    "ts": 1785046452.3400044,
+    "id": "n_1785294792259_04c9",
+    "ts": 1785294792.2599537,
     "level": "info",
     "category": "toast",
-    "title": "无变更",
-    "body": "当前设置与磁盘一致",
+    "title": "配置就绪",
+    "body": "已自动生成 server.properties + allowlist.json 到 ",
     "action_target": "",
     "read": false
   },
   {
-    "id": "n_1785046441795_0674",
-    "ts": 1785046441.7957025,
+    "id": "n_1785294792208_607a",
+    "ts": 1785294792.2085652,
+    "level": "info",
+    "category": "server",
+    "title": "配置就绪",
+    "body": "已自动生成 server.properties + allowlist.json 到 ",
+    "action_target": "page:dashboard",
+    "read": false
+  },
+  {
+    "id": "n_1785294788137_0b80",
+    "ts": 1785294788.1375256,
+    "level": "success",
+    "category": "toast",
+    "title": "安装完成",
+    "body": "BDS 已更新到 E:/Launcher/服务器/Bedrock/Server\n请重新启动服务器",
+    "action_target": "",
+    "read": false
+  },
+  {
+    "id": "n_1785294758692_221c",
+    "ts": 1785294758.6926563,
+    "level": "success",
+    "category": "toast",
+    "title": "下载完成",
+    "body": "BDS 1.26.36.1 下载完成，请选择安装路径",
+    "action_target": "",
+    "read": false
+  },
+  {
+    "id": "n_1785294748751_0265",
+    "ts": 1785294748.7517452,
     "level": "info",
     "category": "toast",
-    "title": "无变更",
-    "body": "当前设置与磁盘一致",
+    "title": "下载中",
+    "body": "BDS 1.26.36.1 正在下载...",
     "action_target": "",
     "read": false
   },
   {
-    "id": "n_1785046155639_0df7",
-    "ts": 1785046155.639914,
+    "id": "n_1785294709703_3393",
+    "ts": 1785294709.7035775,
+    "level": "warning",
+    "category": "toast",
+    "title": "配置文件未找到",
+    "body": "纯 BDS 的 server.properties 不存在\n启动一次服务器即可自动生成",
+    "action_target": "",
+    "read": false
+  },
+  {
+    "id": "n_1785294382406_26d3",
+    "ts": 1785294382.406181,
     "level": "warning",
     "category": "toast",
     "title": "安全关闭",
@@ -630,12 +350,62 @@
     "read": false
   },
   {
-    "id": "n_1785046155613_5bf9",
-    "ts": 1785046155.6136825,
+    "id": "n_1785294382379_6b8d",
+    "ts": 1785294382.379958,
     "level": "warning",
     "category": "system",
     "title": "安全关闭",
     "body": "服务器 / 隧道 / 监控已全部停止，1 秒后退出",
+    "action_target": "",
+    "read": false
+  },
+  {
+    "id": "n_1785294366126_d71d",
+    "ts": 1785294366.1266267,
+    "level": "success",
+    "category": "toast",
+    "title": "服务器已启动",
+    "body": "bedrock_server.exe",
+    "action_target": "",
+    "read": false
+  },
+  {
+    "id": "n_1785294366069_3af5",
+    "ts": 1785294366.0696023,
+    "level": "success",
+    "category": "server",
+    "title": "服务器已启动",
+    "body": "bedrock_server.exe",
+    "action_target": "page:dashboard",
+    "read": false
+  },
+  {
+    "id": "n_1785294350807_f090",
+    "ts": 1785294350.8072882,
+    "level": "success",
+    "category": "toast",
+    "title": "安装完成",
+    "body": "BDS 已更新，请重新启动服务器",
+    "action_target": "",
+    "read": false
+  },
+  {
+    "id": "n_1785294339637_d3d0",
+    "ts": 1785294339.6376014,
+    "level": "success",
+    "category": "toast",
+    "title": "下载完成",
+    "body": "BDS 1.26.36.1 下载完成",
+    "action_target": "",
+    "read": false
+  },
+  {
+    "id": "n_1785294276003_e52f",
+    "ts": 1785294276.0039032,
+    "level": "info",
+    "category": "toast",
+    "title": "下载中",
+    "body": "BDS 1.26.36.1 正在下载...",
     "action_target": "",
     "read": false
   }

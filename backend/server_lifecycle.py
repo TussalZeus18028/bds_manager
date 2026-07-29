@@ -18,16 +18,102 @@ from backend.monitor import SystemStatsSnapshot
 from backend.webhook import send_webhook
 from backend.notifications import notify
 
+# script dir = project root (Manager_Fluent/)
+SCRIPT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
 
 # ── 以下方法直接导入到 BDSFluentWindow 中 ──
 
+_DEFAULT_PROPERTIES = [
+    "server-name=Dedicated Server", "gamemode=survival", "difficulty=easy",
+    "allow-cheats=false", "max-players=10", "online-mode=true",
+    "allow-list=false", "view-distance=32", "tick-distance=4",
+    "player-idle-timeout=30", "max-threads=8", "level-name=Bedrock level",
+    "default-player-permission-level=member", "texturepack-required=false",
+    "content-log-file-enabled=false", "content-log-console-output-enabled=false",
+    "compression-threshold=1", "server-authoritative-movement=server-auth",
+    "player-movement-score-threshold=20",
+    "player-movement-action-direction-threshold=0.85",
+    "player-movement-distance-threshold=0.3",
+    "player-movement-duration-threshold-in-ms=500",
+    "correct-player-movement=false", "server-authoritative-block-breaking=false",
+]
+
+_LL_EXE_CANDIDATES = [
+    lambda: os.path.dirname(SCRIPT_DIR),
+    lambda: os.path.join(os.path.dirname(SCRIPT_DIR), "LLServer"),
+    lambda: os.path.join(os.path.dirname(SCRIPT_DIR), "Server"),
+    lambda: SCRIPT_DIR,
+    lambda: os.path.join(SCRIPT_DIR, "LLServer"),
+]
+
+
+def _ensure_default_properties(srv_dir: str) -> None:
+    """BDS 首次启动前自动生成默认配置和必要文件。"""
+    props = os.path.join(srv_dir, "server.properties")
+    allowlist = os.path.join(srv_dir, "allowlist.json")
+    if os.path.exists(props) and os.path.exists(allowlist):
+        return
+    try:
+        if not os.path.exists(props):
+            with open(props, "w", encoding="utf-8") as f:
+                f.write("\n".join(_DEFAULT_PROPERTIES) + "\n")
+        if not os.path.exists(allowlist):
+            with open(allowlist, "w", encoding="utf-8") as f:
+                f.write("[]\n")
+        notify("info", "server", "配置就绪",
+               f"已自动生成 server.properties + allowlist.json 到 {srv_dir}", "page:dashboard")
+    except OSError:
+        logger.warning("无法创建配置文件 (%s)", srv_dir)
+
+
+def _try_find_ll_exe(srv_dir: str, exe_path: str) -> tuple[str, str] | None:
+    """搜索 LL 服务器可执行文件，返回 (srv_dir, exe_path) 或 None。"""
+    for candidate_fn in _LL_EXE_CANDIDATES:
+        d = candidate_fn()
+        candidate = os.path.join(d, "bedrock_server_mod.exe")
+        if d and os.path.isfile(candidate):
+            config_mgr.set("ll_server_dir", d)
+            config_mgr.save()
+            return (d, candidate)
+    return None
+
+
 def start_server(window):
-    """启动 BDS 服务器。"""
+    """启动 BDS 服务器（支持纯 BDS 或 LeviLamina）。"""
     if window._server and window._server.is_running:
         return "服务器已在运行中"
 
     ctx = get_context()
-    exe_path = os.path.join(ctx.server_dir, config_mgr.get("server_exe", "bedrock_server.exe"))
+    stype = config_mgr.get("server_type", "bds")
+
+    if stype == "ll":
+        ll_dir = config_mgr.get("ll_server_dir", "")
+        srv_dir = ll_dir if (ll_dir and os.path.isabs(ll_dir)) else (
+            os.path.join(SCRIPT_DIR, ll_dir) if ll_dir else ctx.server_dir)
+        exe_name = "bedrock_server_mod.exe"
+    else:
+        srv_dir = ctx.server_dir
+        exe_name = config_mgr.get("server_exe", "bedrock_server.exe")
+
+    exe_path = os.path.join(srv_dir, exe_name)
+    _ensure_default_properties(srv_dir)
+
+    # LL 服务器自动检测
+    if not os.path.exists(exe_path) and stype == "ll":
+        found = _try_find_ll_exe(srv_dir, exe_path)
+        if found:
+            srv_dir, exe_path = found
+
+    # BDS 不存在时尝试回退到 LL
+    if not os.path.exists(exe_path) and stype == "bds":
+        alt = os.path.join(srv_dir, "bedrock_server_mod.exe")
+        if os.path.exists(alt):
+            config_mgr.set("server_type", "ll")
+            config_mgr.set("ll_server_dir", config_mgr.get("server_dir", "Server"))
+            config_mgr.save()
+            srv_dir, exe_path, exe_name = srv_dir, alt, "bedrock_server_mod.exe"
+
     if not os.path.exists(exe_path):
         err = f"未找到服务器可执行文件: {exe_path}"
         notify("error", "server", "服务器启动失败", err, "page:dashboard")
@@ -42,7 +128,7 @@ def start_server(window):
             window._server.proc_stats.disconnect()
         except (TypeError, RuntimeError):
             pass
-    window._server = ServerProcess(exe_path, ctx.server_dir)
+    window._server = ServerProcess(exe_path, srv_dir)
     window._server.output_received.connect(
         lambda t: _on_server_output(window, t))
     window._server.process_stopped.connect(
@@ -73,8 +159,11 @@ def start_server(window):
 def stop_server(window):
     """停止 BDS 服务器。"""
     if window._server and window._server.is_running:
+        window._intentional_stop = True
         window.console_page._append_output("[系统] 正在停止服务器...", "#E65100")
-        window._server.stop_server(graceful=False)
+        graceful = config_mgr.get("graceful_shutdown", True)
+        grace_seconds = config_mgr.get("shutdown_grace_seconds", 10)
+        window._server.stop_server(graceful=graceful, grace_seconds=grace_seconds)
     window._restart_count = 0
     if hasattr(window, "_lag_timer") and window._lag_timer:
         window._lag_timer.stop()
@@ -94,6 +183,11 @@ def _on_server_stopped(window, retcode: int):
         window._restart_count = 0
         if hasattr(window, "_lag_timer") and window._lag_timer:
             window._lag_timer.stop()
+        return
+
+    if getattr(window, "_intentional_stop", False):
+        window._intentional_stop = False
+        window.console_page._append_output("[系统] 服务器已停止（用户操作）", "#888")
         return
 
     if retcode == -1:

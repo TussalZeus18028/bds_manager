@@ -139,7 +139,11 @@ class ServerProcess(QThread):
             logger.error("服务器异常退出，返回码: %d", retcode)
             self.error_occurred.emit(f"服务器异常退出，返回码: {retcode}")
         self.status_changed.emit(False)
-        self.process_stopped.emit(retcode)  # 退出码: 0=正常, !0=崩溃
+        # Windows 进程退出码可能超过 signed int 范围（如 0xC0000005 = 3221225477）
+        rc = int(retcode)
+        if rc > 2147483647:  # 超过 2^31-1
+            rc = rc - 4294967296  # 转为有符号 int32
+        self.process_stopped.emit(rc)
 
     # ---------- 进程级监控 ----------
     def _start_proc_monitor(self):
