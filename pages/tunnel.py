@@ -17,6 +17,7 @@ from qfluentwidgets import (
 )
 
 from shared.config import config_mgr
+from shared.utils import is_linux
 from shared.toast import toast_success, toast_error, toast_warning
 from pages.dashboard import wrap_scrollable
 
@@ -74,6 +75,21 @@ class TunnelPage(QWidget):
         self._auto_scroll = True
 
         inner, layout, _scroll = wrap_scrollable(self, spacing=12)
+
+        if is_linux():
+            card = CardWidget(inner)
+            cl = QVBoxLayout(card)
+            cl.setContentsMargins(24, 20, 24, 20); cl.setSpacing(8)
+            cl.addWidget(SubtitleLabel("内网穿透", card))
+            cl.addWidget(BodyLabel(
+                "frpc 隧道功能当前仅支持 Windows 平台。\n"
+                "Linux 用户可通过命令行手动运行 frpc 实现内网穿透。\n\n"
+                "下载地址: https://github.com/fatedier/frp/releases",
+                card,
+            ))
+            layout.addWidget(card)
+            layout.addStretch()
+            return
 
         # ── 路径设置 ──
         path_card = CardWidget(inner)
@@ -275,7 +291,7 @@ class TunnelPage(QWidget):
             "⚠ 将清除并替换当前所有编辑内容，是否继续？\n\n"
             "提示：请前往 https://www.chmlfrp.net/ 创建隧道。",
             self.window())
-        w.cancelSignal.connect(lambda: self._cfg_edit.setPlainText(template))
+        w.yesSignal.connect(lambda: self._cfg_edit.setPlainText(template))
         w.cancelSignal.connect(w.close)
         w.show()
 

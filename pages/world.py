@@ -12,6 +12,7 @@ v3.1 改进：
 
 import os
 import time
+import logging
 from datetime import datetime, timedelta
 
 from PySide6.QtCore import Qt, QTimer, Signal
@@ -36,6 +37,8 @@ from backend.backup import (
     build_backup_tree, read_backup_metadata,
 )
 from pages.dashboard import wrap_scrollable
+
+logger = logging.getLogger("bds_manager")
 
 
 def _format_size(size_bytes: int) -> str:
@@ -82,6 +85,46 @@ def _time_bucket(mtime: float) -> str:
     if dt.year == now.year and dt.month == now.month:
         return "本月"
     return "更早"
+
+
+def _configured_level_name(ctx) -> str:
+    """读取 server.properties 中配置的活动世界名。"""
+    try:
+        with open(ctx.server_properties, "r", encoding="utf-8") as f:
+            for raw in f:
+                line = raw.strip()
+                if line and not line.startswith("#") and line.startswith("level-name="):
+                    return line.split("=", 1)[1].strip()
+    except (OSError, UnicodeDecodeError):
+        pass
+    return ""
+
+
+def _resolve_active_world(ctx) -> tuple[str, str] | None:
+    """根据 level-name 定位活动世界；仅有一个世界时允许安全降级。"""
+    if not os.path.isdir(ctx.worlds_dir):
+        return None
+    worlds = [
+        name for name in os.listdir(ctx.worlds_dir)
+        if os.path.isdir(os.path.join(ctx.worlds_dir, name))
+    ]
+    if not worlds:
+        return None
+
+    configured = _configured_level_name(ctx)
+    if configured:
+        direct = os.path.join(ctx.worlds_dir, configured)
+        if os.path.isdir(direct):
+            return configured, direct
+        configured_folded = configured.casefold()
+        for name in worlds:
+            if name.casefold() == configured_folded:
+                return name, os.path.join(ctx.worlds_dir, name)
+
+    if len(worlds) == 1:
+        name = worlds[0]
+        return name, os.path.join(ctx.worlds_dir, name)
+    return None
 
 
 class WorldPage(QWidget):
@@ -336,7 +379,7 @@ class WorldPage(QWidget):
                             continue
                         k, v = line.split("=", 1)
                         if k == "level-name":
-                            info_lines.append(f"世界名: <b>{v}</b>")
+                            info_lines.append(f"世界名: {v}")
                         elif k == "level-seed":
                             info_lines.append(f"种子: {v if v else '(随机)'}")
                         elif k == "difficulty":
@@ -351,23 +394,21 @@ class WorldPage(QWidget):
                 logger.debug("读取 server.properties 失败: %s", e)
         if not info_lines:
             info_lines.append("(未检测到 server.properties)")
-        info_lines.append("磁盘占用: <b>正在计算…</b>")
+        info_lines.append("磁盘占用: 正在计算…")
         self._world_info.setText("<br>".join(info_lines))
 
         # v3.02.01: 世界目录 os.walk 可能耗时数秒（数万文件），移到后台线程
-        if os.path.isdir(ctx.worlds_dir):
-            worlds = [d for d in os.listdir(ctx.worlds_dir)
-                      if os.path.isdir(os.path.join(ctx.worlds_dir, d))]
-            if worlds:
-                wp = os.path.join(ctx.worlds_dir, worlds[0])
-                self._size_worker = SimpleWorker(
-                    lambda: _calc_world_size(wp),
-                    parent=self,
-                )
-                self._size_worker.finished.connect(
-                    lambda ok, result: self._on_world_size_done(ok, result)
-                )
-                self._size_worker.start()
+        active_world = _resolve_active_world(ctx)
+        if active_world:
+            _, world_path = active_world
+            self._size_worker = SimpleWorker(
+                lambda: _calc_world_size(world_path),
+                parent=self,
+            )
+            self._size_worker.finished.connect(
+                lambda ok, result: self._on_world_size_done(ok, result)
+            )
+            self._size_worker.start()
 
     def _on_world_size_done(self, ok, result):
         """v3.02.01: 后台线程算完世界大小后更新 UI。"""
@@ -379,14 +420,30 @@ class WorldPage(QWidget):
 
     # ---------- 手动备份 ----------
     def _on_backup(self):
+        self._start_backup("manual_")
+
+    def _start_backup(self, prefix: str):
         ctx = get_context()
-        worlds = [d for d in os.listdir(ctx.worlds_dir)
-                  if os.path.isdir(os.path.join(ctx.worlds_dir, d))]
-        if not worlds:
-            toast_warning("提示", "未找到世界目录", self.window())
+        if not os.path.isdir(ctx.worlds_dir):
+            toast_warning(
+                "未找到世界",
+                "世界目录尚不存在，请先成功启动一次服务器并创建世界。",
+                self.window(),
+            )
             return
-        level = worlds[0]
-        world_path = os.path.join(ctx.worlds_dir, level)
+        active_world = _resolve_active_world(ctx)
+        if active_world is None:
+            toast_warning(
+                "无法确定活动世界",
+                "请检查 server.properties 的 level-name；存在多个世界时必须明确指定活动世界。",
+                self.window(),
+            )
+            return
+        if getattr(self, "_worker", None) is not None and self._worker.isRunning():
+            toast_warning("备份进行中", "请等待当前备份完成。", self.window())
+            return
+        level, world_path = active_world
+        os.makedirs(ctx.backup_dir, exist_ok=True)
 
         self._backup_btn.setEnabled(False)
         self._restore_btn.setEnabled(False)
@@ -401,9 +458,21 @@ class WorldPage(QWidget):
         except (ImportError, AttributeError):
             bds_ver = "unknown"
 
+        win = self.window()
+        server = getattr(win, "_server", None)
+        if server is not None and server.process_alive and not server.is_running:
+            toast_warning("服务器正在停止", "请等待服务器完全退出后再备份。", self.window())
+            return
+        online = bool(
+            config_mgr.get("online_backup", True)
+            and server is not None
+            and server.is_running
+        )
         self._worker = BackupWorker(
-            level, world_path, ctx.backup_dir, parent=self, prefix="manual_",
+            level, world_path, ctx.backup_dir, parent=self, prefix=prefix,
             bds_version=bds_ver,
+            server_process=server,
+            online=online,
         )
         self._worker.progress.connect(self._on_backup_progress)
         self._worker.finished.connect(self._on_backup_done)
@@ -456,6 +525,17 @@ class WorldPage(QWidget):
         self._on_restore(fn)
 
     def _on_restore(self, filename: str):
+        win = self.window()
+        server = getattr(win, "_server", None)
+        if server is not None and server.process_alive:
+            toast_warning("无法还原", "请先停止服务器，再还原世界备份。", self.window())
+            return
+
+        ctx = get_context()
+        if not os.path.isdir(ctx.worlds_dir):
+            toast_warning("无法还原", "世界目录不存在，无法确定还原目标。", self.window())
+            return
+
         # 二次确认
         confirm = MessageBox(
             "确认还原",
@@ -465,13 +545,15 @@ class WorldPage(QWidget):
         if not confirm.exec():
             return
 
-        ctx = get_context()
-        worlds = [d for d in os.listdir(ctx.worlds_dir)
-                  if os.path.isdir(os.path.join(ctx.worlds_dir, d))]
-        if not worlds:
+        active_world = _resolve_active_world(ctx)
+        if active_world is None:
+            toast_warning(
+                "无法确定活动世界",
+                "请检查 server.properties 的 level-name 后重试。",
+                self.window(),
+            )
             return
-        level = worlds[0]
-        world_path = os.path.join(ctx.worlds_dir, level)
+        level, world_path = active_world
         backup_path = os.path.join(ctx.backup_dir, filename)
 
         info = toast_info("还原中", f"正在还原 {filename} ...", self.window(), duration=-1)
@@ -531,7 +613,7 @@ class WorldPage(QWidget):
 
     def _on_auto_backup_tick(self):
         if self._auto_toggle.isChecked():
-            self._on_backup()
+            self._start_backup("auto_")
 
     def refresh_theme(self):
         """v3.02.01: 主题切换后重新设置所有硬编码样式。"""

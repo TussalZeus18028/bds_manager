@@ -20,7 +20,6 @@
 import json
 import os
 import time
-import uuid
 import logging
 import threading
 from dataclasses import dataclass, asdict
@@ -163,24 +162,27 @@ class _Store:
             if changed:
                 self._save()
 
-    def add(self, n: Notification):
-        """新增一条通知到头部。"""
-        self.add_raw(n.level, n.category, n.title, n.body, n.action_target)
-
     def add_raw(self, level: str, category: str, title: str, body: str = "",
-                 action_target: str = ""):
-        """v3.02.02: 跳过 Notification 对象创建，直接写 dict。"""
+                 action_target: str = "") -> Notification:
+        """写入存储并返回 Notification 对象（一次创建，避免双写）。
+
+        修复 v3.04.01：之前 notify() 先创建 Notification 再调 add()→add_raw()
+        导致同一条通知产生两个不同 id 且 insert(0) 两次。
+        现在 add_raw() 是唯一的写入入口，创建→存储→返回一气呵成。
+        """
         import time as _t, uuid as _u
+        n = Notification(
+            id=f"n_{int(_t.time() * 1000)}_{_u.uuid4().hex[:4]}",
+            ts=_t.time(), level=level, category=category,
+            title=title[:80], body=body[:500],
+            action_target=action_target, read=False,
+        )
         with self._lock:
             self._load()
-            self._items.insert(0, {
-                "id": f"n_{int(_t.time() * 1000)}_{_u.uuid4().hex[:4]}",
-                "ts": _t.time(), "level": level, "category": category,
-                "title": title[:80], "body": body[:500],
-                "action_target": action_target, "read": False,
-            })
+            self._items.insert(0, n.to_dict())
             self._prune()
             self._save()
+        return n
 
     def get_all(self) -> list[Notification]:
         """返回全部通知（最新在前）。"""
@@ -220,11 +222,14 @@ def notify(
     body: str = "",
     action_target: str = "",
 ) -> Notification | None:
-    """从任何线程调用：写入存储 + 广播信号。
+    """从任何线程调用：写入存储（单次）+ 广播信号。
+
+    v3.04.01 修复：之前 notify()→add(n)→add_raw() 导致双写（两条 insert(0)），
+    现改为直接调用 add_raw() 创建并存储，Notification 对象只创建一次。
 
     Args:
         level: error/warning/success/info（其他值归为 info）
-        category: server/backup/update/player/webhook/system（其他值归为 system）
+        category: server/backup/update/player/webhook/system/toast（其他值归为 system）
         title: 简短标题（自动截断 80 字）
         body: 详细说明（自动截断 500 字）
         action_target: 点击跳转目标，例 "page:world?backup=xxx"
@@ -233,23 +238,12 @@ def notify(
         level = "info"
     if category not in CATEGORIES:
         category = "system"
-    n = Notification(
-        id=f"n_{int(time.time() * 1000)}_{uuid.uuid4().hex[:4]}",
-        ts=time.time(),
-        level=level,
-        category=category,
-        title=title[:80],
-        body=body[:500],
-        action_target=action_target,
-        read=False,
-    )
-    _STORE.add(n)
+    n = _STORE.add_raw(level, category, title, body, action_target)
     # 广播信号（跨线程时 Qt 自动 QueuedConnection）
     try:
         bus = get_bus()
         bus.notification_added.emit(n)
-        unread = _STORE.get_unread_count()
-        bus.unread_count_changed.emit(unread)
+        bus.unread_count_changed.emit(_STORE.get_unread_count())
     except RuntimeError:
         # QApplication 尚未初始化，仅写存储
         pass

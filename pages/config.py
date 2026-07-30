@@ -13,6 +13,7 @@ v3.1 改进：
 
 import os
 import re
+import logging
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
@@ -30,6 +31,9 @@ from qfluentwidgets import (
 from shared.config import config_mgr, get_context, SCRIPT_DIR
 from shared.toast import toast_success, toast_error, toast_info, toast_warning
 from components.widgets import NoScrollSpinBox  # v3.02.01: 滚轮防护
+
+logger = logging.getLogger("bds_manager")
+
 
 def _get_config_dir() -> str:
     """返回配置文件所在目录（LL 模式用 LL 目录，否则用 BDS 目录）。"""
@@ -422,13 +426,14 @@ class ConfigPage(QWidget):
         old_vals = self._read_existing()
         diffs = []
         for k, v in new_vals.items():
-            if old_vals.get(k) != v:
-                diffs.append((k, old_vals.get(k, "(无)"), v))
+            old = old_vals.get(k)
+            # 只对磁盘已存在的 key 做 diff；缺失的 key 用默认即可，不当作变更
+            if old is not None and old != v:
+                diffs.append((k, old, v))
         if not diffs:
             toast_info("无变更", "当前设置与磁盘一致", self.window())
             return
-        text = "\n".join([f"  {k}: {old}  →  <b>{new}</b>" for k, old, new in diffs])
-        # 用 MessageBox 显示
+        text = "\n".join([f"  {k}: {old}  →  {new}" for k, old, new in diffs])
         mb = MessageBox("配置变更预览", f"以下 {len(diffs)} 项将被修改：\n\n{text}",
                         self.window())
         mb.exec()
@@ -444,11 +449,21 @@ class ConfigPage(QWidget):
 
         ctx = get_context()
         values = self._get_values()
-        # 按 _KNOWN_PROPS 顺序写
+        existing = self._read_existing()
+        # 保留原有 key 顺序；只在用户改动时才覆盖
         lines = []
-        for key in _KNOWN_PROPS:
-            if key in values:
-                lines.append(f"{key}={values[key]}")
+        keys_to_write = [k for k in _KNOWN_PROPS if k in values]
+        # 先按已有顺序写磁盘中存在的 key
+        written = set()
+        if existing:
+            for k in existing.keys():
+                if k in values:
+                    lines.append(f"{k}={values[k]}")
+                    written.add(k)
+        # 追加磁盘上不存在的新 key（用户编辑过的）
+        for k in keys_to_write:
+            if k not in written:
+                lines.append(f"{k}={values[k]}")
         try:
             with open(_get_server_properties_path(), "w", encoding="utf-8") as f:
                 f.write("# server.properties\n" + "\n".join(lines) + "\n")

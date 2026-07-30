@@ -16,6 +16,9 @@ from PySide6.QtCore import QThread, Signal
 # ── 检测 ──
 _LIP_PATHS = [
     os.path.expandvars(r"%LOCALAPPDATA%\Microsoft\WinGet\Packages\futrime.lip_*\lip.exe"),
+    os.path.expanduser("~/.local/bin/lip"),
+    "/usr/local/bin/lip",
+    "/usr/bin/lip",
     os.path.expandvars(r"%LOCALAPPDATA%\Programs\lip\lip.exe"),
     os.path.expandvars(r"%PROGRAMFILES%\lip\lip.exe"),
 ]

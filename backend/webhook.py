@@ -13,12 +13,15 @@ import logging
 import socket
 import urllib.request
 import urllib.error
-import time
+import queue
+import threading
 from shared.config import config_mgr
 from shared.retry import retry
 from shared.errors import NetworkError
 
 logger = logging.getLogger("bds_manager")
+
+_WEBHOOK_QUEUE: queue.Queue[tuple[str, str, dict]] = queue.Queue(maxsize=100)
 
 # 支持的事件类型
 SUPPORTED_EVENTS = [
@@ -79,12 +82,44 @@ def _post_webhook(url: str, payload: dict, timeout: int = 8):
             raise NetworkError(f"Webhook HTTP {resp.status}", code="E_WEBHOOK_HTTP")
 
 
+def _deliver_webhook(event: str, url: str, payload: dict):
+    """后台发送单条 Webhook。"""
+    try:
+        _post_webhook(url, payload)
+    except Exception as e:
+        logger.warning("Webhook 通知失败 (%s): %s", event, e)
+        try:
+            from backend.notifications import notify
+            notify("warning", "webhook", "Webhook 发送失败", f"[{event}] {e}")
+        except (ImportError, AttributeError):
+            pass
+
+
+def _webhook_worker_loop():
+    while True:
+        event, url, payload = _WEBHOOK_QUEUE.get()
+        try:
+            _deliver_webhook(event, url, payload)
+        finally:
+            _WEBHOOK_QUEUE.task_done()
+
+
+_WEBHOOK_WORKER = threading.Thread(
+    target=_webhook_worker_loop,
+    name="bds-webhook",
+    daemon=True,
+)
+_WEBHOOK_WORKER.start()
+
+
 def send_webhook(event: str, title: str, message: str, extra: dict | None = None):
-    """向配置的 Webhook URL 发送通知。
+    """将 Webhook 通知加入后台发送队列。
 
     仅当 webhook_url 非空且 event 在 webhook_events 列表中时发送。
-    失败静默记录日志，不影响主流程。
+    此函数不执行网络 I/O，不阻塞调用线程。
     """
+    if not config_mgr.get("webhook_enabled", True):
+        return
     url = (config_mgr.get("webhook_url") or "").strip()
     if not url:
         return
@@ -114,12 +149,6 @@ def send_webhook(event: str, title: str, message: str, extra: dict | None = None
         payload["extra"] = extra
 
     try:
-        _post_webhook(url, payload)
-    except Exception as e:
-        logger.warning("Webhook 通知失败 (%s): %s", event, e)
-        # v3.02.00：webhook 失败时同步到通知中心（仅 warn 级，避免每次失败都吵）
-        try:
-            from backend.notifications import notify
-            notify("warning", "webhook", "Webhook 发送失败", f"[{event}] {e}")
-        except (ImportError, AttributeError):
-            pass  # 通知中心不可用
+        _WEBHOOK_QUEUE.put_nowait((event, url, payload))
+    except queue.Full:
+        logger.warning("Webhook 队列已满，丢弃事件: %s", event)

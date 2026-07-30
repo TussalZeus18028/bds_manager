@@ -3,23 +3,51 @@
 服务器生命周期管理 —— 启停 / 崩溃自愈 / RTT 延迟 / 资源监控回调。
 
 v3.03.01 从 main.py 拆分：作为 BDSFluentWindow 的方法，通过 self.xxx 访问 UI。
+v3.04.01 新增 ServerHost 协议：约束生命周期函数对主窗口的访问接口，让类型检查器可验证。
 """
+
+from __future__ import annotations
 
 import os
 import time
 import re
+import logging
 from datetime import datetime
+from typing import Protocol
 
-from PySide6.QtCore import QTimer
+from PySide6.QtCore import QTimer, QThread
 
 from shared.config import config_mgr, get_context, LOG_DIR
+from shared.utils import bds_exe, ll_exe
 from backend.server import ServerProcess
 from backend.monitor import SystemStatsSnapshot
 from backend.webhook import send_webhook
 from backend.notifications import notify
 
+logger = logging.getLogger("bds_manager")
+
 # script dir = project root (Manager_Fluent/)
 SCRIPT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+# ════════════════════════════════════════════════════════════
+#  ServerHost 协议：生命周期函数对主窗口的访问约定
+# ════════════════════════════════════════════════════════════
+
+class ServerHost(Protocol):
+    """主窗口必须实现的接口，供生命周期函数访问 UI + 服务器状态。"""
+
+    # 服务器
+    _server: ServerProcess | None
+    _restart_count: int
+    _intentional_stop: bool
+    _lag_samples: list[float]
+
+    # 页面引用
+    console_page: object   # ConsolePage
+    dashboard_page: object  # DashboardPage
+
+    def switchTo(self, page: object) -> None: ...
 
 
 # ── 以下方法直接导入到 BDSFluentWindow 中 ──
@@ -48,6 +76,22 @@ _LL_EXE_CANDIDATES = [
 ]
 
 
+class _StopServerWorker(QThread):
+    """在后台执行可能持续数秒的优雅停服，避免冻结主界面。"""
+
+    def __init__(self, server, graceful: bool, grace_seconds: int, parent=None):
+        super().__init__(parent)
+        self._server = server
+        self._graceful = graceful
+        self._grace_seconds = grace_seconds
+
+    def run(self):
+        self._server.stop_server(
+            graceful=self._graceful,
+            grace_seconds=self._grace_seconds,
+        )
+
+
 def _ensure_default_properties(srv_dir: str) -> None:
     """BDS 首次启动前自动生成默认配置和必要文件。"""
     props = os.path.join(srv_dir, "server.properties")
@@ -71,7 +115,7 @@ def _try_find_ll_exe(srv_dir: str, exe_path: str) -> tuple[str, str] | None:
     """搜索 LL 服务器可执行文件，返回 (srv_dir, exe_path) 或 None。"""
     for candidate_fn in _LL_EXE_CANDIDATES:
         d = candidate_fn()
-        candidate = os.path.join(d, "bedrock_server_mod.exe")
+        candidate = os.path.join(d, ll_exe())
         if d and os.path.isfile(candidate):
             config_mgr.set("ll_server_dir", d)
             config_mgr.save()
@@ -79,10 +123,13 @@ def _try_find_ll_exe(srv_dir: str, exe_path: str) -> tuple[str, str] | None:
     return None
 
 
-def start_server(window):
+def start_server(window: ServerHost) -> str | None:
     """启动 BDS 服务器（支持纯 BDS 或 LeviLamina）。"""
-    if window._server and window._server.is_running:
-        return "服务器已在运行中"
+    if window._server:
+        if window._server.is_running:
+            return "服务器已在运行中"
+        if window._server.process_alive or window._server.isRunning():
+            return "服务器正在启动或停止，请稍候"
 
     ctx = get_context()
     stype = config_mgr.get("server_type", "bds")
@@ -91,10 +138,10 @@ def start_server(window):
         ll_dir = config_mgr.get("ll_server_dir", "")
         srv_dir = ll_dir if (ll_dir and os.path.isabs(ll_dir)) else (
             os.path.join(SCRIPT_DIR, ll_dir) if ll_dir else ctx.server_dir)
-        exe_name = "bedrock_server_mod.exe"
+        exe_name = ll_exe()
     else:
         srv_dir = ctx.server_dir
-        exe_name = config_mgr.get("server_exe", "bedrock_server.exe")
+        exe_name = config_mgr.get("server_exe", bds_exe())
 
     exe_path = os.path.join(srv_dir, exe_name)
     _ensure_default_properties(srv_dir)
@@ -107,12 +154,12 @@ def start_server(window):
 
     # BDS 不存在时尝试回退到 LL
     if not os.path.exists(exe_path) and stype == "bds":
-        alt = os.path.join(srv_dir, "bedrock_server_mod.exe")
+        alt = os.path.join(srv_dir, ll_exe())
         if os.path.exists(alt):
             config_mgr.set("server_type", "ll")
             config_mgr.set("ll_server_dir", config_mgr.get("server_dir", "Server"))
             config_mgr.save()
-            srv_dir, exe_path, exe_name = srv_dir, alt, "bedrock_server_mod.exe"
+            srv_dir, exe_path, exe_name = srv_dir, alt, ll_exe()
 
     if not os.path.exists(exe_path):
         err = f"未找到服务器可执行文件: {exe_path}"
@@ -145,36 +192,46 @@ def start_server(window):
         window._server.proc_stats.connect(window.dashboard_page.update_proc_stats)
     window._server.start()
 
-    window.dashboard_page._on_server_started()
+    # 先进入“正在启动”状态；真正成功提示由 status_changed(True) 发出。
     window.console_page._on_server_started()
-    notify("success", "server", "服务器已启动", os.path.basename(exe_path), "page:dashboard")
-
-    if not hasattr(window, "_lag_timer") or not window._lag_timer:
-        window._lag_timer = QTimer(window)
-        window._lag_timer.timeout.connect(lambda: _lag_ping(window))
-    window._lag_timer.start(30000)
+    window._starting_server = window._server
     return None
 
 
-def stop_server(window):
+def stop_server(window: ServerHost) -> None:
     """停止 BDS 服务器。"""
     if window._server and window._server.is_running:
+        current_worker = getattr(window, "_stop_server_worker", None)
+        if current_worker is not None and current_worker.isRunning():
+            return
         window._intentional_stop = True
         window.console_page._append_output("[系统] 正在停止服务器...", "#E65100")
         graceful = config_mgr.get("graceful_shutdown", True)
         grace_seconds = config_mgr.get("shutdown_grace_seconds", 10)
-        window._server.stop_server(graceful=graceful, grace_seconds=grace_seconds)
+        worker = _StopServerWorker(
+            window._server,
+            graceful=graceful,
+            grace_seconds=grace_seconds,
+            parent=window,
+        )
+        window._stop_server_worker = worker
+        worker.finished.connect(
+            lambda: setattr(window, "_stop_server_worker", None)
+            if getattr(window, "_stop_server_worker", None) is worker else None
+        )
+        worker.finished.connect(worker.deleteLater)
+        worker.start()
     window._restart_count = 0
     if hasattr(window, "_lag_timer") and window._lag_timer:
         window._lag_timer.stop()
 
 
-def _on_server_output(window, text: str):
+def _on_server_output(window: ServerHost, text: str) -> None:
     window.console_page._append_output(text)
     window.dashboard_page.on_output()
 
 
-def _on_server_stopped(window, retcode: int):
+def _on_server_stopped(window: ServerHost, retcode: int) -> None:
     window.dashboard_page._on_server_stopped()
     window.console_page._on_server_stopped()
 
@@ -222,14 +279,29 @@ def _on_server_stopped(window, retcode: int):
             window._lag_timer.stop()
 
 
-def _on_status_changed(window, running: bool):
+def _on_status_changed(window: ServerHost, running: bool) -> None:
     window.dashboard_page._on_status_changed(running)
     window.console_page._on_status_changed(running)
+    if running and getattr(window, "_starting_server", None) is window._server:
+        window._starting_server = None
+        window.dashboard_page._on_server_started()
+        notify(
+            "success", "server", "服务器已启动",
+            os.path.basename(window._server.server_exe),
+            "page:dashboard",
+        )
+        send_webhook("server_started", "服务器已启动", os.path.basename(window._server.server_exe))
+        if not hasattr(window, "_lag_timer") or not window._lag_timer:
+            window._lag_timer = QTimer(window)
+            window._lag_timer.timeout.connect(lambda: _lag_ping(window))
+        window._lag_timer.start(30000)
+    elif not running and getattr(window, "_starting_server", None) is window._server:
+        window._starting_server = None
 
 
 # ── RTT 延迟探测 ──
 
-def _lag_ping(window):
+def _lag_ping(window: ServerHost) -> None:
     if not window._server or not window._server.is_running:
         return
     window._lag_ping_sent = time.time()
@@ -237,7 +309,7 @@ def _lag_ping(window):
     window._server.send_command("list")
 
 
-def check_lag_response(window, text: str):
+def check_lag_response(window: ServerHost, text: str) -> None:
     if window._lag_ping_pending and re.search(r"players online", text, re.I):
         rtt = (time.time() - window._lag_ping_sent) * 1000.0
         if 0 < rtt < 60000:
@@ -254,7 +326,7 @@ def check_lag_response(window, text: str):
 
 # ── 资源监控回调 ──
 
-def on_stats_updated(window, snap: SystemStatsSnapshot):
+def on_stats_updated(window: ServerHost, snap: SystemStatsSnapshot) -> None:
     window.dashboard_page.status_card.update_server_stats(snap)
     if not hasattr(window, "_last_mem_warn"):
         window._last_mem_warn = 0.0
@@ -265,3 +337,32 @@ def on_stats_updated(window, snap: SystemStatsSnapshot):
         send_webhook("memory", "内存告警", msg)
         from shared.toast import toast_warning
         toast_warning("内存告警", msg, window, duration=8000)
+
+
+
+def force_stop_for_update() -> None:
+    """自更新前强行停服，不等优雅退出（已有备份保护）。"""
+    import time as _t
+    try:
+        from main import _MAIN_WINDOW_REF
+        win = _MAIN_WINDOW_REF[0] if _MAIN_WINDOW_REF else None
+    except (ImportError, IndexError):
+        return
+    if win is None or not hasattr(win, "_server") or win._server is None:
+        return
+    srv = win._server
+    if not srv.process_alive:
+        return
+    try:
+        srv.send_command("save hold")
+        _t.sleep(0.5)
+        srv.send_command("save resume")
+    except Exception:
+        pass
+    try:
+        srv.stop_server(graceful=False, grace_seconds=2)
+        _t.sleep(1)
+        if srv.process_alive:
+            srv.process.kill()
+    except Exception:
+        pass

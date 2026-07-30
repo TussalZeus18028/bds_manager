@@ -406,7 +406,7 @@ class BDSProcessCard(CardWidget):
         ofiles = stats.get("open_files", -1)
         ofiles_text = f"· 打开文件: {ofiles}" if ofiles >= 0 else ""
         self._info.setText(
-            f"CPU: <b>{cpu:.1f}%</b>  ·  内存: <b>{mem:.1f} MB</b>  ·  线程: <b>{threads}</b>  {ofiles_text}"
+            f"CPU: {cpu:.1f}%  ·  内存: {mem:.1f} MB  ·  线程: {threads}  {ofiles_text}"
         )
         # v3.02.01 fix: 主题感知主色
         self._info.setStyleSheet(f"color: {main_color};")

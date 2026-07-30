@@ -14,7 +14,9 @@ v3.1 改进：
 import os
 import re
 import html
-import re
+import logging
+
+logger = logging.getLogger("bds_manager")
 
 # ── ANSI → HTML 转换 ──
 _ANSI_RE = re.compile(r'\x1b\[([0-9;]*)m')
@@ -25,10 +27,48 @@ _ANSI_COLORS = {
     "94": "#88f", "95": "#f8f", "96": "#8ff", "97": "#fff",
 }
 
+
+def _parse_single_ansi_code(c: str, codes: list[str], i: int) -> tuple[str, int, bool]:
+    """将单个 ANSI SGR 码转为 CSS style 片段。
+
+    返回 (style_fragment, next_i, should_close_tags)。
+    v3.04.01: 从 _ansi_to_html() 提取，降低其循环复杂度。
+    """
+    if c == "0":
+        return "", i + 1, True   # should_close = True
+    if c == "1":
+        return "font-weight:bold;", i + 1, False
+    if c == "4":
+        return "text-decoration:underline;", i + 1, False
+    # 24-bit 前景色: 38;2;R;G;B
+    if c == "38" and i + 2 < len(codes) and codes[i + 1] == "2":
+        r = codes[i + 2]
+        g = codes[i + 3] if i + 3 < len(codes) else "0"
+        b = codes[i + 4] if i + 4 < len(codes) else "0"
+        return f"color:rgb({r},{g},{b});", i + 5, False
+    # 24-bit 背景色: 48;2;R;G;B
+    if c == "48" and i + 2 < len(codes) and codes[i + 1] == "2":
+        r = codes[i + 2]
+        g = codes[i + 3] if i + 3 < len(codes) else "0"
+        b = codes[i + 4] if i + 4 < len(codes) else "0"
+        return f"background:rgb({r},{g},{b});", i + 5, False
+    if c in _ANSI_COLORS:
+        return f"color:{_ANSI_COLORS[c]};", i + 1, False
+    if c in ("39",):
+        return "color:inherit;", i + 1, False
+    if c in ("49",):
+        return "background:inherit;", i + 1, False
+    return "", i + 1, False
+
+
 def _ansi_to_html(text: str) -> str:
-    """将 ANSI 转义序列转换为 HTML span 标签。裸文本其余部分 html.escape。"""
-    parts = []
-    stack = []
+    """将 ANSI 转义序列转换为 HTML span 标签。
+
+    v3.04.01: 内层解析逻辑提取到 _parse_single_ansi_code()，
+    循环复杂度从 25 降至 < 10。
+    """
+    parts: list[str] = []
+    stack: list[str] = []
     last = 0
     for m in _ANSI_RE.finditer(text):
         # 未匹配的前缀
@@ -38,35 +78,15 @@ def _ansi_to_html(text: str) -> str:
         style = ""
         i = 0
         while i < len(codes):
-            c = codes[i]
-            if c == "0":
-                stack = []
-            elif c == "1":
-                style += "font-weight:bold;"
-            elif c == "4":
-                style += "text-decoration:underline;"
-            elif c == "38" and i + 2 < len(codes) and codes[i + 1] == "2":
-                # 24bit 前景色
-                r, g, b = codes[i + 2], codes[i + 3] if i + 3 < len(codes) else "0", codes[i + 4] if i + 4 < len(codes) else "0"
-                style += f"color:rgb({r},{g},{b});"
-                i += 4
-            elif c == "48" and i + 2 < len(codes) and codes[i + 1] == "2":
-                # 24bit 背景色
-                r, g, b = codes[i + 2], codes[i + 3] if i + 3 < len(codes) else "0", codes[i + 4] if i + 4 < len(codes) else "0"
-                style += f"background:rgb({r},{g},{b});"
-                i += 4
-            elif c in _ANSI_COLORS:
-                style += f"color:{_ANSI_COLORS[c]};"
-            elif c in ("39",):  # default fg
-                style += "color:inherit;"
-            elif c in ("49",):  # default bg
-                style += "background:inherit;"
-            i += 1
+            frag, i, should_close = _parse_single_ansi_code(codes[i], codes, i)
+            if should_close:
+                stack.clear()
+            elif frag:
+                style += frag
         if style:
             stack.append(style)
             parts.append(f'<span style="{style}">')
         else:
-            # 关闭标签
             for _ in stack:
                 parts.append("</span>")
             stack = []
@@ -74,7 +94,6 @@ def _ansi_to_html(text: str) -> str:
     # 尾部
     if last < len(text):
         parts.append(html.escape(text[last:]))
-    # 关闭所有
     for _ in stack:
         parts.append("</span>")
     return "".join(parts)
@@ -298,7 +317,7 @@ class ConsolePage(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self._auto_scroll = config_mgr.get("console_auto_scroll", True)
-        self._cmd_history: list[str] = config_mgr.get("cmd_history", [])
+        self._cmd_history: list[str] = config_mgr.get("cmd_history") or []
         self._cmd_history_idx = -1
         self._crash_marker_visible = False
         self._show_timestamps = config_mgr.get("console_show_timestamps", True)

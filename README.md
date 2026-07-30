@@ -2,7 +2,7 @@
 
 Minecraft Bedrock Dedicated Server 全功能管理器 —— 基于 **PySide6 + QFluentWidgets Fluent Design**。
 
-[![Version](https://img.shields.io/badge/version-3.03.04-blue)](https://github.com/TussalZeus18028/bds_manager/releases)
+[![Version](https://img.shields.io/badge/version-3.04.01-blue)](https://github.com/TussalZeus18028/bds_manager/releases)
 [![Python](https://img.shields.io/badge/python-3.10+-green)](https://www.python.org/)
 [![License](https://img.shields.io/badge/license-MIT-orange)](LICENSE)
 
@@ -70,12 +70,13 @@ Manager_Fluent/
 │   ├── settings.py      # 设置（含快捷键录制）
 │   ├── command_palette.py # 命令面板（Ctrl+K）
 │   └── about.py         # 关于
-├── backend/
+  ├── backend/
 │   ├── server.py        # 服务器进程管理（基岩版 save hold/resume）
 │   ├── server_lifecycle.py # 服务器生命周期（启停·崩溃自愈·RTT）
 │   ├── backup.py        # 备份/还原
 │   ├── monitor.py       # 系统资源监控
 │   ├── self_update.py   # 工具自更新
+│   ├── self_update_ui.py # 自更新 UI 辅助
 │   ├── webhook.py       # Webhook 通知
 │   ├── notifications.py # 通知中心
 │   ├── network.py       # 网络工具
@@ -97,18 +98,16 @@ Manager_Fluent/
     └── errors.py        # 全局异常处理
 ```
 
-## 近期更新 (v3.03.04)
-
-### 新功能
-- 配置 JSON 原生编辑器（白名单/权限）：无边框 Fluent Design + 深浅色 + 半透明
-- 高 DPI 缩放适配（设置页开关）
-- main.py 启动自动安装缺失依赖
-
-### Bug 修复
-- 深色模式持久化 (9处) / 主题最小化 / SSL 证书 / 预设崩溃 / 停止确认 / 滚跳 / 标签截断 / frpc编辑按钮
+## 近期更新 (v3.04.01)
 
 ### 代码质量
-- 版本号集中到 shared/version.py / 样式统一到 shared/theme.py / 30+ 异常窄化 / PEP 8 清理
+- 修复通知中心双写 / 新增 ThemePalette 集中颜色管理 / ConfigManager 白名单自动推导
+- 控制台 ANSI 解析器拆分（复杂度↓）/ 自更新 UI 提取 / ServerHost Protocol 类型注解
+- 修复 MessageBox lambda 析构 RuntimeWarning
+
+### 测试
+- 测试覆盖 12 → 20 用例
+- fuck-u-code 评分: 77.51 → 78.61
 
 ## License
 

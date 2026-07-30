@@ -24,7 +24,7 @@ from PySide6.QtWidgets import (
 )
 
 from qfluentwidgets import (
-    FluentIcon, isDarkTheme,
+    FluentIcon,
     PushButton as FluentPushButton,
     StrongBodyLabel, BodyLabel, CaptionLabel,
 )
@@ -33,15 +33,15 @@ from backend.notifications import (
     get_all, get_unread_count, mark_all_read, clear_all, parse_action_target,
     Notification, get_bus,
 )
+from shared.theme import theme_palette
 
 
-# ---------- 颜色常量（按等级 + 深浅主题）----------
-LEVEL_COLORS = {
-    "error":   ("#ff4444", "#ff7777"),
-    "warning": ("#ffaa33", "#ffcc66"),
-    "success": ("#44cc66", "#66dd88"),
-    "info":    ("#4488ff", "#77aaff"),
-}
+# v3.04.01: 等级颜色由 ThemePalette 统一管理
+def _level_accent(level: str) -> str:
+    """通知等级强调色（适配深浅主题）。"""
+    return theme_palette().level_accent(level)
+
+
 CATEGORY_ICONS = {
     "server":  "🖥",
     "backup":  "📦",
@@ -114,7 +114,7 @@ class BellButton(QToolButton):
         bx = rect.right() - badge_w + 3
         by = rect.top() - 2
         # 阴影/外圈（深色背景时让红点更立体）
-        ring_color = QColor("#1e1e1e") if isDarkTheme() else QColor("#fafafa")
+        ring_color = QColor(theme_palette().surface)
         p.setPen(QPen(ring_color, 1.5))
         p.setBrush(QColor("#e74856"))  # Fluent 红色
         p.drawRoundedRect(bx, by, badge_w, badge_h, badge_w / 2, badge_h / 2)
@@ -161,9 +161,10 @@ class NotificationItemWidget(QFrame):
         self._collapsed_height = 64
         self.setCursor(Qt.PointingHandCursor)
         self.setObjectName("notifItem")
-        # v3.02.01: 现代化主题（暗色用 #2f3136，亮色用 #f0f0f0）
-        bg = "#2f3136" if isDarkTheme() else "#f0f0f0"
-        bg_hover = "#36393f" if isDarkTheme() else "#e6e6e6"
+        # v3.04.01: 使用 ThemePalette 统一颜色
+        _p = theme_palette()
+        bg = _p.card_bg
+        bg_hover = _p.card_hover
         self.setStyleSheet(f"""
             QFrame#notifItem {{ background: {bg}; border-radius: 6px; }}
             QFrame#notifItem:hover {{ background: {bg_hover}; }}
@@ -236,22 +237,23 @@ class NotificationItemWidget(QFrame):
         p = QPainter(self)
         p.setRenderHint(QPainter.Antialiasing)
         rect = self.rect()
+        # v3.04.01: 使用 ThemePalette 统一颜色
+        palette = theme_palette()
         # 左侧色条（按 level）
-        idx = 0 if isDarkTheme() else 1
-        accent_hex = LEVEL_COLORS.get(self.n.level, LEVEL_COLORS["info"])[idx]
+        accent_hex = _level_accent(self.n.level)
         p.setBrush(QColor(accent_hex))
         p.setPen(Qt.NoPen)
         p.drawRoundedRect(0, 8, 4, rect.height() - 16, 2, 2)
-        # 类别图标（主题感知：深色用浅蓝灰，浅色用深灰）
+        # 类别图标
         icon = CATEGORY_ICONS.get(self.n.category, "•")
-        icon_color = "#aabbcc" if isDarkTheme() else "#666666"
+        icon_color = palette.text_secondary
         p.setPen(QColor(icon_color))
         p.setFont(self.FONT_ICON)
         p.drawText(rect.adjusted(14, 8, 0, 0), Qt.AlignLeft | Qt.AlignTop, icon)
         # 标题（粗体）
-        title_color = "#ffffff" if isDarkTheme() else "#1a1a1a"
-        body_color = "#a0a8b0" if isDarkTheme() else "#666666"
-        time_color = "#777" if isDarkTheme() else "#999"
+        title_color = palette.text
+        body_color = palette.text_secondary
+        time_color = palette.scrollbar_handle  # 浅灰时间
         p.setFont(self.FONT_TITLE)
         p.setPen(QColor(title_color))
         title_rect = rect.adjusted(40, 8, -50, 0)
@@ -286,14 +288,14 @@ class NotificationItemWidget(QFrame):
         # 跳转箭头（右下，主题感知）—— 可点击（仅在有 action_target 时）
         if self.n.action_target:
             p.setFont(self.FONT_ARROW)
-            # v3.02.01: hover 时高亮（蓝色），告诉用户「可点击」
-            arrow_color = "#0DC5D4" if self._hovered else ("#666" if isDarkTheme() else "#aaa")
+            # v3.04.01: hover 时高亮（亮青色），告诉用户「可点击」
+            arrow_color = "#0DC5D4" if self._hovered else palette.text_secondary
             p.setPen(QColor(arrow_color))
             p.drawText(rect.adjusted(0, 0, -10, -8), Qt.AlignRight | Qt.AlignBottom, "→")
         # 展开/收起标记（右下角，仅有 body 的项显示）
         if self._has_body():
             p.setFont(self.FONT_MARK)
-            mark_color = "#888" if isDarkTheme() else "#aaa"
+            mark_color = theme_palette().scrollbar_handle
             p.setPen(QColor(mark_color))
             # ▼ 展开 / ▶ 收起
             mark_text = "▲" if self._expanded else "▼"
@@ -405,10 +407,7 @@ class NotificationDrawer(QWidget):
         # 分隔线
         line = QFrame()
         line.setFrameShape(QFrame.HLine)
-        if isDarkTheme():
-            _border = "#3a3d42"
-        else:
-            _border = "#e0e0e0"
+        _border = theme_palette().border
         line.setStyleSheet(f"color: {_border};")
         outer.addWidget(line)
         # ── 过滤行 ──
@@ -464,11 +463,9 @@ class NotificationDrawer(QWidget):
         self.refresh(force=True)
 
     def _update_chip_style(self):
-        # v3.02.01 fix: 主题感知（之前 chip 在浅色主题下背景太深看不清楚）
-        if isDarkTheme():
-            unselected_bg, unselected_hover, unselected_fg = "#2a2a2a", "#353535", "#aabbcc"
-        else:
-            unselected_bg, unselected_hover, unselected_fg = "#e8e8e8", "#d8d8d8", "#444"
+        # v3.04.01: 使用 ThemePalette 统一颜色
+        _p = theme_palette()
+        unselected_bg, unselected_hover, unselected_fg = _p.chip_bg, _p.chip_hover, _p.chip_fg
         for k, btn in self._chip_buttons.items():
             if btn.isChecked():
                 btn.setStyleSheet("""
@@ -513,7 +510,8 @@ class NotificationDrawer(QWidget):
             if not items:
                 empty = CaptionLabel("暂无通知", self._list_container)
                 empty.setAlignment(Qt.AlignCenter)
-                empty.setStyleSheet(f"color: {'#666' if isDarkTheme() else '#999'}; padding: 40px; font-size: 12px;")
+                _empty_c = theme_palette().text_secondary
+                empty.setStyleSheet(f"color: {_empty_c}; padding: 40px; font-size: 12px;")
                 self._list_layout.insertWidget(0, empty)
                 return
             for n in items:
@@ -611,12 +609,9 @@ class NotificationDrawer(QWidget):
         self.refresh()
 
     def _build_styles(self):
-        # v3.02.01: 现代化主题（VSCode 风格深灰，而非纯黑）
-        if isDarkTheme():
-            bg, border = "#202225", "#3a3d42"   # 柔和深灰
-        else:
-            bg, border = "#fafafa", "#e0e0e0"   # 干净浅色
-        # v3.02.01 fix: 用 QWidget#objectName 明确指向自己，避免样式被覆盖或失效
+        # v3.04.01: 使用 ThemePalette 统一颜色
+        _p = theme_palette()
+        bg, border = _p.card_bg, _p.border
         self.setObjectName("notificationDrawer")
         self.setStyleSheet(f"""
             QWidget#notificationDrawer {{ background: {bg}; border-left: 1px solid {border}; }}

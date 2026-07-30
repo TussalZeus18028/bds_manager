@@ -31,11 +31,10 @@ from qfluentwidgets import (
 import requests
 
 from shared.config import config_mgr, get_context, SCRIPT_DIR
+from shared.utils import is_linux, bds_exe
 from shared.toast import toast_success, toast_error, toast_info
 from pages.dashboard import wrap_scrollable
 from components.widgets import NoScrollSpinBox
-
-from shared.config import config_mgr, get_context, SCRIPT_DIR
 
 
 def _table_style() -> str:
@@ -461,76 +460,96 @@ class UpgradePage(QWidget):
         # ═══ lip 一键部署 (BDS + LeviLamina) ═══
         self._setup_lip_section(inner, layout)
 
-        # 版本列表
-        ver_card = CardWidget(inner)
-        vl = QVBoxLayout(ver_card)
-        vl.setContentsMargins(16, 12, 16, 16); vl.setSpacing(8)
+        if is_linux():
+            linux_card = CardWidget(inner)
+            lcl = QVBoxLayout(linux_card)
+            lcl.setContentsMargins(16, 12, 16, 16); lcl.setSpacing(8)
+            lcl.addWidget(SubtitleLabel("Linux 用户", linux_card))
+            from qfluentwidgets import HyperlinkButton
+            link = HyperlinkButton(
+                "https://www.minecraft.net/en-us/download/server/bedrock",
+                "打开 Minecraft 官网下载 Ubuntu 版 BDS",
+                linux_card, FluentIcon.LINK,
+            )
+            lcl.addWidget(link)
+            lcl.addWidget(BodyLabel(
+                "当前运行在 Linux 系统上。BDS Manager 的版本下载功能仅供 Windows 使用。\n"
+                "下载 Linux 版 BDS zip，解压后将文件夹路径配置到「设置」页即可开服。\n"
+                "启动命令: LD_LIBRARY_PATH=. ./bedrock_server",
+                linux_card))
+            layout.addWidget(linux_card)
+            # Linux 下跳过版本表格，继续渲染后续卡片（历史、日志、工具更新）
+        else:
+                # 版本列表
+            ver_card = CardWidget(inner)
+            vl = QVBoxLayout(ver_card)
+            vl.setContentsMargins(16, 12, 16, 16); vl.setSpacing(8)
 
-        hdr = QHBoxLayout()
-        hdr.addWidget(SubtitleLabel("可用版本", ver_card))
-        hdr.addStretch()
-        self._fetch_btn = PrimaryPushButton("浏览可用版本", ver_card, FluentIcon.SYNC)
-        self._stop_btn = PushButton("停止", ver_card, FluentIcon.CANCEL)
-        self._stop_btn.setEnabled(False)
-        self._patch_spin = NoScrollSpinBox(ver_card)
-        self._patch_spin.setRange(10, 200); self._patch_spin.setValue(40)
-        self._build_spin = NoScrollSpinBox(ver_card)
-        self._build_spin.setRange(5, 60); self._build_spin.setValue(30)
-        hdr.addWidget(self._fetch_btn)
-        hdr.addWidget(self._stop_btn)
-        hdr.addWidget(CaptionLabel("Patch:", ver_card))
-        hdr.addWidget(self._patch_spin)
-        hdr.addWidget(CaptionLabel("Build:", ver_card))
-        hdr.addWidget(self._build_spin)
-        vl.addLayout(hdr)
+            hdr = QHBoxLayout()
+            hdr.addWidget(SubtitleLabel("可用版本", ver_card))
+            hdr.addStretch()
+            self._fetch_btn = PrimaryPushButton("浏览可用版本", ver_card, FluentIcon.SYNC)
+            self._stop_btn = PushButton("停止", ver_card, FluentIcon.CANCEL)
+            self._stop_btn.setEnabled(False)
+            self._patch_spin = NoScrollSpinBox(ver_card)
+            self._patch_spin.setRange(10, 200); self._patch_spin.setValue(40)
+            self._build_spin = NoScrollSpinBox(ver_card)
+            self._build_spin.setRange(5, 60); self._build_spin.setValue(30)
+            hdr.addWidget(self._fetch_btn)
+            hdr.addWidget(self._stop_btn)
+            hdr.addWidget(CaptionLabel("Patch:", ver_card))
+            hdr.addWidget(self._patch_spin)
+            hdr.addWidget(CaptionLabel("Build:", ver_card))
+            hdr.addWidget(self._build_spin)
+            vl.addLayout(hdr)
 
-        self._ver_table = QTableWidget(0, 4, ver_card)
-        self._ver_table.setHorizontalHeaderLabels(["版本", "分支", "大小", "操作"])
-        self._ver_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
-        for col, w in [(1, 80), (2, 90), (3, 120)]:
-            self._ver_table.horizontalHeader().setSectionResizeMode(col, QHeaderView.Fixed)
-            self._ver_table.setColumnWidth(col, w)
-        self._ver_table.verticalHeader().setVisible(False)
-        self._ver_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
-        self._ver_table.setSelectionBehavior(QAbstractItemView.SelectRows)
-        self._ver_table.setSelectionMode(QAbstractItemView.ExtendedSelection)
-        self._ver_table.setMinimumHeight(320)
-        self._ver_table.verticalHeader().setDefaultSectionSize(40)  # 行高：容纳 PushButton
-        self._ver_table.setStyleSheet(_table_style())
-        vl.addWidget(self._ver_table)
+            self._ver_table = QTableWidget(0, 4, ver_card)
+            self._ver_table.setHorizontalHeaderLabels(["版本", "分支", "大小", "操作"])
+            self._ver_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
+            for col, w in [(1, 80), (2, 90), (3, 120)]:
+                self._ver_table.horizontalHeader().setSectionResizeMode(col, QHeaderView.Fixed)
+                self._ver_table.setColumnWidth(col, w)
+            self._ver_table.verticalHeader().setVisible(False)
+            self._ver_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+            self._ver_table.setSelectionBehavior(QAbstractItemView.SelectRows)
+            self._ver_table.setSelectionMode(QAbstractItemView.ExtendedSelection)
+            self._ver_table.setMinimumHeight(320)
+            self._ver_table.verticalHeader().setDefaultSectionSize(40)  # 行高：容纳 PushButton
+            self._ver_table.setStyleSheet(_table_style())
+            vl.addWidget(self._ver_table)
 
-        # 工具行
-        tools_row = QHBoxLayout()
-        self._size_btn = PushButton("获取文件大小", ver_card, FluentIcon.SEND)
-        self._size_btn.clicked.connect(self._fetch_sizes)
-        self._compare_btn = PushButton("对比选中", ver_card, FluentIcon.SEND)
-        self._compare_btn.clicked.connect(self._on_compare_versions)
-        self._rollback_btn = PushButton("回滚到上一版本", ver_card, FluentIcon.CANCEL)
-        self._rollback_btn.clicked.connect(self._on_rollback)
-        tools_row.addWidget(self._size_btn)
-        tools_row.addWidget(self._compare_btn)
-        tools_row.addWidget(self._rollback_btn)
-        tools_row.addStretch()
-        vl.addLayout(tools_row)
+            # 工具行
+            tools_row = QHBoxLayout()
+            self._size_btn = PushButton("获取文件大小", ver_card, FluentIcon.SEND)
+            self._size_btn.clicked.connect(self._fetch_sizes)
+            self._compare_btn = PushButton("对比选中", ver_card, FluentIcon.SEND)
+            self._compare_btn.clicked.connect(self._on_compare_versions)
+            self._rollback_btn = PushButton("回滚到上一版本", ver_card, FluentIcon.CANCEL)
+            self._rollback_btn.clicked.connect(self._on_rollback)
+            tools_row.addWidget(self._size_btn)
+            tools_row.addWidget(self._compare_btn)
+            tools_row.addWidget(self._rollback_btn)
+            tools_row.addStretch()
+            vl.addLayout(tools_row)
 
-        self._scan_status = CaptionLabel("", ver_card)
-        self._scan_status.setStyleSheet(f"color: {'#888' if isDarkTheme() else '#666'};")
-        vl.addWidget(self._scan_status)
+            self._scan_status = CaptionLabel("", ver_card)
+            self._scan_status.setStyleSheet(f"color: {'#888' if isDarkTheme() else '#666'};")
+            vl.addWidget(self._scan_status)
 
-        # 手动输入
-        man_row = QHBoxLayout()
-        man_row.addWidget(CaptionLabel("手动版本:", ver_card))
-        self._manual_input = LineEdit(ver_card)
-        self._manual_input.setPlaceholderText("1.21.0.2")
-        self._manual_input.setMaximumWidth(110)
-        self._manual_dl = PushButton("下载", ver_card, FluentIcon.DOWNLOAD)
-        self._manual_dl.clicked.connect(self._download_manual)
-        man_row.addWidget(self._manual_input)
-        man_row.addWidget(self._manual_dl)
-        man_row.addStretch()
-        vl.addLayout(man_row)
+            # 手动输入
+            man_row = QHBoxLayout()
+            man_row.addWidget(CaptionLabel("手动版本:", ver_card))
+            self._manual_input = LineEdit(ver_card)
+            self._manual_input.setPlaceholderText("1.21.0.2")
+            self._manual_input.setMaximumWidth(110)
+            self._manual_dl = PushButton("下载", ver_card, FluentIcon.DOWNLOAD)
+            self._manual_dl.clicked.connect(self._download_manual)
+            man_row.addWidget(self._manual_input)
+            man_row.addWidget(self._manual_dl)
+            man_row.addStretch()
+            vl.addLayout(man_row)
 
-        layout.addWidget(ver_card)
+            layout.addWidget(ver_card)
 
         # 升级历史
         history_card = CardWidget(inner)
@@ -772,15 +791,22 @@ class UpgradePage(QWidget):
 
     def _on_lip_mirrors(self):
         from backend.lip_utils import lip_installed, find_lip_exe, LipCmdWorker
-        if not lip_installed():
-            toast_error("请先安装 lip", "", self.window())
+        try:
+            if not lip_installed():
+                toast_error("请先安装 lip", "未检测到 lip 命令行工具，请先安装 lip。", self.window())
+                return
+        except Exception as e:
+            logger.error("lip_installed 检测异常: %s", e)
+            toast_error("检测失败", f"无法检测 lip 安装状态: {e}", self.window())
             return
+
         self._mirror_btn.setEnabled(False)
         self._mirror_btn.setText("配置中...")
         lip = find_lip_exe() or "lip"
 
         def _done(code):
             self._mirror_btn.setEnabled(True)
+            self._mirror_worker = None
             if code == 0:
                 self._mirror_btn.setText("已加速")
                 try:
@@ -802,12 +828,14 @@ class UpgradePage(QWidget):
             if code == 0:
                 w2 = LipCmdWorker([lip, "config", "set", "go_module_proxy", "https://goproxy.cn"])
                 w2.finished.connect(_step2)
+                self._mirror_worker = w2  # 防 GC
                 w2.start()
             else:
                 _done(code)
 
         w1 = LipCmdWorker([lip, "config", "set", "github_proxy", "https://github.bibk.top"])
         w1.finished.connect(_step1)
+        self._mirror_worker = w1  # 防 GC
         w1.start()
 
     def _on_lip_browse(self):
@@ -826,6 +854,9 @@ class UpgradePage(QWidget):
             config_mgr.save()
 
     def _on_lip_deploy(self):
+        if getattr(self, "_install_worker", None) is not None and self._install_worker.isRunning():
+            toast_warning("安装进行中", "BDS 正在安装，请等待完成后再部署 LL。", self.window())
+            return
         from backend.lip_utils import lip_installed, find_lip_exe, LipCmdWorker
         if not lip_installed():
             toast_error("请先安装 lip", "", self.window())
@@ -1014,7 +1045,7 @@ class UpgradePage(QWidget):
         url = f"https://feedback.minecraft.net/hc/en-us/articles/4410058574989-Minecraft-Bedrock-Changelog"
         mb = MessageBox(
             "版本对比",
-            f"已选: <b>{v1}</b> vs <b>{v2}</b>\n\n"
+            f"已选: {v1} vs {v2}\n\n"
             f"请访问 Mojang 官方 Changelog 页面查看详细变更：\n{url}\n\n"
             f"（本工具暂未集成自动 Changelog 抓取）",
             self.window(),
@@ -1033,7 +1064,7 @@ class UpgradePage(QWidget):
             return
         confirm = MessageBox(
             "回滚确认",
-            f"将回滚到 <b>{last.get('from_version', '?')}</b> 版本。\n\n"
+            f"将回滚到 {last.get('from_version', '?')} 版本。\n\n"
             f"备份位置: {backup}\n\n是否继续？",
             self.window(),
         )
@@ -1147,6 +1178,9 @@ class UpgradePage(QWidget):
 
     def _fetch(self):
         """用户点「浏览可用版本」：清旧表 → GitHub 重试 → 失败后提示用户启用 HEAD 嗅探。"""
+        if getattr(self, "_fetch_done", False):
+            return
+        self._fetch_done = True
         self._ver_table.setRowCount(0)
         self._results.clear()
         self._fetch_btn.setEnabled(False)
@@ -1389,8 +1423,13 @@ class UpgradePage(QWidget):
         self._pending_version = version
         # 显示安装区，填充当前 BDS 目录
         ctx_dl = get_context()
-        self._install_dir.setText(ctx_dl.bds_dir if hasattr(ctx_dl, "bds_dir") else ctx_dl.server_dir)
-        self._install_info.setText(f"已下载 BDS {version}，请选择安装路径后点击 [开始安装]")
+        stype_dir = config_mgr.get("server_type", "bds")
+        if stype_dir == "ll" and ctx_dl.ll_dir:
+            self._install_dir.setText(ctx_dl.ll_dir)
+        else:
+            self._install_dir.setText(ctx_dl.bds_dir if hasattr(ctx_dl, "bds_dir") else ctx_dl.server_dir)
+        stype_info = config_mgr.get("server_type", "bds")
+        self._install_info.setText(f"已下载 BDS {version}，请选择安装路径后点击 [开始安装]" + (f"\n⚠ 当前服务器模式: {stype_info.upper()}" if stype_info != "bds" else ""))
         self._install_btn.setEnabled(True)
         self._install_card.setVisible(True)
         self._update_install_status()
@@ -1410,13 +1449,22 @@ class UpgradePage(QWidget):
         if not d or not os.path.isdir(d):
             self._install_status.setText("请选择一个有效的目录")
             return
-        has_exe = os.path.isfile(os.path.join(d, "bedrock_server.exe"))
-        if has_exe:
-            self._install_status.setText("检测到已有服务器 — 将备份后再升级")
+        has_bds = os.path.isfile(os.path.join(d, bds_exe()))
+        has_ll = os.path.isfile(os.path.join(d, ll_exe()))
+        stype = config_mgr.get("server_type", "bds")
+        if has_bds and has_ll:
+            self._install_status.setText("检测到 BDS + LL — 将备份后再升级")
+        elif has_bds:
+            self._install_status.setText("检测到已有 BDS — 将备份后再升级" + (" (当前: LL 模式)" if stype == "ll" else ""))
+        elif has_ll:
+            self._install_status.setText("检测到已有 LL — 将备份后再升级" + (" (当前: BDS 模式)" if stype == "bds" else ""))
         else:
             self._install_status.setText("空目录 — 将完整安装")
 
     def _do_install(self):
+        if getattr(self, "_lip_worker", None) is not None and self._lip_worker.isRunning():
+            toast_warning("部署进行中", "LL 正在部署，请等待完成后再安装 BDS。", self.window())
+            return
         if not hasattr(self, "_pending_zip") or not os.path.exists(self._pending_zip):
             toast_error("安装失败", "未找到已下载的安装包", self.window())
             return
@@ -1427,7 +1475,7 @@ class UpgradePage(QWidget):
 
         version = self._pending_version
         zip_path = self._pending_zip
-        is_upgrade = os.path.isfile(os.path.join(target, "bedrock_server.exe"))
+        is_upgrade = os.path.isfile(os.path.join(target, bds_exe())) or os.path.isfile(os.path.join(target, ll_exe()))
 
         self._log_line(f"{'升级' if is_upgrade else '新装'} BDS {version} → {target}")
         self._install_btn.setEnabled(False)

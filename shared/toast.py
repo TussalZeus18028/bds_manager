@@ -16,6 +16,7 @@ from PySide6.QtGui import QColor, QPainter, QPen, QBrush, QBitmap
 from qfluentwidgets import InfoBar, InfoBarIcon, InfoBarPosition, isDarkTheme
 
 from shared.config import config_mgr
+from shared.theme import theme_palette
 
 # ══════════════════════════════════════════
 #  原版 ToastNotification（完全照抄旧 PyQt5 版，适配 PySide6）
@@ -33,25 +34,12 @@ class ToastNotification(QWidget):
         self._level = level
         self.raise_()
 
-        # v3.02.01 fix: 主题感知 —— 浅色主题用浅灰底+深色字，避免视觉割裂
-        if isDarkTheme():
-            colors = {
-                "error":   ("#ff7777", "#2a181a"),
-                "warning": ("#ffcc66", "#2a2218"),
-                "success": ("#66dd88", "#182a1e"),
-                "info":    ("#77aaff", "#181e2a"),
-            }
-            title_fg_extra = ""  # 暗色背景下用 accent 已够亮
-            msg_color = "#ccddee"
-        else:
-            colors = {
-                "error":   ("#c03030", "#fdecec"),
-                "warning": ("#b86a00", "#fdf3e3"),
-                "success": ("#2a8a4a", "#e6f5ec"),
-                "info":    ("#1c66c0", "#e6f0fa"),
-            }
-            msg_color = "#333333"
-        accent_hex, bg_hex = colors.get(level, colors["info"])
+        # v3.04.01: 使用 ThemePalette 统一管理颜色
+        p = theme_palette()
+        accent_hex = p.level_accent(level)
+        bg_hex = p.level_bg(level)
+        msg_color = p.toast_msg_color()
+
         self._bg = QColor(bg_hex)
         self._accent = QColor(accent_hex)
         self._radius = 12

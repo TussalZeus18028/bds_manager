@@ -365,7 +365,13 @@ class SettingsPage(QWidget):
         wh = CardWidget(inner)
         wl = QVBoxLayout(wh)
         wl.setContentsMargins(16, 12, 16, 16); wl.setSpacing(8)
-        wl.addWidget(SubtitleLabel("Webhook 通知", wh))
+        hdr_row = QHBoxLayout()
+        hdr_row.addWidget(SubtitleLabel("Webhook 通知", wh))
+        hdr_row.addStretch()
+        self._webhook_toggle = ToggleButton("启用", wh)
+        self._webhook_toggle.setChecked(config_mgr.get("webhook_enabled", True))
+        hdr_row.addWidget(self._webhook_toggle)
+        wl.addLayout(hdr_row)
 
         self._webhook_url = LineEdit(wh)
         self._webhook_url.setText(config_mgr.get("webhook_url", ""))
@@ -512,6 +518,9 @@ class SettingsPage(QWidget):
         s._gh_auth.toggled.connect(lambda v: _sa("github_auth_enabled", v))
         s._auto_update.toggled.connect(lambda v: _sa("auto_check_update", v))
         s._multi_dl.toggled.connect(lambda v: _sa("multi_dl_enabled", v))
+
+        # ── Webhook ──
+        s._webhook_toggle.toggled.connect(lambda v: _sa("webhook_enabled", v))
 
         # ── 高级 ──
         s._mem_warn.valueChanged.connect(lambda v: _sa("mem_warn_threshold", v))

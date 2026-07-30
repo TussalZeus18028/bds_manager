@@ -16,6 +16,10 @@ v3.1 改进：
 
 import sys
 import os
+import ssl as _ssl
+
+_ssl._create_default_https_context = _ssl._create_unverified_context  # GitHub API
+
 import time
 import logging
 from datetime import datetime
@@ -43,6 +47,7 @@ from backend.server import ServerProcess
 from backend.monitor import SystemResourceMonitor, SystemStatsSnapshot
 from backend.webhook import send_webhook
 from backend.self_update import CheckUpdateWorker, DownloadUpdateWorker, InstallUpdateWorker, verify_sha256, is_valid_zip, restart_app
+from backend.self_update_ui import show_cross_version_dialog, show_update_prompt  # v3.04.01
 from backend.notifications import notify  # v3.02.00 通知中心
 from backend.notifications import get_bus as _notify_bus, get_unread_count as _notify_unread
 from components.notification_panel import BellButton, NotificationDrawer
@@ -78,10 +83,7 @@ logging.basicConfig(
 logger = logging.getLogger("bds_manager")
 
 from shared.version import VERSION as __version__, VERSION_INFO as __version_info__, RELEASE_DATE as __release_date__
-
-# SSL: 部分 Windows 缺少根证书，关闭验证以访问 GitHub API
-import ssl as _ssl
-_ssl._create_default_https_context = _ssl._create_unverified_context
+from shared.utils import bds_exe, ll_exe, is_linux
 
 
 
@@ -296,9 +298,10 @@ class BDSFluentWindow(FluentWindow):
         self.upgrade_page.setObjectName("upgrade")
         self.addSubInterface(self.upgrade_page, FluentIcon.SYNC, "升级 (Ctrl+6)")
 
-        self.tunnel_page = TunnelPage(self)
-        self.tunnel_page.setObjectName("tunnel")
-        self.addSubInterface(self.tunnel_page, FluentIcon.LINK, "隧道 (Ctrl+7)")
+        if not is_linux():
+            self.tunnel_page = TunnelPage(self)
+            self.tunnel_page.setObjectName("tunnel")
+            self.addSubInterface(self.tunnel_page, FluentIcon.LINK, "隧道 (Ctrl+7)")
 
         self.about_page = AboutPage(self)
         self.about_page.setObjectName("about")
@@ -464,8 +467,8 @@ class BDSFluentWindow(FluentWindow):
         """首次启动引导：检查服务器状态，指引用户安装。"""
         from qfluentwidgets import MessageBox
         ctx = get_context()
-        has_bds = os.path.isfile(os.path.join(ctx.bds_dir, "bedrock_server.exe"))
-        has_ll = bool(config_mgr.get("ll_server_dir", "")) and                  os.path.isfile(os.path.join(ctx.ll_dir, "bedrock_server_mod.exe"))
+        has_bds = os.path.isfile(os.path.join(ctx.bds_dir, bds_exe()))
+        has_ll = bool(config_mgr.get("ll_server_dir", "")) and                  os.path.isfile(os.path.join(ctx.ll_dir, ll_exe()))
 
         target_page = "console"
         if not has_bds and not has_ll:
@@ -766,12 +769,22 @@ class BDSFluentWindow(FluentWindow):
             self._monitor.stop()
             stopped_any = True
 
-        # 4. 通知 → 停 1 秒让 BDS 处理 stop 命令 → 强制退出
+        # 4. 通知 → 等待 BDS 完成优雅停服后退出，避免固定 1 秒导致世界尚未保存完
         if stopped_any:
-            notify("warning", "system", "安全关闭", "服务器 / 隧道 / 监控已全部停止，1 秒后退出")
-            # v3.02.02: 用 QApplication.quit() 而不是 self.close()，因为 close_to_tray=True
-            # 会导致 closeEvent 只隐藏窗口不退出进程。
-            QTimer.singleShot(1000, QApplication.quit)
+            notify("warning", "system", "安全关闭", "正在等待服务器完成保存并退出")
+            grace = config_mgr.get("shutdown_grace_seconds", 10)
+
+            def wait_then_quit(remaining_ms=(grace + 3) * 1000):
+                if (
+                    self._server is None
+                    or not self._server.process_alive
+                    or remaining_ms <= 0
+                ):
+                    QApplication.quit()
+                    return
+                QTimer.singleShot(250, lambda: wait_then_quit(remaining_ms - 250))
+
+            wait_then_quit()
         else:
             notify("info", "system", "安全关闭", "当前没有运行中的进程，退出")
             QTimer.singleShot(500, QApplication.quit)
@@ -854,52 +867,9 @@ class BDSFluentWindow(FluentWindow):
                 except (AttributeError, RuntimeError):
                     pass
 
-        is_dark = theme_map.get(theme, Theme.DARK) != Theme.LIGHT
-        handle = "#555" if is_dark else "#bbb"
-        handle_hover = "#777" if is_dark else "#999"
-        track = "transparent"
-        self.setStyleSheet(f"""
-            QScrollBar:vertical {{
-                width: 6px;
-                background: {track};
-                border: none;
-                margin: 0;
-            }}
-            QScrollBar::handle:vertical {{
-                background: {handle};
-                border-radius: 3px;
-                min-height: 30px;
-            }}
-            QScrollBar::handle:vertical:hover {{
-                background: {handle_hover};
-            }}
-            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{
-                height: 0; border: none;
-            }}
-            QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{
-                background: none;
-            }}
-            QScrollBar:horizontal {{
-                height: 6px;
-                background: {track};
-                border: none;
-                margin: 0;
-            }}
-            QScrollBar::handle:horizontal {{
-                background: {handle};
-                border-radius: 3px;
-                min-width: 30px;
-            }}
-            QScrollBar::handle:horizontal:hover {{
-                background: {handle_hover};
-            }}
-            QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {{
-                width: 0; border: none;
-            }}
-            QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal {{
-                background: none;
-            }}
-        """)
+        # v3.04.01: 滚动条样式统一到 shared/theme.scrollbar_style()
+        from shared.theme import scrollbar_style as _scrollbar_style
+        self.setStyleSheet(_scrollbar_style())
         logger.info("主题: %s, 主色: %s", theme, accent_color)
 
     # ---------- 服务器管理 ----------
@@ -967,65 +937,34 @@ class BDSFluentWindow(FluentWindow):
         if not dl_url:
             toast_warning("更新源缺失", "version.json 未提供下载链接", self, duration=6000)
             return
-        toast_info("发现新版本", f"v{__version__} → v{remote_ver}，正在后台下载...", self)
-        notify("info", "update", "发现新版本", f"v{__version__} → v{remote_ver}", "page:upgrade")
+        # v3.04.01: 委托到 backend/self_update_ui.py
+        # 必须保存返回值到 self._update_mb，否则 MessageBox.show() 非阻塞返回后
+        # Python 端引用被 GC，导致 yesSignal 回调对象析构 → RuntimeWarning
+        self._update_mb = show_update_prompt(
+            parent=self,
+            remote_ver=remote_ver,
+            dl_url=dl_url,
+            sha256=sha256,
+            on_download=lambda u, v, s: self._start_self_update_download(u, v, s),
+        )
+
+    def _start_self_update_download(self, dl_url, remote_ver, sha256=""):
+        """确认后开始下载自更新包。"""
+        toast_info("正在下载", f"v{remote_ver} 下载中...", self)
         self._dl_updater = DownloadUpdateWorker(dl_url, remote_ver, self)
         self._dl_updater.finished.connect(lambda s, m, p: self._on_update_downloaded(s, m, p, sha256))
         self._dl_updater.start()
 
     def _prompt_cross_version_upgrade(self, remote_ver, dl_url, sha256, msg):
-        """跨主版本升级引导：弹主题适配的 Dialog 让用户选择。"""
-        from shared.toast import toast_info
-        from backend.self_update import GITHUB_REPO_OWNER, GITHUB_REPO_NAME
-        import webbrowser
-        from PySide6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel
-        from PySide6.QtCore import Qt
-        from qfluentwidgets import PushButton, PrimaryPushButton, isDarkTheme
-
-        dlg = QDialog(self)
-        dlg.setWindowTitle("发现新版本（建议手动下载）")
-        dlg.resize(520, 380)
-        # 主题适配
-        bg = "#1e1e1e" if isDarkTheme() else "#fafafa"
-        fg = "#ccc" if isDarkTheme() else "#1a1a1a"
-        dlg.setStyleSheet(f"QDialog {{ background: {bg}; }} QLabel {{ color: {fg}; }}")
-        layout = QVBoxLayout(dlg)
-        layout.setContentsMargins(20, 16, 20, 16)
-        layout.setSpacing(12)
-
-        title = QLabel("发现新版本（建议手动下载）")
-        title.setStyleSheet(f"font-size: 15px; font-weight: bold; color: {fg};")
-        layout.addWidget(title)
-
-        body_text = (
-            f"检测到新版本 v{remote_ver}（当前 v{__version__}）。\n\n"
-            f"您的版本与新版差异较大，{msg or '自动升级可能需要手动调整'}。\n\n"
-            f"建议手动下载完整包升级（更稳妥）：\n"
-            f"1. 点击「打开下载页」前往 GitHub Releases\n"
-            f"2. 下载 bds_manager_v{remote_ver}.zip\n"
-            f"3. 解压覆盖到当前目录（自动迁移旧版特征文件）\n"
-            f"4. 重启程序\n\n"
-            f"如果您想继续体验一键自动升级，也可选择「继续自动升级」。"
+        """跨主版本升级引导（v3.04.01: 委托到 backend/self_update_ui.py）。"""
+        show_cross_version_dialog(
+            parent=self,
+            remote_ver=remote_ver,
+            dl_url=dl_url,
+            sha256=sha256,
+            msg=msg,
+            on_auto_upgrade=lambda u, v, s: self._start_self_update_download(u, v, s),
         )
-        body_label = QLabel(body_text)
-        body_label.setWordWrap(True)
-        layout.addWidget(body_label)
-
-        btn_row = QHBoxLayout()
-        btn_manual = PrimaryPushButton("打开下载页（推荐）", dlg)
-        btn_auto = PushButton("继续自动升级", dlg)
-        btn_cancel = PushButton("取消", dlg)
-        btn_manual.clicked.connect(lambda: webbrowser.open(
-            f"https://github.com/{GITHUB_REPO_OWNER}/{GITHUB_REPO_NAME}/releases/tag/v{remote_ver}"
-        ) or dlg.accept())
-        btn_auto.clicked.connect(lambda: (self._start_download_update(remote_ver, dl_url, sha256), dlg.accept()))
-        btn_cancel.clicked.connect(dlg.reject)
-        btn_row.addStretch()
-        btn_row.addWidget(btn_cancel)
-        btn_row.addWidget(btn_auto)
-        btn_row.addWidget(btn_manual)
-        layout.addLayout(btn_row)
-        dlg.exec()
 
     def _show_update_complete(self):
         """更新完成提示。"""

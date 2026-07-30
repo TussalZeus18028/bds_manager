@@ -112,17 +112,36 @@ class BackupWorker(BaseWorker):
     """世界备份后台线程。"""
 
     def __init__(self, level_name: str, world_path: str, backup_dir: str,
-                 parent=None, prefix: str = "", bds_version: str = ""):
+                 parent=None, prefix: str = "", bds_version: str = "",
+                 server_process=None, online: bool = False):
         super().__init__(parent)
         self.level_name = level_name
         self.world_path = world_path
         self.backup_dir = backup_dir
         self.prefix = prefix
         self.bds_version = bds_version
+        self.server_process = server_process
+        self.online = online
         self.result_path: str = ""
 
     def run(self):
+        backup_path = ""
+        online_prepared = False
         try:
+            if not os.path.isdir(self.world_path):
+                raise FileMissingError(
+                    self.world_path,
+                    hint="请先成功启动服务器并创建世界",
+                )
+            os.makedirs(self.backup_dir, exist_ok=True)
+
+            if self.online and self.server_process and self.server_process.is_running:
+                self.progress.emit("正在请求服务器冻结世界文件...")
+                if not self.server_process.prepare_online_backup():
+                    raise RuntimeError("服务器未确认世界文件可复制，在线备份已取消")
+                online_prepared = True
+                self.progress.emit("服务器已冻结世界文件，开始备份...")
+
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             backup_name = f"{self.prefix}{self.level_name}_{timestamp}.zip"
             backup_path = os.path.join(self.backup_dir, backup_name)
@@ -163,16 +182,26 @@ class BackupWorker(BaseWorker):
             }
             _write_backup_metadata(backup_path, metadata)
             self.result_path = backup_path
+            if online_prepared:
+                self.server_process.resume_online_backup()
+                online_prepared = False
             self.progress.emit(f"备份完成: {backup_name}（{file_count} 个文件，{total_bytes/1024/1024:.1f} MB）")
             self.finished.emit(True, f"备份成功: {backup_name}")
         except Exception as e:
             logger.error("备份失败: %s", e)
             # v3.02.02: 清理半成品 zip 文件
             try:
-                os.remove(backup_path)
+                if backup_path:
+                    os.remove(backup_path)
             except OSError:
                 pass
             self.finished.emit(False, f"备份失败: {e}")
+        finally:
+            if online_prepared:
+                try:
+                    self.server_process.resume_online_backup()
+                except Exception as e:
+                    logger.error("在线备份结束后恢复写入失败: %s", e)
 
 
 # ---------- 还原 Worker ----------

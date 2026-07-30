@@ -4,7 +4,6 @@
 """
 
 import os, sys, json, shutil, zipfile, base64, hashlib, subprocess
-import urllib.request, urllib.error
 import logging
 
 from PySide6.QtCore import QThread, Signal
@@ -89,7 +88,7 @@ def fetch_remote_version_json() -> dict:
 # ── SHA256 校验 ──
 def verify_sha256(filepath: str, expected: str) -> tuple[bool, str]:
     if not expected:
-        return True, "跳过校验"
+        return False, "更新源未提供 SHA256，已拒绝安装"
     try:
         h = hashlib.sha256()
         with open(filepath, "rb") as f:
@@ -224,7 +223,7 @@ class InstallUpdateWorker(QThread):
     def _migrate_legacy_v2(self):
         """检测 v2.x 旧版文件 → 移到 backups/legacy_v2/。"""
         legacy_files = {"bds_manager.py", "bds_manager.py.bak_174752", "release_gui.py"}
-        legacy_dirs = {"web_ui", "tests"}
+        legacy_dirs = {"web_ui"}
         detected = [n for n in legacy_files if os.path.exists(os.path.join(SCRIPT_DIR, n))]
         detected += [n for n in legacy_dirs if os.path.isdir(os.path.join(SCRIPT_DIR, n))]
         if not detected:

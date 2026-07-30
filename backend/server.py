@@ -74,6 +74,8 @@ class ServerProcess(QThread):
         self._monitor_thread: threading.Thread | None = None
         self._monitor_active = False
         self._last_output_time: float = 0.0
+        self._stdin_lock = threading.Lock()
+        self._backup_ready_event = threading.Event()
 
     @property
     def started_at(self) -> float:
@@ -86,19 +88,19 @@ class ServerProcess(QThread):
         return time.time() - self._started_at
 
     @property
+    def process_alive(self) -> bool:
+        """底层进程是否仍存在，不受“正在停止”标志影响。"""
+        return self.process is not None and self.process.poll() is None
+
+    @property
     def is_running(self) -> bool:
-        return (
-            self.process is not None
-            and self.process.poll() is None
-            and not self._stop_event.is_set()
-        )
+        return self.process_alive and not self._stop_event.is_set()
 
     def run(self):
         self._stop_event.clear()
         cmd = [self.server_exe] + list(self.extra_args)
         try:
-            self.process = subprocess.Popen(
-                cmd,
+            popen_kw = dict(
                 cwd=self.work_dir,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
@@ -106,6 +108,13 @@ class ServerProcess(QThread):
                 bufsize=0,
                 creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0,
             )
+            # Linux: BDS 需要 LD_LIBRARY_PATH 指向自身目录
+            if sys.platform == "linux":
+                import copy
+                env = copy.copy(os.environ)
+                env["LD_LIBRARY_PATH"] = os.path.abspath(self.work_dir)
+                popen_kw["env"] = env
+            self.process = subprocess.Popen(cmd, **popen_kw)
         except Exception as e:
             logger.error("启动服务器进程失败: %s", e)
             self.error_occurred.emit(f"启动失败: {e}")
@@ -131,6 +140,8 @@ class ServerProcess(QThread):
                 break
             text = _decode_server_line(raw).rstrip()
             self._last_output_time = time.time()
+            if "files are now ready to be copied" in text.lower():
+                self._backup_ready_event.set()
             self.output_received.emit(text)
         self.process.stdout.close()
         self._stop_proc_monitor()
@@ -190,8 +201,8 @@ class ServerProcess(QThread):
         return (time.time() - self._last_output_time) < idle_seconds
 
     # ---------- 命令发送 ----------
-    def send_command(self, command: str):
-        """向服务器发送命令。"""
+    def send_command(self, command: str) -> bool:
+        """向服务器发送命令，返回是否写入成功。"""
         if self.process and self.process.stdin and not self._stop_event.is_set():
             try:
                 line = command + "\n"
@@ -204,10 +215,40 @@ class ServerProcess(QThread):
                     data = line.encode(enc) if enc else line.encode("utf-8")
                 except (UnicodeEncodeError, LookupError):
                     data = line.encode("utf-8")
-                self.process.stdin.write(data)
-                self.process.stdin.flush()
+                with self._stdin_lock:
+                    self.process.stdin.write(data)
+                    self.process.stdin.flush()
+                return True
             except Exception as e:
                 logger.error("发送命令失败: %s", e)
+        return False
+
+    def prepare_online_backup(self, timeout: float = 20.0, query_interval: float = 0.5) -> bool:
+        """冻结世界文件并等待 BDS 明确确认可复制。
+
+        必须从后台线程调用，避免等待期间阻塞 GUI。成功后调用方必须在 finally
+        中调用 resume_online_backup()。
+        """
+        if not self.is_running:
+            return False
+        self._backup_ready_event.clear()
+        if not self.send_command("save hold"):
+            return False
+
+        deadline = time.monotonic() + max(timeout, 1.0)
+        while self.is_running and time.monotonic() < deadline:
+            self.send_command("save query")
+            remaining = deadline - time.monotonic()
+            if self._backup_ready_event.wait(timeout=min(query_interval, max(remaining, 0.0))):
+                return True
+        # save hold 已经发出但未收到就绪确认时，也必须尝试解除冻结。
+        self.resume_online_backup()
+        return False
+
+    def resume_online_backup(self):
+        """解除 save hold；可重复调用。"""
+        self.send_command("save resume")
+        self._backup_ready_event.clear()
 
     def send_save_all(self):
         """保存世界（BDS 基岩版用 save hold→通知备份→save resume）。"""

@@ -173,6 +173,7 @@ DEFAULT_CONFIG = {
     "backup_keep": 20,
     "backup_min_age_days": 0,
     "online_backup": True,
+    "webhook_enabled": True,
     "webhook_url": "",
     "webhook_events": ["backup", "crash", "memory"],
     "frpc_path": "",
@@ -237,7 +238,7 @@ BOOL_FIELDS = {
     "multi_dl_enabled", "show_startup_toasts", "github_auth_enabled",
     "follow_system_theme", "console_show_timestamps",
     "enable_bds_process_monitor", "graceful_shutdown",
-    "console_auto_scroll", "close_to_tray", "first_launch_done",
+    "console_auto_scroll", "close_to_tray", "first_launch_done", "webhook_enabled",
 }
 # 注意：server_root_dir / ll_server_dir / server_type 是字符串，不是 bool
 
@@ -283,6 +284,20 @@ def _migrate_config(loaded: dict) -> dict:
     return loaded
 
 
+def _merge_loaded_config(loaded: dict) -> dict:
+    """迁移、校验并合并一份已解析的配置。"""
+    loaded = _migrate_config(dict(loaded))
+    config = dict(DEFAULT_CONFIG)
+    for key in DEFAULT_CONFIG:
+        raw = loaded.get(key, DEFAULT_CONFIG[key])
+        config[key] = _validate_value(key, raw)
+    # 保留 window_geometry 等不在默认 schema 中、但仍需持久化的扩展字段。
+    for key, value in loaded.items():
+        if key not in config:
+            config[key] = value
+    return config
+
+
 class ConfigManager:
     """配置管理器：读写 bds_manager_config.json。"""
 
@@ -301,20 +316,13 @@ class ConfigManager:
             try:
                 with open(CONFIG_FILE, "r", encoding="utf-8") as f:
                     loaded = json.load(f)
-                # 迁移
-                loaded = _migrate_config(loaded)
-                # 用 schema 校验后的值覆盖
-                for k in DEFAULT_CONFIG:
-                    raw = loaded.get(k, DEFAULT_CONFIG[k])
-                    config[k] = _validate_value(k, raw)
-                # v3.02.01: 合并不在 DEFAULT_CONFIG 但 save 会写出的非标准键
-                for k, v in loaded.items():
-                    if k not in config:
-                        config[k] = v
+                config = _merge_loaded_config(loaded)
             except (json.JSONDecodeError, FileNotFoundError, UnicodeDecodeError) as e:
                 logger.error("加载配置文件失败: %s", e)
                 # 尝试恢复最近一次备份
-                self._try_restore_backup()
+                restored = self._try_restore_backup()
+                if restored is not None:
+                    config = _merge_loaded_config(restored)
         # 从独立版本缓存加载
         if os.path.exists(VERSION_CACHE_FILE):
             try:
@@ -328,37 +336,29 @@ class ConfigManager:
         return config
 
     def save(self):
-        """原子保存：先写 tmp，fsync 后 rename，保留最近 5 份快照。"""
-        keys = [
-            "config_version", "theme", "theme_color", "server_dir", "server_exe",
-            "auto_backup_enabled", "backup_interval", "monitor_interval",
-            "backup_keep", "backup_min_age_days", "online_backup",
-            "webhook_url", "webhook_events", "frpc_path",
-            "mem_warn_threshold", "max_restart_retries",
-            "auto_check_update", "multi_dl_enabled", "show_startup_toasts",
-            "toast_duration_error", "toast_duration_warning",
-            "toast_duration_success", "toast_duration_info",
-            "toast_queue_delay", "toast_opacity", "toast_style",
-            "window_width", "window_height",
-            "server_root_dir", "ll_server_dir", "server_type",
-            "github_auth_enabled", "github_token",
-            # v3.1 新增
-            "font_size", "follow_system_theme",
-            "console_show_timestamps", "console_max_lines", "console_auto_scroll",
-            "enable_bds_process_monitor", "graceful_shutdown", "shutdown_grace_seconds",
-            # v3.02.00 新增
-            "show_command_palette_tip", "shortcuts",
-            # v3.02.01 新增
-            "window_geometry",
-            # v3.02.02 新增
-            "close_to_tray", "window_background_opacity",
-            # v3.03.02 新增
-            "high_dpi",
-            # v3.03.04 新增
-            "first_launch_done", "cmd_history",
-        ]
+        """原子保存：先写 tmp，fsync 后 rename，保留最近 5 份快照。
+
+        v3.04.01: keys 白名单由 DEFAULT_CONFIG 自动推导（消除手写维护）。
+        新增 DEFAULT_CONFIG 字段 → 自动纳入 save()；无需手动更新白名单。
+        扩展字段（如 window_geometry / cmd_history）如果存在于 self.values 中也一并保存。
+        """
+        # 核心 keys：从 DEFAULT_CONFIG schema 自动推导
+        keys = list(DEFAULT_CONFIG.keys())
+        # 扩展字段：存在于 self.values 但不在 DEFAULT_CONFIG 中的
+        for key in self.values:
+            if key not in DEFAULT_CONFIG and key not in ("version_cache", "version_list"):
+                keys.append(key)
         data = {k: self.values.get(k, DEFAULT_CONFIG.get(k)) for k in keys}
         os.makedirs(SCRIPT_DIR, exist_ok=True)
+        # 覆盖有效旧配置前先保存快照；内容未变化时不制造重复快照。
+        if os.path.exists(CONFIG_FILE):
+            try:
+                with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+                    previous = json.load(f)
+            except (OSError, json.JSONDecodeError, UnicodeDecodeError):
+                previous = None
+            if previous != data:
+                self._save_config_snapshot()
         # 原子写
         self._atomic_write_json(CONFIG_FILE, data)
         # 日志节流：避免 _silent_save 刷屏，但数据每次都会落盘
@@ -398,7 +398,7 @@ class ConfigManager:
             return
         try:
             os.makedirs(CONFIG_BACKUP_DIR, exist_ok=True)
-            ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+            ts = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
             snap = os.path.join(CONFIG_BACKUP_DIR, f"config_{ts}.json")
             shutil.copy2(CONFIG_FILE, snap)
             self._history.append(snap)
@@ -415,24 +415,28 @@ class ConfigManager:
         except Exception as e:
             logger.debug("配置快照失败: %s", e)
 
-    def _try_restore_backup(self):
-        """配置文件损坏时尝试从最新快照恢复。"""
+    def _try_restore_backup(self) -> dict | None:
+        """配置文件损坏时尝试从最新快照恢复，并返回快照内容。"""
         if not os.path.isdir(CONFIG_BACKUP_DIR):
-            return
+            return None
         snaps = sorted(
             [os.path.join(CONFIG_BACKUP_DIR, f) for f in os.listdir(CONFIG_BACKUP_DIR) if f.endswith(".json")],
             key=os.path.getmtime, reverse=True,
         )
         if not snaps:
-            return
+            return None
         latest = snaps[0]
         try:
             with open(latest, "r", encoding="utf-8") as f:
-                json.load(f)  # 验证可解析
+                restored = json.load(f)
+            if not isinstance(restored, dict):
+                raise ValueError("配置快照根节点不是对象")
             shutil.copy2(latest, CONFIG_FILE)
             logger.warning("主配置损坏，已从快照恢复: %s", os.path.basename(latest))
+            return restored
         except Exception as e:
             logger.error("快照恢复失败: %s", e)
+            return None
 
     def rollback(self) -> bool:
         """手动回滚到上一份快照。返回是否成功。"""
