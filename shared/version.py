@@ -4,7 +4,7 @@
 
 所有模块都从这里 import 版本信息，修改版本只需改这一个文件。
 """
-VERSION = "3.04.01"
-VERSION_INFO = (3, 4, 1)
-RELEASE_DATE = "2026-07-30"
-CONFIG_VERSION = "3.04.01"  # 配置 schema 版本（通常跟随主版本）
+VERSION = "3.04.02"
+VERSION_INFO = (3, 4, 2)
+RELEASE_DATE = "2026-07-31"
+CONFIG_VERSION = "3.04.02"  # 配置 schema 版本（通常跟随主版本）
