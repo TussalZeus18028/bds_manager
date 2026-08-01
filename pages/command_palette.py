@@ -25,7 +25,6 @@ from qfluentwidgets import (
 )
 
 from shared.theme import theme_palette
-from shared.config import config_mgr
 
 
 class CommandItem:
@@ -41,7 +40,7 @@ class CommandItem:
 
 
 class CommandPaletteDialog(QDialog):
-    """命令面板弹窗（v3.04.03: 主题感知 + 半透明 + 触控）。"""
+    """命令面板弹窗（v3.04.03: ThemePalette 主题感知 + 触控）。"""
 
     def __init__(self, commands: list[CommandItem], parent=None):
         super().__init__(parent)
@@ -49,20 +48,16 @@ class CommandPaletteDialog(QDialog):
         self.setModal(True)
         self.resize(620, 520)
 
-        # v3.04.03: 主题感知背景 + 半透明毛玻璃
+        # v3.04.03: ThemePalette 主题感知 — 每次创建读取当前主题色
+        # 不使用 WA_TranslucentBackground（QDialog 在 Windows 下会渲染异常）
         p = theme_palette()
-        opacity = config_mgr.get("window_background_opacity", 100)
-        alpha = int(opacity * 2.55)  # 100→255, 80→204
-        if isDarkTheme():
-            bg_rgba = f"rgba(24,24,27,{alpha})"
-            border_color = p.border
-        else:
-            bg_rgba = f"rgba(245,245,247,{alpha})"
-            border_color = p.border
         self.setStyleSheet(f"""
-            QDialog {{ background:{bg_rgba}; border:1px solid {border_color}; border-radius:12px; }}
+            QDialog {{
+                background:{p.surface};
+                border:1px solid {p.border};
+                border-radius:12px;
+            }}
         """)
-        self.setAttribute(Qt.WA_TranslucentBackground, alpha < 255)
 
         self._commands = commands
         self._filtered: list[CommandItem] = list(commands)

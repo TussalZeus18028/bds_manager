@@ -603,6 +603,24 @@ class BDSFluentWindow(FluentWindow):
             config_mgr.save()
             self.hide()
             return
+        # v3.04.03: 真正退出前弹出确认提示
+        from qfluentwidgets import MessageBox
+        _ev = event
+        mb = MessageBox(
+            "确认退出",
+            "确定要退出 BDS Manager 吗？\n\n"
+            "系统托盘和通知将随之关闭。",
+            self,
+        )
+        mb.yesButton.setText("退出")
+        mb.cancelButton.setText("取消")
+        mb.yesSignal.connect(self._do_full_shutdown_and_quit)
+        mb.cancelSignal.connect(mb.close)
+        mb.show()
+        _ev.ignore()
+
+    def _do_full_shutdown_and_quit(self):
+        """安全退出应用。"""
         self.stop_server()
         if self._monitor:
             self._monitor.stop()
@@ -614,10 +632,9 @@ class BDSFluentWindow(FluentWindow):
             self.upgrade_page._stop_scan()
         if self._tray is not None:
             self._tray.hide()
-        # v3.02.01：正常关闭时显式保存几何（resizeEvent 已实时保存，这里再保证一次）
         self._save_geometry()
         config_mgr.save()
-        super().closeEvent(event)
+        QApplication.quit()
 
     # ---------- 快捷键 ----------
     def _init_shortcuts(self):
