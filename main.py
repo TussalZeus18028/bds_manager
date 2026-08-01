@@ -262,7 +262,7 @@ class BDSFluentWindow(FluentWindow):
         cmd_palette_action.triggered.connect(self._open_command_palette)
         menu.addSeparator()
         quit_action = menu.addAction("退出")
-        quit_action.triggered.connect(QApplication.quit)
+        quit_action.triggered.connect(lambda: (setattr(self, "_skip_close_confirm", True), QApplication.quit()))
         self._tray.setContextMenu(menu)
         self._tray.show()
 
