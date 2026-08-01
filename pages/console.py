@@ -268,11 +268,15 @@ class LevelFilterBar(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        layout = QHBoxLayout(self)
+        layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(8)
-        layout.addWidget(CaptionLabel("过滤:", self))
-        layout.addSpacing(4)
+        layout.setSpacing(4)
+
+        # 第一行: 过滤标签 + 4 个 CheckBox
+        row1 = QHBoxLayout()
+        row1.setContentsMargins(0, 0, 0, 0)
+        row1.setSpacing(6)
+        row1.addWidget(CaptionLabel("过滤:", self))
         self._filters: dict[str, CheckBox] = {}
         for label, key in [("信息", "info"), ("警告", "warn"),
                            ("错误", "error"), ("聊天", "chat")]:
@@ -280,15 +284,22 @@ class LevelFilterBar(QWidget):
             cb.setChecked(True)
             cb.toggled.connect(lambda: self.changed.emit())
             self._filters[key] = cb
-            layout.addWidget(cb)
+            row1.addWidget(cb)
         self._filter_count = CaptionLabel("", self)
-        layout.addWidget(self._filter_count)
+        row1.addWidget(self._filter_count)
+        row1.addStretch()
+        layout.addLayout(row1)
+
+        # 第二行: 显示全部按钮（不勾时才出现，单独一行避免挤压）
         self._show_all = PushButton("显示全部", self)
-        self._show_all.setFixedWidth(72)
+        self._show_all.setFixedWidth(80)
         self._show_all.clicked.connect(self._show_all_filters)
         self._show_all.hide()
-        layout.addWidget(self._show_all)
-        layout.addStretch()
+        row2 = QHBoxLayout()
+        row2.setContentsMargins(0, 0, 0, 0)
+        row2.addWidget(self._show_all)
+        row2.addStretch()
+        layout.addLayout(row2)
 
     def _show_all_filters(self):
         for cb in self._filters.values():
