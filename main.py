@@ -798,13 +798,13 @@ class BDSFluentWindow(FluentWindow):
             except (RuntimeError, AttributeError, ValueError):
                 pass
 
-        # 3. 停系统监控
+        # 3. 停系统监控（不改变 stopped_any——它始终运行）
         if self._monitor:
             self._monitor.stop()
-            stopped_any = True
 
-        # 4. 通知 → 等待 BDS 完成优雅停服后退出
+        # 4. 根据实际有无进程决定退出路径
         if stopped_any:
+            # 服务器/隧道在运行 → 等优雅停服完成再退出
             notify("warning", "system", "安全关闭", "正在等待服务器完成保存并退出")
             from shared.toast import toast_warning
             toast_warning("安全关闭", "正在停止服务器，请稍候...", self, duration=5000)
