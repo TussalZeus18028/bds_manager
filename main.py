@@ -803,9 +803,11 @@ class BDSFluentWindow(FluentWindow):
             self._monitor.stop()
             stopped_any = True
 
-        # 4. 通知 → 等待 BDS 完成优雅停服后退出，避免固定 1 秒导致世界尚未保存完
+        # 4. 通知 → 等待 BDS 完成优雅停服后退出
         if stopped_any:
             notify("warning", "system", "安全关闭", "正在等待服务器完成保存并退出")
+            from shared.toast import toast_warning
+            toast_warning("安全关闭", "正在停止服务器，请稍候...", self, duration=5000)
             grace = config_mgr.get("shutdown_grace_seconds", 10)
 
             def wait_then_quit(remaining_ms=(grace + 3) * 1000):
@@ -821,8 +823,8 @@ class BDSFluentWindow(FluentWindow):
             wait_then_quit()
         else:
             from shared.toast import toast_info
-            toast_info("安全关闭", "当前没有运行中的进程，正在退出", self, duration=2000)
-            QTimer.singleShot(2000, self.close)
+            toast_info("安全关闭", "当前没有运行中的进程，正在退出", self, duration=3000)
+            QTimer.singleShot(3500, self.close)
 
     def _on_page_changed_for_shortcuts(self, idx):
         """主窗口 stackedWidget 切页时通知 ShortcutManager 更新作用域。"""
