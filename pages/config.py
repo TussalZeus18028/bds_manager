@@ -14,8 +14,9 @@ v3.1 改进：
 import os
 import re
 import logging
+import socket
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QThread, Signal
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QTableWidget, QTableWidgetItem,
@@ -622,35 +623,67 @@ class ConfigPage(QWidget):
         dlg.exec()
 
     def _check_ports(self):
-        import socket
-        ctx = get_context()
+        """v3.04.03 修复: 端口检测移到后台线程，不再阻塞 GUI。
+        
+        之前 socket.bind() 在主线程运行，端口占用时扫描 200 个偏移 × 3s 超时
+        = 最长 12 分钟卡死，导致 MessageBox 模态弹窗不响应点击 + 系统提示音。
+        """
         ipv4 = self._editors["server-port"][1].value()
         ipv6 = self._editors["server-portv6"][1].value()
 
-        msgs = []
-        for label, port in [("IPv4", ipv4), ("IPv6", ipv6)]:
-            try:
-                sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-                sock.settimeout(3)
-                sock.bind(("0.0.0.0", port))
-                sock.close()
-                msgs.append(f"{label} {port}: 可用")
-            except OSError:
-                free = None
-                for offset in range(1, 200):
-                    p = port + offset
+        self._port_btn = self.sender()  # 保存按钮引用以便禁用
+        if self._port_btn:
+            self._port_btn.setEnabled(False)
+            self._port_btn.setText("检测中...")
+        toast_info("端口检测", "正在扫描端口，请稍候...", self.window())
+
+        class _PortScanner(QThread):
+            result = Signal(str)
+            def __init__(self, ipv4, ipv6, parent=None):
+                super().__init__(parent)
+                self._ipv4 = ipv4
+                self._ipv6 = ipv6
+
+            def run(self):
+                msgs = []
+                for label, port in [("IPv4", self._ipv4), ("IPv6", self._ipv6)]:
                     try:
                         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-                        s.bind(("0.0.0.0", p))
+                        s.settimeout(2)
+                        s.bind(("0.0.0.0", port))
                         s.close()
-                        free = p
-                        break
+                        msgs.append(f"{label} {port}: 可用")
                     except OSError:
-                        pass
-                if free:
-                    msgs.append(f"{label} {port}: 已占用 → 推荐 {free}")
-                else:
-                    msgs.append(f"{label} {port}: 已占用（附近无空闲端口）")
+                        free = None
+                        for offset in range(1, 200):
+                            p = port + offset
+                            try:
+                                s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                                s.settimeout(0.3)
+                                s.bind(("0.0.0.0", p))
+                                s.close()
+                                free = p
+                                break
+                            except OSError:
+                                pass
+                        if free:
+                            msgs.append(f"{label} {port}: 已占用 → 推荐 {free}")
+                        else:
+                            msgs.append(f"{label} {port}: 已占用（附近无空闲端口）")
+                self.result.emit("\n".join(msgs))
 
-        mb = MessageBox("端口检测", "\n".join(msgs), self.window())
+        self._port_worker = _PortScanner(ipv4, ipv6, self)
+        self._port_worker.result.connect(self._on_port_result)
+        self._port_worker.start()
+
+    def _on_port_result(self, text: str):
+        """端口检测完成回调（主线程）。"""
+        import os
+        has_bds = os.path.isfile(os.path.join(get_context().server_dir, "bedrock_server.exe"))
+        if not has_bds:
+            text += "\n\n⚠ BDS 未安装，可能存在误报"
+        if self._port_btn:
+            self._port_btn.setEnabled(True)
+            self._port_btn.setText("端口检测")
+        mb = MessageBox("端口检测", text, self.window())
         mb.exec()
