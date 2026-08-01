@@ -262,7 +262,7 @@ class BDSFluentWindow(FluentWindow):
         cmd_palette_action.triggered.connect(self._open_command_palette)
         menu.addSeparator()
         quit_action = menu.addAction("退出")
-        quit_action.triggered.connect(self.close)
+        quit_action.triggered.connect(self._quit_with_toast)
         self._tray.setContextMenu(menu)
         self._tray.show()
 
@@ -592,32 +592,43 @@ class BDSFluentWindow(FluentWindow):
             self._resize_timer.start(300)
 
     def closeEvent(self, event):
-        # v3.02.02: 服务器在运行 → 先安全关闭，不直接退出
+        # 服务器在运行 → 先安全关闭，不直接退出
         if self._server is not None and self._server.is_running:
             self._do_safe_shutdown()
             event.ignore()
             return
+        # close_to_tray → 最小化到托盘
         if self._tray and self._tray.isVisible() and config_mgr.get("close_to_tray", True):
             event.ignore()
             self._save_geometry()
             config_mgr.save()
             self.hide()
             return
-        # v3.04.03: 真正退出前弹出确认提示
+        # v3.04.03: _skip_close_confirm 标志 → 跳过确认（托盘菜单/快捷键退出用）
+        if getattr(self, "_skip_close_confirm", False):
+            self._skip_close_confirm = False
+            self._do_full_shutdown_and_quit()
+            return
+        # v3.04.03: X 按钮/Alt+F4 → 弹出模态确认框
         from qfluentwidgets import MessageBox
-        _ev = event
         mb = MessageBox(
             "确认退出",
-            "确定要退出 BDS Manager 吗？\n\n"
-            "系统托盘和通知将随之关闭。",
+            "确定要退出 BDS Manager 吗？",
             self,
         )
         mb.yesButton.setText("退出")
         mb.cancelButton.setText("取消")
-        mb.yesSignal.connect(self._do_full_shutdown_and_quit)
-        mb.cancelSignal.connect(mb.close)
-        mb.show()
-        _ev.ignore()
+        if mb.exec():
+            self._do_full_shutdown_and_quit()
+        else:
+            event.ignore()
+
+    def _quit_with_toast(self):
+        """托盘菜单/快捷键退出：Toast 提示后关闭。"""
+        from shared.toast import toast_info
+        toast_info("正在退出", "BDS Manager 即将关闭", self, duration=1500)
+        self._skip_close_confirm = True
+        QTimer.singleShot(800, self.close)
 
     def _do_full_shutdown_and_quit(self):
         """安全退出应用。"""
