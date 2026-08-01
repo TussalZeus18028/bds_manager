@@ -31,7 +31,7 @@ from qfluentwidgets import (
 import requests
 
 from shared.config import config_mgr, get_context, SCRIPT_DIR
-from shared.utils import is_linux, bds_exe
+from shared.utils import is_linux, bds_exe, ll_exe
 from shared.toast import toast_success, toast_error, toast_info
 from pages.dashboard import wrap_scrollable
 from components.widgets import NoScrollSpinBox
