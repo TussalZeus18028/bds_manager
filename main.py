@@ -820,8 +820,8 @@ class BDSFluentWindow(FluentWindow):
 
             wait_then_quit()
         else:
-            notify("info", "system", "安全关闭", "当前没有运行中的进程，退出")
-            # v3.04.03: 延迟 2 秒确保 Toast 可见，再走 close() 路径（_skip_close_confirm 已设）
+            from shared.toast import toast_info
+            toast_info("安全关闭", "当前没有运行中的进程，正在退出", self, duration=2000)
             QTimer.singleShot(2000, self.close)
 
     def _on_page_changed_for_shortcuts(self, idx):
