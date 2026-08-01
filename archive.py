@@ -48,7 +48,7 @@ SKIP_SUFFIX = (".pyc", ".bak_", ".tmp")
 
 
 def iter_source_files():
-    """遍历要打包的源文件（按相对路径排序，保证 hash 稳定）。"""
+    """遍历要打包的源文件（返回相对于 SCRIPT_DIR 的路径，保证 hash 稳定）。"""
     files = []
     for root, dirs, fs in os.walk(SCRIPT_DIR):
         dirs[:] = [d for d in dirs if d not in SKIP_DIRS and not d.startswith(".")]
@@ -60,16 +60,17 @@ def iter_source_files():
             if fn.endswith(".zip"):
                 continue
             fp = Path(root) / fn
-            files.append(fp)
-    files.sort(key=lambda p: p.relative_to(SCRIPT_DIR).as_posix())
+            # v3.05.00 fix: 存相对路径，避免 zip 内嵌套完整目录
+            files.append(fp.relative_to(SCRIPT_DIR).as_posix())
+    files.sort()
     return files
 
 
 def compute_source_hash() -> str:
     """对所有源文件计算 SHA256（路径 + mtime + size）。"""
     h = hashlib.sha256()
-    for fp in iter_source_files():
-        rel = fp.relative_to(SCRIPT_DIR).as_posix()
+    for rel in iter_source_files():
+        fp = SCRIPT_DIR / rel
         st = fp.stat()
         h.update(rel.encode("utf-8"))
         h.update(str(st.st_mtime_ns).encode("utf-8"))
@@ -101,10 +102,9 @@ def build_zip(version: str, label: str = "") -> tuple[Path, list]:
 
     files = []
     with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as zf:
-        for fp in iter_source_files():
-            arc = fp.relative_to(SCRIPT_DIR).as_posix()
-            zf.write(fp, arc)
-            files.append(arc)
+        for rel in iter_source_files():
+            zf.write(SCRIPT_DIR / rel, rel)
+            files.append(rel)
 
     return out, files
 

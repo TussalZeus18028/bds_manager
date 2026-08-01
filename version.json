@@ -2,7 +2,7 @@
     "version": "3.05.00",
     "release_date": "2026-08-01",
     "download_url": "https://github.com/TussalZeus18028/bds_manager/releases/download/v3.05.00/bds_manager_v3.05.00.zip",
-    "sha256": "4a27d7ec74b1f056acf63c1f105d317a0f7024a77c81c4b9a109885e38f6c2ab",
+    "sha256": "6300890e637254e6ea083ca31e11d4a8f9d909a7fa1571ff35f27741f12086c6",
     "file_size": 205694,
     "min_compatible_version": "2.00.00",
     "changelog": "## v3.04.01 (2026-07-30)\n\n### 代码质量\n- 修复通知中心 notify() 双写问题（每条通知只写一次存储）\n- 新增 ThemePalette 集中管理主题颜色（20+ 属性，消除 15+ 处 isDarkTheme() 重复）\n- ConfigManager.save() 白名单自动推导（DEFAULT_CONFIG 新增字段自动保存）\n- 服务器生命周期类型注解（ServerHost Protocol + 9 函数签名）\n- main.py 自更新 UI 提取到 backend/self_update_ui.py\n- 控制台 ANSI 解析器拆分（循环复杂度 25→<10）\n- 修复 MessageBox lambda 析构 RuntimeWarning\n- 新增 scrollbar_style() 工厂函数\n\n### 测试\n- 测试覆盖 12→20 用例（配置白名单/主题Palette/ANSI解析 共 8 个新测试）\n\n### 评分\n- fuck-u-code: 77.51 → 78.61 (+1.10)"
