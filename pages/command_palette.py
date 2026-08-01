@@ -40,7 +40,7 @@ class CommandItem:
 
 
 class CommandPaletteDialog(QDialog):
-    """命令面板弹窗（可拖动 + 半透明 + ThemePalette 主题感知）。"""
+    """命令面板弹窗（可拖动 + 半透明内卡 + ThemePalette）。"""
 
     def __init__(self, commands: list[CommandItem], parent=None):
         super().__init__(parent)
@@ -49,41 +49,43 @@ class CommandPaletteDialog(QDialog):
         self.resize(600, 500)
 
         self.setWindowFlags(Qt.Dialog | Qt.FramelessWindowHint)
-        self.setAttribute(Qt.WA_TranslucentBackground, True)
         self._drag_pos = QPoint()
+
+        p = theme_palette()
+        self.setStyleSheet(f"QDialog {{ background:{p.surface}; border-radius:14px; }}")
 
         self._commands = commands
         self._filtered: list[CommandItem] = list(commands)
-
         self._build_ui()
         self._input.setFocus()
 
     def mousePressEvent(self, event: QMouseEvent):
         if event.button() == Qt.LeftButton:
             self._drag_pos = event.globalPosition().toPoint() - self.frameGeometry().topLeft()
+            event.accept()
         super().mousePressEvent(event)
 
     def mouseMoveEvent(self, event: QMouseEvent):
         if event.buttons() & Qt.LeftButton and not self._drag_pos.isNull():
             self.move(event.globalPosition().toPoint() - self._drag_pos)
+            event.accept()
         super().mouseMoveEvent(event)
 
     def _build_ui(self):
         p = theme_palette()
 
         outer = QVBoxLayout(self)
-        outer.setContentsMargins(8, 8, 8, 8)  # 留边给透明底
+        outer.setContentsMargins(12, 12, 12, 12)
 
-        # 内部卡片 — 半透明圆角背景
+        # 内部半透明卡片
         card = QFrame(self)
         card.setObjectName("paletteCard")
-        alpha_val = "DC" if isDarkTheme() else "F0"
-        bg_rgb = "24,24,27" if isDarkTheme() else "245,245,247"
+        bg_rgb = "30,30,35" if isDarkTheme() else "250,250,252"
         card.setStyleSheet(f"""
             QFrame#paletteCard {{
-                background:rgba({bg_rgb},{alpha_val});
+                background:rgba({bg_rgb},0.92);
                 border:1px solid {p.border};
-                border-radius:14px;
+                border-radius:10px;
             }}
         """)
         outer.addWidget(card)
