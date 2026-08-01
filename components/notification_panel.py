@@ -443,6 +443,9 @@ class NotificationDrawer(QWidget):
         self._scroll = QScrollArea()
         self._scroll.setWidgetResizable(True)
         self._scroll.setStyleSheet("QScrollArea { background: transparent; border: none; }")
+        # v3.04.03 触控适配
+        from PySide6.QtWidgets import QScroller
+        QScroller.grabGesture(self._scroll, QScroller.LeftMouseButtonGesture)
         self._list_container = QWidget()
         self._list_layout = QVBoxLayout(self._list_container)
         self._list_layout.setContentsMargins(10, 4, 10, 10)

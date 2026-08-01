@@ -52,7 +52,7 @@ def _open_dir(path: str):
 
 
 # ---------- 可滚动页面封装 ----------
-def wrap_scrollable(page_widget: QWidget, spacing: int = 12) -> tuple[QWidget, QVBoxLayout]:
+def wrap_scrollable(page_widget: QWidget, spacing: int = 12) -> tuple[QWidget, QVBoxLayout, QScrollArea]:
     outer = QVBoxLayout(page_widget)
     outer.setContentsMargins(0, 0, 0, 0)
     scroll = QScrollArea(page_widget)
@@ -61,6 +61,9 @@ def wrap_scrollable(page_widget: QWidget, spacing: int = 12) -> tuple[QWidget, Q
     scroll.setFrameShape(QFrame.NoFrame)
     scroll.setStyleSheet("QScrollArea { background: transparent; border: none; }")
     scroll.viewport().setStyleSheet("background: transparent;")
+    # v3.04.03: 触控/远程桌面适配 — QScroller 提供惯性滑动
+    from PySide6.QtWidgets import QScroller
+    QScroller.grabGesture(scroll, QScroller.LeftMouseButtonGesture)
     inner = QWidget()
     inner.setStyleSheet("background: transparent;")
     layout = QVBoxLayout(inner)
@@ -68,7 +71,6 @@ def wrap_scrollable(page_widget: QWidget, spacing: int = 12) -> tuple[QWidget, Q
     layout.setSpacing(spacing)
     scroll.setWidget(inner)
     outer.addWidget(scroll)
-    # 返回 inner, layout, scroll — 方便页面保存/恢复滚动位置
     return inner, layout, scroll
 
 
