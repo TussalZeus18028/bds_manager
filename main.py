@@ -767,19 +767,23 @@ class BDSFluentWindow(FluentWindow):
                 pass
 
     def _shortcut_safe_shutdown(self):
-        """v3.02.02: Ctrl+Shift+D 安全关闭 —— 停服 + 停隧道 + 停监控 + toast。"""
+        """v3.02.02: Ctrl+Shift+D 安全关闭 —— Toast 提示 + 停服/停隧道/停监控 + 退出。"""
         if not hasattr(self, "_server") or not hasattr(self, "console_page"):
             return
         if getattr(self, "_shutting_down", False):
             return
         self._shutting_down = True
+        self._skip_close_confirm = True
+        # 先弹出可见 Toast，再执行关闭流程
+        from shared.toast import toast_warning
+        toast_warning("安全关闭", "正在安全退出 BDS Manager...", self, duration=4000)
         try:
-            self._skip_close_confirm = True  # v3.04.03: 快捷键不走确认框
             self._do_safe_shutdown()
         finally:
             self._shutting_down = False
 
     def _do_safe_shutdown(self):
+        """停止所有服务 + 等待关闭（内部使用，Toast 由调用方负责）。"""
         from backend.notifications import notify
         stopped_any = False
 
@@ -798,16 +802,13 @@ class BDSFluentWindow(FluentWindow):
             except (RuntimeError, AttributeError, ValueError):
                 pass
 
-        # 3. 停系统监控（不改变 stopped_any——它始终运行）
+        # 3. 停监控（不改变 stopped_any）
         if self._monitor:
             self._monitor.stop()
 
-        # 4. 根据实际有无进程决定退出路径
+        # 4. 等待 BDS 完成优雅停服后退出
         if stopped_any:
-            # 服务器/隧道在运行 → 等优雅停服完成再退出
             notify("warning", "system", "安全关闭", "正在等待服务器完成保存并退出")
-            from shared.toast import toast_warning
-            toast_warning("安全关闭", "正在停止服务器，请稍候...", self, duration=5000)
             grace = config_mgr.get("shutdown_grace_seconds", 10)
 
             def wait_then_quit(remaining_ms=(grace + 3) * 1000):
@@ -816,15 +817,14 @@ class BDSFluentWindow(FluentWindow):
                     or not self._server.process_alive
                     or remaining_ms <= 0
                 ):
-                    self.close()  # v3.04.03: 走 closeEvent→_skip_close_confirm→跳过确认框
+                    self.close()
                     return
                 QTimer.singleShot(250, lambda: wait_then_quit(remaining_ms - 250))
 
             wait_then_quit()
         else:
-            from shared.toast import toast_info
-            toast_info("安全关闭", "当前没有运行中的进程，正在退出", self, duration=3000)
-            QTimer.singleShot(3500, self.close)
+            notify("info", "system", "安全关闭", "当前没有运行中的进程，退出")
+            self.close()  # _skip_close_confirm 已设，直接关闭
 
     def _on_page_changed_for_shortcuts(self, idx):
         """主窗口 stackedWidget 切页时通知 ShortcutManager 更新作用域。"""
