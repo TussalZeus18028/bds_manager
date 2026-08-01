@@ -262,7 +262,7 @@ class BDSFluentWindow(FluentWindow):
         cmd_palette_action.triggered.connect(self._open_command_palette)
         menu.addSeparator()
         quit_action = menu.addAction("退出")
-        quit_action.triggered.connect(self._quit_with_toast)
+        quit_action.triggered.connect(QApplication.quit)
         self._tray.setContextMenu(menu)
         self._tray.show()
 
@@ -592,47 +592,19 @@ class BDSFluentWindow(FluentWindow):
             self._resize_timer.start(300)
 
     def closeEvent(self, event):
-        # 服务器在运行 → 先安全关闭，不直接退出
+        # 服务器在运行 → 先安全关闭
         if self._server is not None and self._server.is_running:
             self._do_safe_shutdown()
             event.ignore()
             return
-        # close_to_tray → 最小化到托盘
+        # close_to_tray → 隐藏到托盘
         if self._tray and self._tray.isVisible() and config_mgr.get("close_to_tray", True):
             event.ignore()
             self._save_geometry()
             config_mgr.save()
             self.hide()
             return
-        # v3.04.03: _skip_close_confirm 标志 → 跳过确认（托盘菜单/快捷键退出用）
-        if getattr(self, "_skip_close_confirm", False):
-            self._skip_close_confirm = False
-            self._do_full_shutdown_and_quit()
-            event.accept()
-            return
-        # v3.04.03: X 按钮/Alt+F4 → 弹出模态确认框
-        from qfluentwidgets import MessageBox
-        mb = MessageBox(
-            "确认退出",
-            "确定要退出 BDS Manager 吗？",
-            self,
-        )
-        mb.yesButton.setText("退出")
-        mb.cancelButton.setText("取消")
-        if mb.exec():
-            self._do_full_shutdown_and_quit()
-        else:
-            event.ignore()
-
-    def _quit_with_toast(self):
-        """托盘菜单/快捷键退出：Toast 提示后关闭。"""
-        from shared.toast import toast_info
-        toast_info("正在退出", "BDS Manager 即将关闭", self, duration=2000)
-        self._skip_close_confirm = True
-        QTimer.singleShot(2000, self.close)
-
-    def _do_full_shutdown_and_quit(self):
-        """安全退出应用（v3.04.03: 让窗口自然关闭，保留 Toast 显示）。"""
+        # 正常退出
         self.stop_server()
         if self._monitor:
             self._monitor.stop()
@@ -646,7 +618,7 @@ class BDSFluentWindow(FluentWindow):
             self._tray.hide()
         self._save_geometry()
         config_mgr.save()
-        # 不直接 quit() — 让 closeEvent 自然返回，窗口关闭后 Qt 自动退出
+        super().closeEvent(event)
 
     # ---------- 快捷键 ----------
     def _init_shortcuts(self):
@@ -767,23 +739,19 @@ class BDSFluentWindow(FluentWindow):
                 pass
 
     def _shortcut_safe_shutdown(self):
-        """v3.02.02: Ctrl+Shift+D 安全关闭 —— Toast 提示 + 停服/停隧道/停监控 + 退出。"""
+        """v3.02.02: Ctrl+Shift+D 安全关闭。"""
         if not hasattr(self, "_server") or not hasattr(self, "console_page"):
             return
         if getattr(self, "_shutting_down", False):
             return
         self._shutting_down = True
-        self._skip_close_confirm = True
-        # 先弹出可见 Toast，再执行关闭流程
-        from shared.toast import toast_warning
-        toast_warning("安全关闭", "正在安全退出 BDS Manager...", self, duration=4000)
         try:
             self._do_safe_shutdown()
         finally:
             self._shutting_down = False
 
     def _do_safe_shutdown(self):
-        """停止所有服务 + 等待关闭（内部使用，Toast 由调用方负责）。"""
+        """停止所有服务后退出（旧版行为: QApplication.quit() 不走 closeEvent）。"""
         from backend.notifications import notify
         stopped_any = False
 
@@ -799,32 +767,21 @@ class BDSFluentWindow(FluentWindow):
                 self.tunnel_page.cleanup()
                 stopped_any = True
                 self.console_page._append_output("[系统] 安全关闭：隧道已停止", "#E65100")
-            except (RuntimeError, AttributeError, ValueError):
+            except Exception:
                 pass
 
-        # 3. 停监控（不改变 stopped_any）
+        # 3. 停监控
         if self._monitor:
             self._monitor.stop()
+            stopped_any = True
 
-        # 4. 等待 BDS 完成优雅停服后退出
+        # 4. 退出
         if stopped_any:
-            notify("warning", "system", "安全关闭", "正在等待服务器完成保存并退出")
-            grace = config_mgr.get("shutdown_grace_seconds", 10)
-
-            def wait_then_quit(remaining_ms=(grace + 3) * 1000):
-                if (
-                    self._server is None
-                    or not self._server.process_alive
-                    or remaining_ms <= 0
-                ):
-                    self.close()
-                    return
-                QTimer.singleShot(250, lambda: wait_then_quit(remaining_ms - 250))
-
-            wait_then_quit()
+            notify("warning", "system", "安全关闭", "服务器 / 隧道 / 监控已全部停止，1 秒后退出")
+            QTimer.singleShot(1000, QApplication.quit)
         else:
             notify("info", "system", "安全关闭", "当前没有运行中的进程，退出")
-            self.close()  # _skip_close_confirm 已设，直接关闭
+            QTimer.singleShot(500, QApplication.quit)
 
     def _on_page_changed_for_shortcuts(self, idx):
         """主窗口 stackedWidget 切页时通知 ShortcutManager 更新作用域。"""
@@ -850,7 +807,6 @@ class BDSFluentWindow(FluentWindow):
     def _restart_app(self):
         from shared.toast import toast_info
         config_mgr.save()
-        self._skip_close_confirm = True  # v3.04.03: QApplication.quit() 会触发 closeEvent
         toast_info("工具即将重启", "将在 1 秒后自动重启", self)
         QTimer.singleShot(1000, lambda: restart_app("main.py"))
 
