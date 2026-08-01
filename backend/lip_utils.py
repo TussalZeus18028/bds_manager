@@ -79,10 +79,12 @@ class LipCmdWorker(QThread):
             p = subprocess.Popen(
                 self._args, cwd=self._cwd,
                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                encoding="utf-8", errors="replace", bufsize=1,
             )
-            for line in p.stdout:
-                line = line.rstrip("\n")
+            for raw_line in p.stdout:
+                try:
+                    line = raw_line.decode("utf-8").rstrip("\n")
+                except UnicodeDecodeError:
+                    line = raw_line.decode("gbk", errors="replace").rstrip("\n")
                 if line:
                     self.output.emit(line, "")
             p.wait()
@@ -90,7 +92,7 @@ class LipCmdWorker(QThread):
         except FileNotFoundError:
             self.output.emit("", "未找到命令行工具")
             self.finished.emit(-1)
-        except OSError as e:
+        except (OSError, Exception) as e:
             self.output.emit("", str(e))
             self.finished.emit(-1)
 

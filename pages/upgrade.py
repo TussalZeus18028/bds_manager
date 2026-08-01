@@ -487,7 +487,6 @@ class UpgradePage(QWidget):
                 toast_error("请先安装 lip", "未检测到 lip 命令行工具，请先安装 lip。", self.window())
                 return
         except Exception as e:
-            logger.error("lip_installed 检测异常: %s", e)
             toast_error("检测失败", f"无法检测 lip 安装状态: {e}", self.window())
             return
 
@@ -496,38 +495,43 @@ class UpgradePage(QWidget):
         lip = find_lip_exe() or "lip"
 
         def _done(code):
-            self._mirror_btn.setEnabled(True)
-            self._mirror_worker = None
-            if code == 0:
-                self._mirror_btn.setText("已加速")
-                try:
+            try:
+                self._mirror_btn.setEnabled(True)
+                self._mirror_worker = None
+                if code == 0:
+                    self._mirror_btn.setText("已加速")
                     toast_success("加速源就绪", "GitHub + Go 代理已配置", self.window())
-                except Exception:
-                    pass
-            else:
-                self._mirror_btn.setText("加速源")
-                try:
+                else:
+                    self._mirror_btn.setText("加速源")
                     toast_error("配置失败", f"lip 退出码 {code}", self.window())
-                except Exception:
-                    pass
+            except Exception as e:
+                logger.error("_done 异常: %s", e)
 
-        # 串行执行两条 config 命令
         def _step2(code):
             _done(code)
 
         def _step1(code):
-            if code == 0:
-                w2 = LipCmdWorker([lip, "config", "set", "go_module_proxy", "https://goproxy.cn"])
-                w2.finished.connect(_step2)
-                self._mirror_worker = w2  # 防 GC
-                w2.start()
-            else:
-                _done(code)
+            try:
+                if code == 0:
+                    w2 = LipCmdWorker([lip, "config", "set", "go_module_proxy", "https://goproxy.cn"])
+                    w2.finished.connect(_step2)
+                    self._mirror_worker = w2
+                    w2.start()
+                else:
+                    _done(code)
+            except Exception as e:
+                logger.error("_step1 异常: %s", e)
+                _done(-1)
 
-        w1 = LipCmdWorker([lip, "config", "set", "github_proxy", "https://github.bibk.top"])
-        w1.finished.connect(_step1)
-        self._mirror_worker = w1  # 防 GC
-        w1.start()
+        try:
+            w1 = LipCmdWorker([lip, "config", "set", "github_proxy", "https://github.bibk.top"])
+            w1.finished.connect(_step1)
+            self._mirror_worker = w1
+            w1.start()
+        except Exception as e:
+            logger.error("启动 mirror worker 失败: %s", e)
+            self._mirror_btn.setEnabled(True)
+            self._mirror_btn.setText("加速源")
 
     def _on_lip_browse(self):
         from PySide6.QtWidgets import QFileDialog
