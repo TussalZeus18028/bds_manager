@@ -604,19 +604,7 @@ class BDSFluentWindow(FluentWindow):
             config_mgr.save()
             self.hide()
             return
-        # 正常退出前确认
-        from qfluentwidgets import MessageBox
-        mb = MessageBox(
-            "确认退出",
-            "确定要退出 BDS Manager 吗？\n\n系统托盘和通知将随之关闭。",
-            self,
-        )
-        mb.yesButton.setText("退出")
-        mb.cancelButton.setText("取消")
-        if not mb.exec():
-            event.ignore()
-            return
-        # 正常退出
+        # X 按钮 → 直接退出（无需确认）
         self.stop_server()
         if self._monitor:
             self._monitor.stop()
