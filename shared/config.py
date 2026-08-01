@@ -306,7 +306,7 @@ class ConfigManager:
         self.values: dict = {}
         self._history: deque = deque(maxlen=CONFIG_MAX_BACKUPS)
         self._save_timer: threading.Timer | None = None
-        self._save_lock = threading.Lock()
+        self._save_lock = threading.RLock()  # v3.05.00: 保护 save() + timer 并发
 
     def _schedule_save(self, delay: float = 0.5):
         """延迟保存（防抖）：多次 set 只触发一次落盘。"""
@@ -356,21 +356,18 @@ class ConfigManager:
         return config
 
     def save(self):
-        """原子保存：先写 tmp，fsync 后 rename，保留最近 5 份快照。
+        """原子保存（v3.05.00: RLock 防并发）。"""
+        with self._save_lock:
+            self._save_inner()
 
-        v3.04.01: keys 白名单由 DEFAULT_CONFIG 自动推导（消除手写维护）。
-        新增 DEFAULT_CONFIG 字段 → 自动纳入 save()；无需手动更新白名单。
-        扩展字段（如 window_geometry / cmd_history）如果存在于 self.values 中也一并保存。
-        """
-        # 核心 keys：从 DEFAULT_CONFIG schema 自动推导
+    def _save_inner(self):
+        """内部实现：原子写 + 快照 + 版本缓存。"""
         keys = list(DEFAULT_CONFIG.keys())
-        # 扩展字段：存在于 self.values 但不在 DEFAULT_CONFIG 中的
         for key in self.values:
             if key not in DEFAULT_CONFIG and key not in ("version_cache", "version_list"):
                 keys.append(key)
         data = {k: self.values.get(k, DEFAULT_CONFIG.get(k)) for k in keys}
         os.makedirs(SCRIPT_DIR, exist_ok=True)
-        # 覆盖有效旧配置前先保存快照；内容未变化时不制造重复快照。
         if os.path.exists(CONFIG_FILE):
             try:
                 with open(CONFIG_FILE, "r", encoding="utf-8") as f:
@@ -379,14 +376,11 @@ class ConfigManager:
                 previous = None
             if previous != data:
                 self._save_config_snapshot()
-        # 原子写
         self._atomic_write_json(CONFIG_FILE, data)
-        # 日志节流：避免 _silent_save 刷屏，但数据每次都会落盘
         now = time.time()
         if not hasattr(self, "_last_log") or now - self._last_log > 2.0:
             logger.info("配置已保存: %s", os.path.basename(CONFIG_FILE))
             self._last_log = now
-        # 版本数据单独存到独立文件
         self._save_version_cache()
 
     def _atomic_write_json(self, path: str, data: dict):
