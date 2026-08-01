@@ -766,15 +766,14 @@ class BDSFluentWindow(FluentWindow):
                 pass
 
     def _shortcut_safe_shutdown(self):
-        """v3.02.02: Ctrl+Shift+D 安全关闭 —— 停服 + 停隧道 + 停监控 + toast 通知。"""
-        # 防御：窗口未完全初始化时不响应
+        """v3.02.02: Ctrl+Shift+D 安全关闭 —— 停服 + 停隧道 + 停监控 + toast。"""
         if not hasattr(self, "_server") or not hasattr(self, "console_page"):
             return
-        # v3.02.02: 防重复触发
         if getattr(self, "_shutting_down", False):
             return
         self._shutting_down = True
         try:
+            self._skip_close_confirm = True  # v3.04.03: 快捷键不走确认框
             self._do_safe_shutdown()
         finally:
             self._shutting_down = False
@@ -814,14 +813,14 @@ class BDSFluentWindow(FluentWindow):
                     or not self._server.process_alive
                     or remaining_ms <= 0
                 ):
-                    QApplication.quit()
+                    self.close()  # v3.04.03: 走 closeEvent→_skip_close_confirm→跳过确认框
                     return
                 QTimer.singleShot(250, lambda: wait_then_quit(remaining_ms - 250))
 
             wait_then_quit()
         else:
             notify("info", "system", "安全关闭", "当前没有运行中的进程，退出")
-            QTimer.singleShot(500, QApplication.quit)
+            QTimer.singleShot(500, self.close)  # v3.04.03: 统一走 close() 路径
 
     def _on_page_changed_for_shortcuts(self, idx):
         """主窗口 stackedWidget 切页时通知 ShortcutManager 更新作用域。"""
