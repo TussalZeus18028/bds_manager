@@ -15,8 +15,8 @@ import subprocess
 import sys
 from typing import Callable
 
-from PySide6.QtCore import Qt, QStringListModel
-from PySide6.QtGui import QKeyEvent, QFont, QPainter, QColor, QBrush, QPen
+from PySide6.QtCore import Qt, QStringListModel, QPoint
+from PySide6.QtGui import QKeyEvent, QFont, QPainter, QColor, QBrush, QPen, QMouseEvent
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QListView, QLineEdit, QLabel,
     QDialog, QApplication, QScroller, QFrame,
@@ -40,7 +40,7 @@ class CommandItem:
 
 
 class CommandPaletteDialog(QDialog):
-    """命令面板弹窗（FramelessWindowHint 透明 + 圆角 + ThemePalette 主题感知）。"""
+    """命令面板弹窗（可拖动 + 半透明 + ThemePalette 主题感知）。"""
 
     def __init__(self, commands: list[CommandItem], parent=None):
         super().__init__(parent)
@@ -48,9 +48,9 @@ class CommandPaletteDialog(QDialog):
         self.setModal(True)
         self.resize(600, 500)
 
-        # v3.04.03: 无边框窗口 + 透明背景 → 圆角由内部卡片实现
         self.setWindowFlags(Qt.Dialog | Qt.FramelessWindowHint)
         self.setAttribute(Qt.WA_TranslucentBackground, True)
+        self._drag_pos = QPoint()
 
         self._commands = commands
         self._filtered: list[CommandItem] = list(commands)
@@ -58,20 +58,30 @@ class CommandPaletteDialog(QDialog):
         self._build_ui()
         self._input.setFocus()
 
+    def mousePressEvent(self, event: QMouseEvent):
+        if event.button() == Qt.LeftButton:
+            self._drag_pos = event.globalPosition().toPoint() - self.frameGeometry().topLeft()
+        super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event: QMouseEvent):
+        if event.buttons() & Qt.LeftButton and not self._drag_pos.isNull():
+            self.move(event.globalPosition().toPoint() - self._drag_pos)
+        super().mouseMoveEvent(event)
+
     def _build_ui(self):
         p = theme_palette()
 
-        # 外层透明容器
         outer = QVBoxLayout(self)
-        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setContentsMargins(8, 8, 8, 8)  # 留边给透明底
 
-        # 内部卡片 — 带圆角背景 + 阴影效果就用 border
+        # 内部卡片 — 半透明圆角背景
         card = QFrame(self)
         card.setObjectName("paletteCard")
-        alpha = "EA" if isDarkTheme() else "F2"
+        alpha_val = "DC" if isDarkTheme() else "F0"
+        bg_rgb = "24,24,27" if isDarkTheme() else "245,245,247"
         card.setStyleSheet(f"""
             QFrame#paletteCard {{
-                background:{p.surface};
+                background:rgba({bg_rgb},{alpha_val});
                 border:1px solid {p.border};
                 border-radius:14px;
             }}
