@@ -246,6 +246,7 @@ class RestoreWorker(BaseWorker):
                     shutil.move(item_path, dest)
 
             # 解压备份（ZipSlip 防护）
+            # v3.04.03 安全修复: 用 commonpath() 代替 startswith()，更精确
             self.progress.emit("正在解压备份...")
             with zipfile.ZipFile(self.backup_path, "r") as zipf:
                 target_dir = os.path.dirname(self.world_path)
@@ -254,8 +255,12 @@ class RestoreWorker(BaseWorker):
                     if member.filename == ".metadata.json":
                         continue
                     member_path = os.path.realpath(os.path.join(target_dir, member.filename))
-                    if not member_path.startswith(target_real + os.sep) and member_path != target_real:
-                        logger.warning("跳过越权路径: %s", member.filename)
+                    try:
+                        if os.path.commonpath([member_path, target_real]) != target_real:
+                            logger.warning("跳过越权路径: %s", member.filename)
+                            continue
+                    except ValueError:
+                        logger.warning("跳过跨盘符路径: %s", member.filename)
                         continue
                     zipf.extract(member, target_dir)
 

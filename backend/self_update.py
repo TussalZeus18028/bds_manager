@@ -34,6 +34,11 @@ GITHUB_REPO_BRANCH = "main"
 
 
 # ── Token 辅助 ──
+# ⚠ 安全提示 (v3.04.03 S2):
+# 这里的 XOR+base64 只是「混淆」而非「加密」。密钥硬编码在源码中，
+# 任何拿到源码或编译产物的人都能一步反解。仅用于防止配置文件被
+# 文本编辑器随手打开时直接看到明文 Token。
+# 如需真正的安全存储，应使用 keyring 库写入系统凭据管理器。
 _TOKEN_XOR_KEY = b"bds_manager_2026_token_obfuscation_key"
 
 def _deobfuscate_token(obfuscated: str) -> str:
@@ -178,11 +183,24 @@ class DownloadUpdateWorker(QThread):
                     if total:
                         self.progress.emit(int(done * 100 / total))
             if os.path.getsize(path) < 1000:
+                # v3.04.03 R3 修复: 清理异常下载文件
+                self._cleanup(path)
                 self.finished.emit(False, "下载文件异常", "")
                 return
             self.finished.emit(True, "下载完成", path)
         except Exception as e:
+            # v3.04.03 R3 修复: 失败时清理半成品文件，避免下次启动误用
+            self._cleanup(path)
             self.finished.emit(False, str(e), "")
+
+    @staticmethod
+    def _cleanup(path: str):
+        """安全删除下载半成品文件。"""
+        try:
+            if path and os.path.exists(path):
+                os.remove(path)
+        except OSError:
+            pass
 
 
 # ── 安装 Worker ──
@@ -269,8 +287,15 @@ def _resolve_zip_path(name: str, top: str, skip_files: set, skip_dirs: set) -> s
     if parts[-1] in skip_files or parts[0] in skip_dirs:
         return None
     target = os.path.join(SCRIPT_DIR, *parts)
-    if not os.path.realpath(target).startswith(os.path.realpath(SCRIPT_DIR)):
-        return None
+    # v3.04.03 安全修复: 用 commonpath() 代替 startswith()，防止边界绕过
+    # (如 SCRIPT_DIR=/bds, target=/bds_other/x → startswith 通过但越权)
+    try:
+        real_target = os.path.realpath(target)
+        real_script = os.path.realpath(SCRIPT_DIR)
+        if os.path.commonpath([real_target, real_script]) != real_script:
+            return None
+    except ValueError:
+        return None  # 不同盘符（Windows）commonpath 会抛 ValueError
     return target
 
 

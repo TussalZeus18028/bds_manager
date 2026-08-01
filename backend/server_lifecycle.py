@@ -200,6 +200,12 @@ def start_server(window: ServerHost) -> str | None:
 
 def stop_server(window: ServerHost) -> None:
     """停止 BDS 服务器。"""
+    # v3.04.03 L1 修复: 取消挂起的自动重启定时器
+    # 场景: 服务器崩溃后 5 秒倒计时期间用户点"停止" → 应取消重启
+    if hasattr(window, "_pending_restart_timer") and window._pending_restart_timer:
+        window._pending_restart_timer.stop()
+        window._pending_restart_timer = None
+        window.console_page._append_output("[系统] 已取消自动重启", "#888")
     if window._server and window._server.is_running:
         current_worker = getattr(window, "_stop_server_worker", None)
         if current_worker is not None and current_worker.isRunning():
@@ -262,7 +268,14 @@ def _on_server_stopped(window: ServerHost, retcode: int) -> None:
         window.console_page.mark_crash(window._restart_count, max_retries)
         from shared.toast import toast_warning
         toast_warning("自动重启", f"第 {window._restart_count} 次尝试", window)
-        QTimer.singleShot(5000, lambda: start_server(window))
+        # v3.04.03 L1 修复: 用可追踪的 QTimer 代替匿名 singleShot，
+        # 让 stop_server 能取消挂起的重启
+        if hasattr(window, "_pending_restart_timer") and window._pending_restart_timer:
+            window._pending_restart_timer.stop()
+        window._pending_restart_timer = QTimer(window)
+        window._pending_restart_timer.setSingleShot(True)
+        window._pending_restart_timer.timeout.connect(lambda: start_server(window))
+        window._pending_restart_timer.start(5000)
     else:
         if window._restart_count >= max_retries and max_retries > 0:
             log_text = window.console_page._log.toPlainText()

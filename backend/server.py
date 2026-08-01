@@ -251,11 +251,16 @@ class ServerProcess(QThread):
         self._backup_ready_event.clear()
 
     def send_save_all(self):
-        """保存世界（BDS 基岩版用 save hold→通知备份→save resume）。"""
+        """保存世界（BDS 基岩版用 save hold→save resume）。
+
+        v3.04.03 L2 修复: 移除 time.sleep(0.3) 阻塞调用线程。
+        改用 threading.Timer 异步延迟发送 save resume，不冻结 GUI。
+        """
         self.send_command("save hold")
-        time.sleep(0.3)
-        self.send_command("save query")
-        self.send_command("save resume")
+        # 延迟 500ms 后发送 save resume，给 BDS 时间完成磁盘刷写
+        _resume_timer = threading.Timer(0.5, self.send_command, args=["save resume"])
+        _resume_timer.daemon = True
+        _resume_timer.start()
 
     def stop_server(self, graceful: bool = True, grace_seconds: int = 10):
         """停止 BDS。

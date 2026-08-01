@@ -2,7 +2,7 @@
 
 Minecraft Bedrock Dedicated Server 全功能管理器 —— 基于 **PySide6 + QFluentWidgets Fluent Design**。
 
-[![Version](https://img.shields.io/badge/version-3.04.02-blue)](https://github.com/TussalZeus18028/bds_manager/releases)
+[![Version](https://img.shields.io/badge/version-3.04.03-blue)](https://github.com/TussalZeus18028/bds_manager/releases)
 [![Python](https://img.shields.io/badge/python-3.10+-green)](https://www.python.org/)
 [![License](https://img.shields.io/badge/license-MIT-orange)](LICENSE)
 
@@ -85,11 +85,23 @@ Manager_Fluent/
     └── utils.py             # 工具函数
 ```
 
-## 近期更新 (v3.04.02)
+## 近期更新 (v3.04.03)
 
-- 代码质量：修复通知双写、新增 ThemePalette 统一主题颜色、ConfigManager 白名单自动推导
-- 稳定性：修复 lambda 析构警告、ANSI 解析器拆分、自更新 UI 提取
-- 测试覆盖从 12 个用例提升至 20 个
+### 安全修复
+- 移除全局 SSL 验证绕过（之前禁用了整个应用的 HTTPS 证书验证）
+- ZipSlip 防护改用 `commonpath()` 代替 `startswith()`，消除边界绕过
+- Token 混淆机制标注安全提示（非加密，建议用 keyring）
+
+### Bug 修复
+- 服务器崩溃后 5 秒倒计时期间用户点"停止"现在能正确取消重启
+- `send_save_all()` 不再阻塞 GUI 线程 300ms
+- frpc 进程 terminate 失败后增加 kill 兜底，防止进程孤儿
+- frpc 进程意外退出时 UI 同步更新，不再显示"运行中"
+- 下载失败时清理半成品 zip 文件
+- qfluentwidgets import 失败时 stdout 正确恢复
+
+### 测试
+- 测试覆盖 20 → 25 用例（新增 ZipSlip/重启取消/下载清理测试）
 
 ## License
 

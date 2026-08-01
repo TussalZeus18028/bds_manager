@@ -18,18 +18,24 @@ import sys
 import os
 import ssl as _ssl
 
-_ssl._create_default_https_context = _ssl._create_unverified_context  # GitHub API
+# v3.04.03 安全修复: 移除全局 SSL 验证绕过。
+# 之前 _ssl._create_default_https_context = _ssl._create_unverified_context
+# 会禁用整个应用的 HTTPS 证书验证（自更新下载/Webhook/版本检查全部裸奔）。
+# 如果 GitHub API 遇到 SSL 错误，应修复系统 CA 证书而非绕过验证。
 
 import time
 import logging
 from datetime import datetime
 
 # ---------- 屏蔽 QFluentWidgets 的 ANSI 彩色 Tips ----------
+# v3.04.03 健壮性修复: try/finally 保护，确保 import 失败时 stdout 也能恢复
 _real_stdout = sys.stdout
 sys.stdout = open(os.devnull, "w", encoding="utf-8")
-import qfluentwidgets  # noqa: E402
-sys.stdout.close()
-sys.stdout = _real_stdout
+try:
+    import qfluentwidgets  # noqa: E402
+finally:
+    sys.stdout.close()
+    sys.stdout = _real_stdout
 # ----------------------------------------------------------
 
 from PySide6.QtWidgets import QApplication, QSystemTrayIcon, QMenu, QSplashScreen

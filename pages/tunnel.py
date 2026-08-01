@@ -37,6 +37,7 @@ def _esc(text: str) -> str:
 # ── frpc 输出读取 Worker（QThread，不卡 UI）──
 class FrpcReader(QThread):
     line_received = Signal(str, str)  # (text, color)
+    process_exited = Signal()         # v3.04.03 L4: frpc 进程退出通知
 
     def __init__(self, process: subprocess.Popen, parent=None):
         super().__init__(parent)
@@ -47,21 +48,26 @@ class FrpcReader(QThread):
         self._stop = True
 
     def run(self):
-        for line in self._proc.stdout:
-            if self._stop:
-                break
-            text = line.rstrip()
-            c = "#ccc" if isDarkTheme() else "#444"
-            ls = text.lower()
-            if "error" in ls:
-                c = "#ff5555"
-            elif "warn" in ls:
-                c = "#ffaa00"
-            elif "success" in ls or "start proxy" in ls or "login" in ls:
-                c = "#4CAF50"
-            elif "new connection" in ls:
-                c = "#64b5f6"
-            self.line_received.emit(text, c)
+        try:
+            for line in self._proc.stdout:
+                if self._stop:
+                    break
+                text = line.rstrip()
+                c = "#ccc" if isDarkTheme() else "#444"
+                ls = text.lower()
+                if "error" in ls:
+                    c = "#ff5555"
+                elif "warn" in ls:
+                    c = "#ffaa00"
+                elif "success" in ls or "start proxy" in ls or "login" in ls:
+                    c = "#4CAF50"
+                elif "new connection" in ls:
+                    c = "#64b5f6"
+                self.line_received.emit(text, c)
+        finally:
+            # v3.04.03 L4: stdout 关闭 = frpc 进程退出，通知 UI
+            if not self._stop:
+                self.process_exited.emit()
 
 
 class TunnelPage(QWidget):
@@ -330,9 +336,21 @@ class TunnelPage(QWidget):
 
             self._reader = FrpcReader(self._process, self)
             self._reader.line_received.connect(self._append_log)
+            # v3.04.03 L4: frpc 崩溃时通知 UI，避免显示"运行中"但实际已停
+            self._reader.process_exited.connect(self._on_frpc_exited)
             self._reader.start()
         except Exception as e:
             toast_error("启动失败", str(e), self.window())
+
+    def _on_frpc_exited(self):
+        """v3.04.03 L4: frpc 进程意外退出时的 UI 同步。"""
+        self._running = False
+        self._process = None
+        self._reader = None
+        self._start_btn.setEnabled(True)
+        self._stop_btn.setEnabled(False)
+        self._append_log("[系统] frpc 进程已退出", "#ff5555")
+        toast_warning("frpc 已停止", "frpc 进程意外退出，请检查配置", self.window())
 
     def _stop(self):
         self._running = False
@@ -341,11 +359,16 @@ class TunnelPage(QWidget):
             self._reader.wait(2000)
             self._reader = None
         if self._process:
+            # v3.04.03 L3 修复: terminate 失败后 kill 兜底，防止进程孤儿
             try:
                 self._process.terminate()
                 self._process.wait(3)
             except (OSError, subprocess.TimeoutExpired):
-                pass  # 进程已退出
+                try:
+                    self._process.kill()
+                    self._process.wait(2)
+                except (OSError, subprocess.TimeoutExpired):
+                    pass  # kill 也失败，无能为力
         self._process = None
         self._start_btn.setEnabled(True)
         self._stop_btn.setEnabled(False)
