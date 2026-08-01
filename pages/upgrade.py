@@ -1131,17 +1131,17 @@ class UpgradePage(QWidget):
         from backend.self_update import DownloadUpdateWorker
         self.__dl = DownloadUpdateWorker(dl_url, remote_ver, self)
         self.__dl.progress.connect(self._tool_bar.setValue)
-        self.__dl.finished.connect(lambda s, m, p: self._on_tool_dl_done(s, m, p, sha256))
+        self.__dl.finished.connect(lambda s, m, p, ver=remote_ver: self._on_tool_dl_done(s, m, p, sha256, ver))
         self.__dl.start()
         toast_info("下载中", f"BDS Manager v{remote_ver} 正在下载...", self.window())
 
-    def _on_tool_dl_done(self, success, msg, path, sha256):
+    def _on_tool_dl_done(self, success, msg, path, sha256, remote_ver=""):
         self._tool_bar.setVisible(False)
         if not success:
             self._tool_status.setText(f"下载失败: {msg}")
             toast_error("更新下载失败", msg, self.window())
             return
-        self._tool_status.setText(f"下载完成: v{remote_ver}，准备安装...")
+        self._tool_status.setText(f"✅ 下载完成: v{remote_ver}，准备安装...")
         toast_success("更新就绪", f"BDS Manager v{remote_ver} 下载完成", self.window())
         from backend.self_update import verify_sha256, is_valid_zip
         if not is_valid_zip(path):
