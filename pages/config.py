@@ -678,10 +678,15 @@ class ConfigPage(QWidget):
 
     def _on_port_result(self, text: str):
         """端口检测完成回调（主线程）。"""
-        import os
-        has_bds = os.path.isfile(os.path.join(get_context().server_dir, "bedrock_server.exe"))
-        if not has_bds:
-            text += "\n\n⚠ BDS 未安装，可能存在误报"
+        from shared.utils import bds_exe, ll_exe
+        ctx = get_context()
+        # 检查 BDS 或 LL 是否已安装（考虑 server_type 和双目录）
+        bds_ok = os.path.isfile(os.path.join(ctx.bds_dir, bds_exe()))
+        ll_ok = bool(config_mgr.get("ll_server_dir", "")) and \
+                os.path.isfile(os.path.join(ctx.ll_dir, ll_exe()))
+        has_server = bds_ok or ll_ok
+        if not has_server:
+            text += "\n\n⚠ 未检测到服务器可执行文件，端口状态可能不准确"
         if self._port_btn:
             self._port_btn.setEnabled(True)
             self._port_btn.setText("端口检测")
