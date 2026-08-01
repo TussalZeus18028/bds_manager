@@ -849,8 +849,8 @@ class BDSFluentWindow(FluentWindow):
 
     def _restart_app(self):
         from shared.toast import toast_info
-        # v3.03.01: 重启前先保存配置（快捷键切换的主题/颜色等变更还未落盘）
         config_mgr.save()
+        self._skip_close_confirm = True  # v3.04.03: QApplication.quit() 会触发 closeEvent
         toast_info("工具即将重启", "将在 1 秒后自动重启", self)
         QTimer.singleShot(1000, lambda: restart_app("main.py"))
 
