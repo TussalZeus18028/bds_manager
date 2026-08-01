@@ -209,8 +209,10 @@ class DownloadWorker(QThread):
             resp = requests.get(self.url, stream=True, headers=hdr, timeout=600)
             total = int(resp.headers.get("content-length", 0))
             done = 0
+            last_pct = -1
+            CHUNK = 256 * 1024  # 256KB — 减少 I/O 和信号频次
             with open(self.save_path, "wb") as f:
-                for chunk in resp.iter_content(8192):
+                for chunk in resp.iter_content(CHUNK):
                     if self._cancel:
                         self.finished.emit(False, "已取消")
                         return
@@ -218,8 +220,10 @@ class DownloadWorker(QThread):
                     done += len(chunk)
                     if total:
                         pct = int(done * 100 / total)
-                        self.progress.emit(pct)
-                        self.status.emit(f"{done/1024/1024:.1f}/{total/1024/1024:.1f} MB ({pct}%)")
+                        if pct != last_pct:  # 只在百分比变化时发信号
+                            self.progress.emit(pct)
+                            self.status.emit(f"{done/1024/1024:.1f}/{total/1024/1024:.1f} MB ({pct}%)")
+                            last_pct = pct
             self.finished.emit(True, "下载完成")
         except Exception as e:
             self.finished.emit(False, str(e))

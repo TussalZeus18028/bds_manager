@@ -176,12 +176,17 @@ class DownloadUpdateWorker(QThread):
             r.raise_for_status()
             total = int(r.headers.get("content-length", 0))
             done = 0
+            last_pct = -1
+            CHUNK = 256 * 1024
             with open(path, "wb") as f:
-                for chunk in r.iter_content(chunk_size=65536):
+                for chunk in r.iter_content(chunk_size=CHUNK):
                     f.write(chunk)
                     done += len(chunk)
                     if total:
-                        self.progress.emit(int(done * 100 / total))
+                        pct = int(done * 100 / total)
+                        if pct != last_pct:
+                            self.progress.emit(pct)
+                            last_pct = pct
             if os.path.getsize(path) < 1000:
                 # v3.04.03 R3 修复: 清理异常下载文件
                 self._cleanup(path)
