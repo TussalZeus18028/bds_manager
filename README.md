@@ -2,7 +2,7 @@
 
 Minecraft Bedrock Dedicated Server 全功能管理器 —— 基于 **PySide6 + QFluentWidgets Fluent Design**。
 
-[![Version](https://img.shields.io/badge/version-3.04.03-blue)](https://github.com/TussalZeus18028/bds_manager/releases)
+[![Version](https://img.shields.io/badge/version-3.05.00-blue)](https://github.com/TussalZeus18028/bds_manager/releases)
 [![Python](https://img.shields.io/badge/python-3.10+-green)](https://www.python.org/)
 [![License](https://img.shields.io/badge/license-MIT-orange)](LICENSE)
 
@@ -85,23 +85,31 @@ Manager_Fluent/
     └── utils.py             # 工具函数
 ```
 
-## 近期更新 (v3.04.03)
+## v3.05.00 (2026-08-01)
 
-### 安全修复
-- 移除全局 SSL 验证绕过（之前禁用了整个应用的 HTTPS 证书验证）
-- ZipSlip 防护改用 `commonpath()` 代替 `startswith()`，消除边界绕过
-- Token 混淆机制标注安全提示（非加密，建议用 keyring）
+### 安全
+- 移除全局 SSL 验证绕过
+- ZipSlip 防护改用 `commonpath()` 消除边界绕过
 
 ### Bug 修复
-- 服务器崩溃后 5 秒倒计时期间用户点"停止"现在能正确取消重启
-- `send_save_all()` 不再阻塞 GUI 线程 300ms
-- frpc 进程 terminate 失败后增加 kill 兜底，防止进程孤儿
-- frpc 进程意外退出时 UI 同步更新，不再显示"运行中"
-- 下载失败时清理半成品 zip 文件
-- qfluentwidgets import 失败时 stdout 正确恢复
+- 崩溃倒计时期间点停止正确取消重启
+- `send_save_all()` 不再阻塞 GUI 线程
+- frpc 进程孤儿兜底 kill + 意外退出 UI 同步
+- 端口检测异步化（不再卡死 GUI + 对话框不响应）
+- stdout 重定向 try/finally 保护
+- 下载失败清理半成品文件
 
-### 测试
-- 测试覆盖 20 → 25 用例（新增 ZipSlip/重启取消/下载清理测试）
+### 体验
+- **全页面触控适配** — QScroller 惯性滚动（10 页面 + 通知抽屉 + 资源包表格）
+- 命令面板全新设计：可拖动、深色适配、半透明、plaintext_style 搜索框
+- 本地回环免除命令 (`CheckNetIsolation LoopbackExempt`)
+- 控制台过滤器按钮布局修复
+- X 按钮退出确认框
+
+### 架构
+- `config_mgr.set()` 防抖自动落盘 — 任何设置变更 0.5s 后自动持久化
+- 关闭逻辑还原旧版 — `QApplication.quit()` 绕过 closeEvent 避免托盘冲突
+- 测试 20 → 25 用例
 
 ## License
 
