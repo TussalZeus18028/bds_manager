@@ -565,6 +565,7 @@ class UpgradePage(QWidget):
         self._history_table.verticalHeader().setVisible(False)
         self._history_table.verticalHeader().setDefaultSectionSize(36)
         self._history_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self._history_table.setMinimumHeight(250)  # v3.04.03: 够显示6-7行
         self._history_table.setStyleSheet(_table_style())
         hl.addWidget(self._history_table)
         layout.addWidget(history_card)

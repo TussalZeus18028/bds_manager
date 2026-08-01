@@ -250,6 +250,9 @@ class PackInfoDialog(QDialog):
         scroll = ScrollArea(self)
         scroll.setWidgetResizable(True)
         scroll.setStyleSheet("QScrollArea { background: transparent; border: none; }")
+        # v3.04.03: 触控/远程桌面惯性滚动
+        from PySide6.QtWidgets import QScroller
+        QScroller.grabGesture(scroll, QScroller.LeftMouseButtonGesture)
         frame = Frame()
         frame.setStyleSheet("QFrame { background: transparent; }")
         fl = QVBoxLayout(frame)
@@ -384,6 +387,9 @@ class PacksPage(QWidget):
         self._refresh_all_themes()
 
     def _apply_table_theme(self, table: QTableWidget):
+        # v3.04.03: 触控/远程桌面惯性滚动
+        from PySide6.QtWidgets import QScroller
+        QScroller.grabGesture(table, QScroller.LeftMouseButtonGesture)
         if isDarkTheme():
             table.setStyleSheet("""
                 QTableWidget {
