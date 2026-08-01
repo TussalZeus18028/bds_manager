@@ -604,14 +604,18 @@ class BDSFluentWindow(FluentWindow):
             config_mgr.save()
             self.hide()
             return
-        # X 按钮 → 确认后退出
-        from qfluentwidgets import MessageBox
-        mb = MessageBox("确认退出", "确定要退出 BDS Manager 吗？", self)
-        mb.yesButton.setText("退出")
-        mb.cancelButton.setText("取消")
-        if not mb.exec():
-            event.ignore()
-            return
+        # 快捷键/程序化退出跳过确认
+        if getattr(self, "_skip_close_confirm", False):
+            self._skip_close_confirm = False
+        else:
+            # X 按钮 → 确认后退出
+            from qfluentwidgets import MessageBox
+            mb = MessageBox("确认退出", "确定要退出 BDS Manager 吗？", self)
+            mb.yesButton.setText("退出")
+            mb.cancelButton.setText("取消")
+            if not mb.exec():
+                event.ignore()
+                return
         self.stop_server()
         if self._monitor:
             self._monitor.stop()
@@ -758,7 +762,8 @@ class BDSFluentWindow(FluentWindow):
             self._shutting_down = False
 
     def _do_safe_shutdown(self):
-        """停止所有服务后退出（旧版行为: QApplication.quit() 不走 closeEvent）。"""
+        """停止所有服务后退出（QApplication.quit() 不走 closeEvent 确认）。"""
+        self._skip_close_confirm = True
         from backend.notifications import notify
         stopped_any = False
 
@@ -818,6 +823,7 @@ class BDSFluentWindow(FluentWindow):
     def _restart_app(self):
         from shared.toast import toast_info
         config_mgr.save()
+        self._skip_close_confirm = True
         toast_info("工具即将重启", "将在 1 秒后自动重启", self)
         QTimer.singleShot(1000, lambda: restart_app("main.py"))
 
