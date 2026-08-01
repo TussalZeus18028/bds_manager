@@ -203,26 +203,28 @@ class DownloadWorker(QThread):
         self._cancel = True
 
     def run(self):
-        import requests  # lazy import（非公共库）
+        import urllib.request as _ur
         try:
-            hdr = {"User-Agent": "Mozilla/5.0"}
-            resp = requests.get(self.url, stream=True, headers=hdr, timeout=600)
+            req = _ur.Request(self.url, headers={"User-Agent": "Mozilla/5.0"})
+            resp = _ur.urlopen(req, timeout=30)
             total = int(resp.headers.get("content-length", 0))
             done = 0
             last_pct = -1
-            CHUNK = 256 * 1024  # 256KB — 减少 I/O 和信号频次
+            CHUNK = 1024 * 1024  # 1MB buffer
             with open(self.save_path, "wb") as f:
-                for chunk in resp.iter_content(CHUNK):
+                while True:
                     if self._cancel:
                         self.finished.emit(False, "已取消")
                         return
+                    chunk = resp.read(CHUNK)
+                    if not chunk:
+                        break
                     f.write(chunk)
                     done += len(chunk)
                     if total:
                         pct = int(done * 100 / total)
                         if pct != last_pct:  # 只在百分比变化时发信号
                             self.progress.emit(pct)
-                            self.status.emit(f"{done/1024/1024:.1f}/{total/1024/1024:.1f} MB ({pct}%)")
                             last_pct = pct
             self.finished.emit(True, "下载完成")
         except Exception as e:
