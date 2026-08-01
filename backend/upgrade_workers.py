@@ -203,7 +203,8 @@ class DownloadWorker(QThread):
         self._cancel = True
 
     def run(self):
-        import urllib.request as _ur
+        import urllib.request as _ur, time as _time
+        t0 = _time.monotonic()
         try:
             req = _ur.Request(self.url, headers={"User-Agent": "Mozilla/5.0"})
             resp = _ur.urlopen(req, timeout=30)
@@ -224,9 +225,15 @@ class DownloadWorker(QThread):
                     if total:
                         pct = int(done * 100 / total)
                         if pct != last_pct:
+                            elapsed = max(_time.monotonic() - t0, 0.1)
+                            speed = done / elapsed  # bytes/s
+                            if speed >= 1048576:
+                                speed_str = f"{speed/1048576:.1f} MB/s"
+                            else:
+                                speed_str = f"{speed/1024:.0f} KB/s"
                             self.progress.emit(pct)
                             self.status.emit(
-                                f"{done/1024/1024:.1f}/{total/1024/1024:.1f} MB ({pct}%)")
+                                f"{done/1048576:.1f}/{total/1048576:.1f} MB ({pct}%)  {speed_str}")
                             last_pct = pct
             self.finished.emit(True, "下载完成")
         except Exception as e:
