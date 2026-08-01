@@ -13,8 +13,8 @@ v3.04.03:
 import os, subprocess, sys
 from typing import Callable
 
-from PySide6.QtCore import Qt, QStringListModel, QPoint
-from PySide6.QtGui import QKeyEvent, QFont, QMouseEvent
+from PySide6.QtCore import Qt, QStringListModel, QPoint, QRect
+from PySide6.QtGui import QKeyEvent, QFont, QMouseEvent, QPainterPath, QRegion
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QListView, QLineEdit, QLabel,
     QDialog, QScroller, QFrame,
@@ -34,7 +34,7 @@ class CommandItem:
 
 
 class CommandPaletteDialog(QDialog):
-    """命令面板弹窗（可拖动 + 深色适配 + 触控）。"""
+    """命令面板弹窗（可拖动 + 半透明 + 深色适配 + 触控）。"""
 
     def __init__(self, commands: list[CommandItem], parent=None):
         super().__init__(parent)
@@ -42,14 +42,22 @@ class CommandPaletteDialog(QDialog):
         self.setModal(True)
         self.resize(600, 500)
 
-        # Popup 标志 = 无边框 + 无任务栏图标，干净窗口
+        # Popup = 无边框 + 无任务栏图标
         self.setWindowFlags(Qt.Popup | Qt.FramelessWindowHint)
+        self.setAttribute(Qt.WA_TranslucentBackground, True)
         self._drag_pos = QPoint()
 
         self._commands = commands
         self._filtered: list[CommandItem] = list(commands)
         self._build_ui()
         self._input.setFocus()
+
+    def resizeEvent(self, event):
+        """圆角遮罩裁剪。"""
+        path = QPainterPath()
+        path.addRoundedRect(QRect(0, 0, self.width(), self.height()), 14, 14)
+        self.setMask(QRegion(path.toFillPolygon().toPolygon()))
+        super().resizeEvent(event)
 
     # ── 拖动 ──
     def mousePressEvent(self, e: QMouseEvent):
@@ -66,13 +74,11 @@ class CommandPaletteDialog(QDialog):
     def _build_ui(self):
         p = theme_palette()
 
-        # 对话框本体：实色底 + 圆角
+        # 半透明背景
+        a = "CC" if isDarkTheme() else "EE"
+        rgb = "22,22,26" if isDarkTheme() else "240,240,244"
         self.setStyleSheet(f"""
-            QDialog {{
-                background:{p.surface};
-                border:1px solid {p.border};
-                border-radius:14px;
-            }}
+            QDialog {{ background:rgba({rgb},{a}); border:none; border-radius:14px; }}
         """)
 
         layout = QVBoxLayout(self)
@@ -84,15 +90,15 @@ class CommandPaletteDialog(QDialog):
         title.setStyleSheet(f"color: {p.text_secondary}; font-size: 12px;")
         layout.addWidget(title)
 
-        # 输入框 — 深色主题对齐控制台 plaintext_style
-        from shared.theme import plaintext_style as _ps
+        # 输入框 — 深色适配
         self._input = QLineEdit(self)
         self._input.setPlaceholderText("搜索：备份、玩家、升级、回环...")
         self._input.setFont(QFont("Consolas", 12))
         self._input.setStyleSheet(f"""
             QLineEdit {{
-                {_ps(font_family="Consolas, Microsoft YaHei", font_size=12, padding=8)}
+                background:{p.card_bg}; color:{p.text};
                 border:2px solid #0DC5D4; border-radius:8px;
+                padding:9px 12px; font-size:14px;
             }}
         """)
         self._input.textChanged.connect(self._on_search)
