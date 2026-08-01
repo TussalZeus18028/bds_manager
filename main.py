@@ -778,9 +778,13 @@ class BDSFluentWindow(FluentWindow):
         # 4. 退出
         if stopped_any:
             notify("warning", "system", "安全关闭", "服务器 / 隧道 / 监控已全部停止，1 秒后退出")
+            from shared.toast import toast_warning
+            toast_warning("安全关闭", "正在安全退出...", self, duration=3000)
             QTimer.singleShot(1000, QApplication.quit)
         else:
             notify("info", "system", "安全关闭", "当前没有运行中的进程，退出")
+            from shared.toast import toast_info
+            toast_info("安全关闭", "正在退出...", self, duration=2000)
             QTimer.singleShot(500, QApplication.quit)
 
     def _on_page_changed_for_shortcuts(self, idx):
