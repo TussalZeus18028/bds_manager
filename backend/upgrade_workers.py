@@ -225,9 +225,8 @@ class DownloadWorker(QThread):
                         pct = int(done * 100 / total)
                         if pct != last_pct:
                             self.progress.emit(pct)
-                            if pct % 5 == 0:  # 每 5% 刷新一次状态文字
-                                self.status.emit(
-                                    f"{done/1024/1024:.1f}/{total/1024/1024:.1f} MB ({pct}%)")
+                            self.status.emit(
+                                f"{done/1024/1024:.1f}/{total/1024/1024:.1f} MB ({pct}%)")
                             last_pct = pct
             self.finished.emit(True, "下载完成")
         except Exception as e:
