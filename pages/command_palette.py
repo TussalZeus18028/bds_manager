@@ -22,6 +22,7 @@ from PySide6.QtWidgets import (
 from qfluentwidgets import BodyLabel, CaptionLabel, isDarkTheme
 
 from shared.theme import theme_palette
+from shared.config import config_mgr
 
 
 class CommandItem:
@@ -74,11 +75,12 @@ class CommandPaletteDialog(QDialog):
     def _build_ui(self):
         p = theme_palette()
 
-        # 半透明背景
-        a = "CC" if isDarkTheme() else "EE"
+        # 半透明背景 — 跟随设置页 window_background_opacity
+        opacity = config_mgr.get("window_background_opacity", 100)
+        alpha_hex = format(int(opacity * 2.55), '02X')  # 100→FF, 80→CC
         rgb = "22,22,26" if isDarkTheme() else "240,240,244"
         self.setStyleSheet(f"""
-            QDialog {{ background:rgba({rgb},{a}); border:none; border-radius:14px; }}
+            QDialog {{ background:rgba({rgb},{alpha_hex}); border:none; border-radius:14px; }}
         """)
 
         layout = QVBoxLayout(self)
