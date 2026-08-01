@@ -2,25 +2,30 @@
 """
 命令面板 —— 仿 VSCode Ctrl+K 跨页面快速跳转 + 常用操作。
 
-设计：
-- 顶部 LineEdit 用于输入
-- 下方 ListView 列出匹配项
-- 支持模糊匹配（按命令名、描述、关键词）
-- 上下箭头 / Enter 选择
+v3.04.03 改进:
+- 触控/远程桌面 QScroller 惯性滚动
+- 深色模式输入框适配 ThemePalette
+- 半透明毛玻璃背景（根据主题+bg_opacity）
+- 新增「本地回环免除」命令
 """
 
 import os
+import subprocess
+import sys
 from typing import Callable
 
 from PySide6.QtCore import Qt, QStringListModel, QSize
 from PySide6.QtGui import QKeyEvent, QFont
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QListView, QLineEdit, QLabel,
-    QDialog, QApplication,
+    QDialog, QApplication, QScroller,
 )
 from qfluentwidgets import (
     CardWidget, BodyLabel, CaptionLabel, FluentIcon, PrimaryPushButton, isDarkTheme,
 )
+
+from shared.theme import theme_palette
+from shared.config import config_mgr
 
 
 class CommandItem:
@@ -36,67 +41,77 @@ class CommandItem:
 
 
 class CommandPaletteDialog(QDialog):
-    """命令面板弹窗。"""
+    """命令面板弹窗（v3.04.03: 主题感知 + 半透明 + 触控）。"""
 
     def __init__(self, commands: list[CommandItem], parent=None):
         super().__init__(parent)
         self.setWindowTitle("命令面板")
         self.setModal(True)
-        self.resize(620, 460)
+        self.resize(620, 520)
+
+        # v3.04.03: 主题感知背景 + 半透明毛玻璃
+        p = theme_palette()
+        opacity = config_mgr.get("window_background_opacity", 100)
+        alpha = int(opacity * 2.55)  # 100→255, 80→204
         if isDarkTheme():
-            self.setStyleSheet("""
-                QDialog { background:#1e1e1e; border:1px solid #3a3a3a; border-radius:8px; }
-            """)
+            bg_rgba = f"rgba(24,24,27,{alpha})"
+            border_color = p.border
         else:
-            self.setStyleSheet("""
-                QDialog { background:#fafafa; border:1px solid #d0d0d0; border-radius:8px; }
-            """)
+            bg_rgba = f"rgba(245,245,247,{alpha})"
+            border_color = p.border
+        self.setStyleSheet(f"""
+            QDialog {{ background:{bg_rgba}; border:1px solid {border_color}; border-radius:12px; }}
+        """)
+        self.setAttribute(Qt.WA_TranslucentBackground, alpha < 255)
+
         self._commands = commands
         self._filtered: list[CommandItem] = list(commands)
         self._build()
         self._input.setFocus()
 
     def _build(self):
+        p = theme_palette()
         layout = QVBoxLayout(self)
         layout.setContentsMargins(16, 16, 16, 16)
         layout.setSpacing(8)
 
         # 标题
-        title = BodyLabel("🔍 命令面板  输入关键词搜索页面或操作", self)
-        title.setStyleSheet("color: #888; font-size: 12px;" if isDarkTheme() else "color: #666; font-size: 12px;")
+        title = BodyLabel("命令面板  输入关键词搜索页面或操作", self)
+        title.setStyleSheet(f"color: {p.text_secondary}; font-size: 12px;")
         layout.addWidget(title)
 
-        # 输入框
+        # v3.04.03: 输入框 ThemePalette 适配深色模式
         self._input = QLineEdit(self)
         self._input.setPlaceholderText("搜索：备份、玩家、升级...")
-        if isDarkTheme():
-            self._input.setStyleSheet("""
-                QLineEdit { background:#2a2a2a; color:#fff; border:1px solid #0DC5D4; border-radius:6px; padding:8px 12px; font-size:14px; }
-            """)
-        else:
-            self._input.setStyleSheet("""
-                QLineEdit { background:#fff; color:#1a1a1a; border:1px solid #0DC5D4; border-radius:6px; padding:8px 12px; font-size:14px; }
-            """)
+        self._input.setStyleSheet(f"""
+            QLineEdit {{
+                background:{p.surface}; color:{p.text};
+                border:2px solid #0DC5D4; border-radius:8px;
+                padding:10px 14px; font-size:14px;
+            }}
+            QLineEdit:focus {{ border-color: #0DC5D4; }}
+        """)
         self._input.textChanged.connect(self._on_search)
         self._input.installEventFilter(self)
         layout.addWidget(self._input)
 
-        # 列表
+        # v3.04.03: 列表 + 触控适配
         self._list = QListView(self)
+        QScroller.grabGesture(self._list, QScroller.LeftMouseButtonGesture)
         self._model = QStringListModel(self)
         self._list.setModel(self._model)
-        if isDarkTheme():
-            self._list.setStyleSheet("""
-                QListView { background:#252525; color:#ccc; border:1px solid #3a3a3a; border-radius:6px; outline:0; }
-                QListView::item { padding:10px 12px; border-bottom:1px solid #2a2a2a; }
-                QListView::item:selected { background:rgba(13,197,212,0.25); color:#fff; }
-            """)
-        else:
-            self._list.setStyleSheet("""
-                QListView { background:#fff; color:#1a1a1a; border:1px solid #d0d0d0; border-radius:6px; outline:0; }
-                QListView::item { padding:10px 12px; border-bottom:1px solid #e8e8e8; }
-                QListView::item:selected { background:rgba(13,197,212,0.15); color:#1a1a1a; }
-            """)
+        self._list.setStyleSheet(f"""
+            QListView {{
+                background:{p.card_bg}; color:{p.text};
+                border:1px solid {p.border}; border-radius:8px; outline:0;
+            }}
+            QListView::item {{
+                padding:10px 12px; border-bottom:1px solid {p.border};
+            }}
+            QListView::item:selected {{
+                background:rgba(13,197,212,0.2); color:{p.text};
+            }}
+        """)
         self._list.setFont(QFont("Microsoft YaHei", 11))
         self._list.doubleClicked.connect(self._on_activate)
         self._list.activated.connect(self._on_activate)
@@ -104,7 +119,7 @@ class CommandPaletteDialog(QDialog):
 
         # 底部提示
         hint = CaptionLabel("↑↓ 选择  Enter 确认  Esc 关闭", self)
-        hint.setStyleSheet(f"color: {'#666' if isDarkTheme() else '#999'};")
+        hint.setStyleSheet(f"color: {p.text_secondary};")
         layout.addWidget(hint)
 
         self._refresh_model()
@@ -219,6 +234,27 @@ def build_default_commands(window) -> list[CommandItem]:
             window.world_page._on_backup()
     cmds.append(CommandItem("手动备份", "立即备份当前世界", do_backup,
                             "backup 备份 save", "SAVE"))
+
+    # v3.04.03: 本地回环免除 — 允许 Minecraft UWP 连接本地 BDS
+    def do_loopback_exempt():
+        cmd = [
+            "CheckNetIsolation", "LoopbackExempt", "-a",
+            "-n=Microsoft.MinecraftUWP_8wekyb3d8bbwe",
+        ]
+        try:
+            result = subprocess.run(cmd, capture_output=True, text=True,
+                                    creationflags=subprocess.CREATE_NO_WINDOW)
+            from shared.toast import toast_success, toast_error
+            if result.returncode == 0:
+                toast_success("回环免除", "已添加 Minecraft UWP 本地连接权限", window)
+            else:
+                toast_error("回环免除失败", result.stderr.strip() or "权限不足, 请以管理员运行",
+                            window, duration=5000)
+        except Exception as e:
+            from shared.toast import toast_error
+            toast_error("回环免除失败", str(e), window)
+    cmds.append(CommandItem("本地回环免除 (管理员)", "允许 Minecraft 连接本机 BDS",
+                            do_loopback_exempt, "loopback uwp 本地 回环 免除 管理员", "WIFI"))
 
     # 主题切换
     def set_theme(t):
