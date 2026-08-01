@@ -16,6 +16,7 @@ import json
 import shutil
 import logging
 import time
+import threading
 from collections import deque
 from datetime import datetime
 
@@ -304,6 +305,25 @@ class ConfigManager:
     def __init__(self):
         self.values: dict = {}
         self._history: deque = deque(maxlen=CONFIG_MAX_BACKUPS)
+        self._save_timer: threading.Timer | None = None
+        self._save_lock = threading.Lock()
+
+    def _schedule_save(self, delay: float = 0.5):
+        """延迟保存（防抖）：多次 set 只触发一次落盘。"""
+        with self._save_lock:
+            if self._save_timer:
+                self._save_timer.cancel()
+            self._save_timer = threading.Timer(delay, self.save)
+            self._save_timer.daemon = True
+            self._save_timer.start()
+
+    def save_now(self):
+        """立即落盘（关键路径如关闭前）。"""
+        with self._save_lock:
+            if self._save_timer:
+                self._save_timer.cancel()
+                self._save_timer = None
+        self.save()
 
     def load(self) -> dict:
         """加载配置，缺失键用 DEFAULT_CONFIG 补全。
@@ -469,7 +489,9 @@ class ConfigManager:
         return self.values.get(key, default)
 
     def set(self, key, value):
+        """设置配置值并自动延迟落盘（v3.04.03: 防抖保存）。"""
         self.values[key] = value
+        self._schedule_save()
 
     def diff(self, other: dict) -> dict:
         """返回与 other 不同的键（{key: (old, new)}）。用于 UI 高亮变更。"""

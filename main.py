@@ -601,14 +601,13 @@ class BDSFluentWindow(FluentWindow):
         if self._tray and self._tray.isVisible() and config_mgr.get("close_to_tray", True):
             event.ignore()
             self._save_geometry()
-            config_mgr.save()
+            config_mgr.save_now()
             self.hide()
             return
-        # 快捷键/程序化退出跳过确认
+        # _skip_close_confirm → 快捷键/程序化退出，跳过确认
         if getattr(self, "_skip_close_confirm", False):
             self._skip_close_confirm = False
         else:
-            # X 按钮 → 确认后退出
             from qfluentwidgets import MessageBox
             mb = MessageBox("确认退出", "确定要退出 BDS Manager 吗？", self)
             mb.yesButton.setText("退出")
@@ -628,7 +627,7 @@ class BDSFluentWindow(FluentWindow):
         if self._tray is not None:
             self._tray.hide()
         self._save_geometry()
-        config_mgr.save()
+        config_mgr.save_now()
         super().closeEvent(event)
 
     # ---------- 快捷键 ----------
@@ -724,7 +723,6 @@ class BDSFluentWindow(FluentWindow):
         cur = config_mgr.get("theme", "light")
         new = "light" if cur == "dark" else "dark"
         config_mgr.set("theme", new)
-        config_mgr.save()
         self.apply_theme(new, self._current_color)
 
     def _shortcut_open_world(self):
