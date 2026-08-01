@@ -696,8 +696,8 @@ class UpgradePage(QWidget):
         self._auto_refreshed = True
         cached = config_mgr.get("version_list", {})
         ts = cached.get("timestamp", 0) if isinstance(cached, dict) else 0
-        # 缓存 24 小时内不算过期，减少 GitHub 请求
-        if time.time() - ts < 86400:
+        # 缓存 48 小时内不算过期，减少 GitHub 请求
+        if time.time() - ts < 172800:
             return
         # 延迟 800ms 启动后台刷新，避免影响 UI 渲染
         QTimer.singleShot(800, self._auto_refresh)
