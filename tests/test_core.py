@@ -301,7 +301,11 @@ class ConfigSaveWhitelistTests(unittest.TestCase):
                 ):
                     manager.load()
                     manager.set(extra_key, "roundtrip_ok")
-                    manager.save()
+                    # v3.05.00: set() 会触发 0.5s 延迟保存 timer；必须用 save_now()
+                    # 取消 timer，否则 patch 退出后 timer 会把默认值写进真实配置文件
+                    manager.save_now()
+
+                manager.cancel_pending_save()  # 双保险：确保无残留延迟保存
 
                 saved = json.loads(config_file.read_text(encoding="utf-8"))
                 self.assertEqual(saved.get(extra_key), "roundtrip_ok",

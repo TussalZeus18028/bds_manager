@@ -317,12 +317,16 @@ class ConfigManager:
             self._save_timer.daemon = True
             self._save_timer.start()
 
-    def save_now(self):
-        """立即落盘（关键路径如关闭前）。"""
+    def cancel_pending_save(self):
+        """取消未触发的延迟保存 timer（测试/退出前调用，防止 timer 在路径变化后写错位置）。"""
         with self._save_lock:
             if self._save_timer:
                 self._save_timer.cancel()
                 self._save_timer = None
+
+    def save_now(self):
+        """立即落盘（关键路径如关闭前）。先取消 pending timer 再同步保存。"""
+        self.cancel_pending_save()
         self.save()
 
     def load(self) -> dict:
