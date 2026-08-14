@@ -448,7 +448,15 @@ class PacksPage(QWidget):
         open_dir_btn.setMaximumWidth(130)
         def _open_dir(d):
             if os.path.isdir(d):
-                os.startfile(d)
+                # v3.05.00: 跨平台打开目录（os.startfile 仅 Windows）
+                if sys.platform == "win32":
+                    os.startfile(d)
+                elif sys.platform == "darwin":
+                    import subprocess
+                    subprocess.Popen(["open", d])
+                else:
+                    import subprocess
+                    subprocess.Popen(["xdg-open", d])
         open_dir_btn.clicked.connect(
             lambda _, pt=pack_type: _open_dir(
                 get_context().resource_packs_dir if pt == "resource"

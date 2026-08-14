@@ -208,6 +208,11 @@ def build_default_commands(window) -> list[CommandItem]:
     cmds.append(CommandItem("手动备份","立即备份世界", backup, "backup"))
 
     def loopback():
+        # CheckNetIsolation 是 Windows 专属命令，Linux/macOS 上直接提示
+        if sys.platform != "win32":
+            from shared.toast import toast_warning
+            toast_warning("仅限 Windows", "本地回环免除是 Windows UWP 专属功能", window)
+            return
         r = subprocess.run(
             ["CheckNetIsolation","LoopbackExempt","-a","-n=Microsoft.MinecraftUWP_8wekyb3d8bbwe"],
             capture_output=True, text=True, creationflags=subprocess.CREATE_NO_WINDOW)
