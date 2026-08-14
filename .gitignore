@@ -10,8 +10,7 @@ logs/
 *.log
 
 # ── 备份 ──
-backups/pre_refactor_*
-backups/upgrade_backup_*
+backups/
 
 # ── 临时文件 ──
 _update_*.zip
@@ -20,6 +19,7 @@ bds_manager_v*.zip
 *.tmp
 *_cleanup.bat
 *_clean_archives.ps1
+archives.rar
 
 # ── IDE ──
 .vscode/
@@ -34,11 +34,13 @@ release.py
 archive.py
 
 # ── 运行时生成的文件 ──
-bds_manager_config.json       # 用户配置
-bds_manager_notifications.json # 通知中心数据
-bds_version_cache.json        # 升级页缓存
-dist/                         # release.py 产出
-archives/                     # archive.py 产出
-.workbuddy/                   # WorkBuddy 会话数据
+bds_manager_config.json
+bds_manager_notifications.json
+bds_version_cache.json
+.upgrade_history.json
+dist/
+archives/
+.workbuddy/
+Server/
 
 PROJECT_SUMMARY.md
