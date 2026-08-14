@@ -1035,6 +1035,10 @@ def main():
     app.setApplicationName("BDS Manager")
     app.setApplicationVersion(__version__)
 
+    # v3.05.00: 任何退出路径（X/托盘/快捷键/系统关机）都强制落盘，
+    # 防止防抖 timer 未触发就退出导致配置丢失
+    app.aboutToQuit.connect(config_mgr.save_now)
+
     # 2. 闪屏（根据配置主题选择深/浅色）
     theme_raw = config_mgr.get("theme", "light")
     splash = AnimatedSplashScreen(__version__, is_dark=(theme_raw == "dark"))
