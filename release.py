@@ -60,14 +60,16 @@ SKIP_FILES = {
     "bds_manager_notifications.json",  # v3.02.00 通知中心数据
     # 本地开发工具（不需要给最终用户）
     ".gitignore", "release.py", "archive.py",
+    # v3.05.01: 本地大体积归档（曾导致发布包 902MB，v3.05.00 仅 205KB）
+    "archives.rar",
 }
 SKIP_SUFFIX = (".pyc", ".zip", ".bak_")
 
 # ── 终端输出辅助 ──
 def info(msg):  print(f"  {msg}")
-def ok(msg):    print(f"  ✅ {msg}")
-def warn(msg):  print(f"  ⚠️  {msg}")
-def err(msg):   print(f"  ❌ {msg}")
+def ok(msg):    print(f"  [OK] {msg}")
+def warn(msg):  print(f"  [WARN] {msg}")
+def err(msg):   print(f"  [ERR] {msg}")
 def step(msg):  print(f"\n▶ {msg}")
 
 
@@ -156,7 +158,7 @@ def calc_zip_hash(zip_path: Path) -> tuple[str, int]:
 def write_version_json(sha256: str, size: int):
     """覆盖写 version.json 的发布字段，保留 min_compatible_version / changelog 不动。
 
-    ⚠️ min_compatible_version 和 changelog 由开发者手动维护（用编辑器改 version.json），
+    注意: min_compatible_version 和 changelog 由开发者手动维护（用编辑器改 version.json），
     不应该被 release.py 覆盖：
       - min_compatible_version 是兼容性策略决策（如跨主版本升级窗口）
       - changelog 应该写得详细（标题 + bullet），命令行 --notes 太简陋
@@ -351,7 +353,7 @@ def main() -> int:
             pass
     else:
         # 交互模式：提示用户多行输入
-        print("\n📝 输入更新说明（多行，Ctrl+D 或 Ctrl+Z 结束）:")
+        print("\n输入更新说明（多行，Ctrl+D 或 Ctrl+Z 结束）:")
         try:
             changelog = sys.stdin.read().strip()
         except (EOFError, KeyboardInterrupt):
@@ -387,7 +389,7 @@ def main() -> int:
         info(f"路径: {zip_path}")
 
     if args.dry_run:
-        ok(f"\n🎯 dry-run 完成（无任何写操作）")
+        ok(f"\ndry-run 完成（无任何写操作）")
         info(f"zip 预览: {zip_path}")
         return 0
 
@@ -427,7 +429,7 @@ def main() -> int:
     else:
         warn("跳过 asset 上传（--no-upload）")
 
-    print("\n🎉 发布完成！")
+    print("\n发布完成！")
     print(f"  Release: {rel['html_url']}")
     print(f"  Tag:     {TAG}")
     print(f"  Zip:     {zip_path}")
@@ -438,7 +440,7 @@ if __name__ == "__main__":
     try:
         sys.exit(main())
     except KeyboardInterrupt:
-        print("\n⚠️  已取消")
+        print("\n已取消")
         sys.exit(1)
     except Exception as e:
         err(f"发布失败: {e}")

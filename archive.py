@@ -122,12 +122,12 @@ def keep_recent(n: int):
     to_remove = archives[n:]
     if not to_remove:
         return
-    print(f"\n  ⚠️  超过保留上限 {n} 份，以下 {len(to_remove)} 份较旧归档建议清理：")
+    print(f"\n  [WARN] 超过保留上限 {n} 份，以下 {len(to_remove)} 份较旧归档建议清理：")
     for old in to_remove:
         size_kb = old.stat().st_size / 1024
         mt = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(old.stat().st_mtime))
         print(f"     · {old.name}  ({size_kb:.1f} KB, {mt})")
-    print(f"\n  💡 如需自动清理，请手动执行（沙箱策略禁止脚本直接删除文件）：")
+    print(f"\n  [提示] 如需自动清理，请手动执行（沙箱策略禁止脚本直接删除文件）：")
     quoted = " ".join(f'"{p}"' for p in to_remove)
     print(f"     rm {quoted}")
 
@@ -150,7 +150,7 @@ def main():
         if not archives:
             print("archives/ 目录为空")
             return 0
-        print(f"\n📦 archives/ 下有 {len(archives)} 份归档（最新在前）：\n")
+        print(f"\narchives/ 下有 {len(archives)} 份归档（最新在前）：\n")
         for p in archives:
             size_kb = p.stat().st_size / 1024
             mt = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(p.stat().st_mtime))
@@ -159,7 +159,7 @@ def main():
 
     # 打包模式
     version = VERSION
-    print(f"📦 归档项目: BDS Manager v{version}")
+    print(f"归档项目: BDS Manager v{version}")
     print(f"   目标: archives/")
     if args.label:
         print(f"   标签: {args.label}")
@@ -173,10 +173,10 @@ def main():
         if latest:
             size_kb = latest.stat().st_size / 1024
             mt = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(latest.stat().st_mtime))
-            print(f"\n⏭️  源代码未变更，跳过归档")
+            print(f"\n源代码未变更，跳过归档")
             print(f"   最近一份: {latest.name}  ({size_kb:.1f} KB, {mt})")
             print(f"   内容 hash: {current_hash[:16]}...")
-            print(f"\n   💡 强制归档: python archive.py --force")
+            print(f"\n   提示: 强制归档: python archive.py --force")
             if args.label:
                 print(f"   或带标签: python archive.py --label {args.label} --force")
             return 0
@@ -187,7 +187,7 @@ def main():
     # 把当前 hash 写入 sidecar
     write_last_hash(current_hash)
 
-    print(f"\n✅ 归档完成: {out.name}")
+    print(f"\n[OK] 归档完成: {out.name}")
     print(f"   文件数: {len(files)}")
     print(f"   大小:   {size:,} 字节 ({size/1024:.1f} KB)")
     print(f"   内容 hash: {current_hash[:16]}...")
@@ -204,5 +204,5 @@ if __name__ == "__main__":
     try:
         sys.exit(main())
     except KeyboardInterrupt:
-        print("\n⚠️  已取消")
+        print("\n已取消")
         sys.exit(1)

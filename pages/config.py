@@ -448,26 +448,40 @@ class ConfigPage(QWidget):
             return
         self._error_label.setText("")
 
-        ctx = get_context()
         values = self._get_values()
-        existing = self._read_existing()
-        # 保留原有 key 顺序；只在用户改动时才覆盖
-        lines = []
         keys_to_write = [k for k in _KNOWN_PROPS if k in values]
-        # 先按已有顺序写磁盘中存在的 key
-        written = set()
-        if existing:
-            for k in existing.keys():
+        props_path = _get_server_properties_path()
+        new_lines: list[str] = []
+        written: set[str] = set()
+        # v3.05.02: 行级处理保留原文件注释/空行/未知 key（此前整文件重写会丢弃
+        # BDS 官方 server.properties 的全部说明注释）。磁盘上已有的 key 就地替换。
+        orig_lines: list[str] = []
+        if os.path.exists(props_path):
+            try:
+                with open(props_path, "r", encoding="utf-8") as f:
+                    orig_lines = f.read().splitlines()
+            except (OSError, UnicodeDecodeError):
+                orig_lines = []
+        for line in orig_lines:
+            stripped = line.strip()
+            if not stripped or stripped.startswith("#"):
+                new_lines.append(line)  # 保留注释与空行
+                continue
+            if "=" in stripped:
+                k = stripped.split("=", 1)[0].strip()
                 if k in values:
-                    lines.append(f"{k}={values[k]}")
+                    new_lines.append(f"{k}={values[k]}")
                     written.add(k)
+                    continue
+            # 未知 key / 格式异常行：原样保留
+            new_lines.append(line)
         # 追加磁盘上不存在的新 key（用户编辑过的）
         for k in keys_to_write:
             if k not in written:
-                lines.append(f"{k}={values[k]}")
+                new_lines.append(f"{k}={values[k]}")
         try:
-            with open(_get_server_properties_path(), "w", encoding="utf-8") as f:
-                f.write("# server.properties\n" + "\n".join(lines) + "\n")
+            with open(props_path, "w", encoding="utf-8") as f:
+                f.write("\n".join(new_lines) + "\n")
         except Exception as e:
             toast_error("保存失败", str(e), self.window())
             return
@@ -540,7 +554,7 @@ class ConfigPage(QWidget):
 
         # ── 标题栏 ──
         title_bar = QHBoxLayout()
-        title_lbl = BodyLabel(f"📄  {filename}", container)
+        title_lbl = BodyLabel(f"{filename}", container)
         title_lbl.setObjectName("fileEditTitle")
         title_lbl.setStyleSheet(
             "BodyLabel#fileEditTitle { color: #d4d4d4; font-size: 14px; font-weight: 600; }" if dark
@@ -686,7 +700,7 @@ class ConfigPage(QWidget):
                 os.path.isfile(os.path.join(ctx.ll_dir, ll_exe()))
         has_server = bds_ok or ll_ok
         if not has_server:
-            text += "\n\n⚠ 未检测到服务器可执行文件，端口状态可能不准确"
+            text += "\n\n未检测到服务器可执行文件，端口状态可能不准确"
         if self._port_btn:
             self._port_btn.setEnabled(True)
             self._port_btn.setText("端口检测")

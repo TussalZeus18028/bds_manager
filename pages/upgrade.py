@@ -196,7 +196,9 @@ class UpgradePage(QWidget):
             self._ver_table = QTableWidget(0, 4, ver_card)
             self._ver_table.setHorizontalHeaderLabels(["版本", "分支", "大小", "操作"])
             self._ver_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
-            for col, w in [(1, 80), (2, 90), (3, 120)]:
+            # v3.05.02: 分支列 80 → 120（"稳定版" emoji+中文约 100px+，原宽 80 右边被截断，
+            # 高 DPI 下更明显）
+            for col, w in [(1, 120), (2, 90), (3, 120)]:
                 self._ver_table.horizontalHeader().setSectionResizeMode(col, QHeaderView.Fixed)
                 self._ver_table.setColumnWidth(col, w)
             self._ver_table.verticalHeader().setVisible(False)
@@ -358,7 +360,7 @@ class UpgradePage(QWidget):
                 age_text = f"{age // 3600} 小时前"
             else:
                 age_text = f"{age // 86400} 天前"
-            self._scan_status.setText(f"📦 缓存 {len(self._results)} 个版本（{age_text}），后台静默检查中...")
+            self._scan_status.setText(f"缓存 {len(self._results)} 个版本（{age_text}），后台静默检查中...")
 
         self._refresh_history()
         self._auto_refreshed = False  # 首次 showEvent 触发后台刷新
@@ -617,11 +619,11 @@ class UpgradePage(QWidget):
             config_mgr.set("ll_server_dir", rel)
             config_mgr.set("server_type", "ll")
             config_mgr.save()
-            self._append_lip_term("✅ 部署完成！已自动切换为 LL 服务器\n", "#4caf50")
+            self._append_lip_term("部署完成！已自动切换为 LL 服务器\n", "#4caf50")
             self._append_lip_term(f"> 运行 bedrock_server_mod.exe 启动\n", "#888")
             toast_success("部署完成", f"BDS + LeviLamina 已安装到 {d}\n已自动切换为 LL 服务器", self.window())
         else:
-            self._append_lip_term(f"❌ 部署失败 (退出码 {code})\n", "#e81123")
+            self._append_lip_term(f"部署失败 (退出码 {code})\n", "#e81123")
             toast_error("部署失败", f"lip 退出码 {code}，请查看终端输出", self.window())
 
     def _on_lip_cmd(self):
@@ -835,7 +837,7 @@ class UpgradePage(QWidget):
             self._tool_status.setText(f"下载失败: {msg}")
             toast_error("更新下载失败", msg, self.window())
             return
-        self._tool_status.setText(f"✅ 下载完成: v{remote_ver}，准备安装...")
+        self._tool_status.setText(f"下载完成: v{remote_ver}，准备安装...")
         toast_success("更新就绪", f"BDS Manager v{remote_ver} 下载完成", self.window())
         from backend.self_update import verify_sha256, is_valid_zip
         if not is_valid_zip(path):
@@ -845,17 +847,17 @@ class UpgradePage(QWidget):
             return
         ok, sha_msg = verify_sha256(path, sha256)
         if not ok:
-            self._tool_status.setText(f"❌ SHA256 校验失败: {sha_msg}")
+            self._tool_status.setText(f"SHA256 校验失败: {sha_msg}")
             try: os.remove(path)
             except OSError as e: logger.debug("清理校验失败 zip: %s", e)
             return
         self._tool_zip = path
-        self._tool_status.setText(f"✅ 就绪: {os.path.basename(path)} | {sha_msg}")
+        self._tool_status.setText(f"就绪: {os.path.basename(path)} | {sha_msg}")
         self._tool_install_btn.setEnabled(True)
 
     def _install_tool_update(self):
         if not hasattr(self, "_tool_zip") or not os.path.exists(self._tool_zip):
-            self._tool_status.setText("❌ 找不到更新包")
+            self._tool_status.setText("找不到更新包")
             return
         from backend.self_update import InstallUpdateWorker, restart_app
         self._tool_status.setText("正在安装更新...")
@@ -882,7 +884,7 @@ class UpgradePage(QWidget):
         self._stop_btn.setEnabled(True)
         self._stop_btn.setText("停止")
         self._pending_head_scan = False
-        self._log_line("🔄 正在从 GitHub 仓库拉取版本列表...")
+        self._log_line("正在从 GitHub 仓库拉取版本列表...")
         self._start_github_fetch(silent=False)
 
     def _start_github_fetch(self, silent: bool, attempt: int = 1):
@@ -890,10 +892,10 @@ class UpgradePage(QWidget):
         self._github_attempt = attempt
         self._github_silent = silent
         self._scan_status.setText(
-            f"🔄 拉取 GitHub 仓库版本列表...（尝试 {attempt}/{self.GITHUB_MAX_RETRIES}）"
+            f"拉取 GitHub 仓库版本列表...（尝试 {attempt}/{self.GITHUB_MAX_RETRIES}）"
         )
         if not silent:
-            self._log_line(f"🔄 GitHub 拉取（尝试 {attempt}/{self.GITHUB_MAX_RETRIES}）")
+            self._log_line(f"GitHub 拉取（尝试 {attempt}/{self.GITHUB_MAX_RETRIES}）")
         self._github_worker = GithubFetcher(self)
         # 用默认参数绑定 attempt，避免 lambda 闭包陷阱
         self._github_worker.result.connect(
@@ -910,16 +912,16 @@ class UpgradePage(QWidget):
         if attempt < self.GITHUB_MAX_RETRIES:
             delay = self.GITHUB_BACKOFF_BASE ** (attempt - 1)  # 1, 2, 4 秒
             self._scan_status.setText(
-                f"⚠️ GitHub 拉取失败，{delay}s 后重试（{attempt+1}/{self.GITHUB_MAX_RETRIES}）"
+                f"GitHub 拉取失败，{delay}s 后重试（{attempt+1}/{self.GITHUB_MAX_RETRIES}）"
             )
             if not silent:
-                self._log_line(f"⚠️ GitHub 失败，{delay}s 后重试（{attempt+1}/{self.GITHUB_MAX_RETRIES}）")
+                self._log_line(f"GitHub 失败，{delay}s 后重试（{attempt+1}/{self.GITHUB_MAX_RETRIES}）")
             QTimer.singleShot(delay * 1000, lambda: self._start_github_fetch(silent, attempt + 1))
             return
         # 全部失败
         if silent:
             # 后台静默：直接放弃，保留缓存
-            self._scan_status.setText(f"❌ 后台静默检查失败（尝试 {attempt} 次），保留缓存")
+            self._scan_status.setText(f"后台静默检查失败（尝试 {attempt} 次），保留缓存")
             return
         # 用户主动：把停止按钮变成"启用 HEAD 嗅探"，让用户决定
         self._on_github_exhausted()
@@ -931,12 +933,12 @@ class UpgradePage(QWidget):
             and results and cached and results[0] == cached[0]):
             self._save_cache()
             self._populate_table()
-            self._scan_status.setText(f"✅ {len(results)} 个版本（无变化）")
+            self._scan_status.setText(f"{len(results)} 个版本（无变化）")
             return
         self._results = results
         self._save_cache()
         self._populate_table()
-        msg = f"✅ GitHub: {len(results)} 个版本（之前 {len(cached)}）"
+        msg = f"GitHub: {len(results)} 个版本（之前 {len(cached)}）"
         self._scan_status.setText(msg)
         if not silent:
             self._log_line(msg)
@@ -948,10 +950,10 @@ class UpgradePage(QWidget):
         self._stop_btn.setEnabled(True)
         self._stop_btn.setText("启用 HEAD 嗅探")
         self._scan_status.setText(
-            f"❌ GitHub 失败 {self.GITHUB_MAX_RETRIES} 次 — 可点停止按钮启用 HEAD 嗅探（最后手段，65+ 请求）"
+            f"GitHub 失败 {self.GITHUB_MAX_RETRIES} 次 — 可点停止按钮启用 HEAD 嗅探（最后手段，65+ 请求）"
         )
         self._log_line(
-            f"❌ GitHub 失败 {self.GITHUB_MAX_RETRIES} 次，嗅探作为最后手段"
+            f"GitHub 失败 {self.GITHUB_MAX_RETRIES} 次，嗅探作为最后手段"
         )
 
     def _start_head_scan(self, base_ver: str, append_mode: bool):
@@ -994,7 +996,7 @@ class UpgradePage(QWidget):
         if self._pending_head_scan:
             self._pending_head_scan = False
             self._stop_btn.setText("停止")
-            self._log_line("⚠️ 启用 HEAD 嗅探（最后手段，会发 65+ 个请求）...")
+            self._log_line("启用 HEAD 嗅探（最后手段，会发 65+ 个请求）...")
             self._start_head_scan("1.20.0.0", append_mode=False)
             return
         # 状态 1 & 2：中止正在运行的任务
@@ -1034,7 +1036,7 @@ class UpgradePage(QWidget):
             self._ver_table.setItem(i, 0, QTableWidgetItem(ver))
             # v3.02.02: stable 绿色 / preview 橙色，加 emoji 图标
             is_stable = branch == "stable"
-            branch_text = "🟢 稳定版" if is_stable else "🟠 预览版"
+            branch_text = "稳定版" if is_stable else "预览版"
             item = QTableWidgetItem(branch_text)
             item.setForeground(QColor("#4CAF50" if is_stable else "#ff9800"))
             self._ver_table.setItem(i, 1, item)
@@ -1124,7 +1126,7 @@ class UpgradePage(QWidget):
         else:
             self._install_dir.setText(ctx_dl.bds_dir if hasattr(ctx_dl, "bds_dir") else ctx_dl.server_dir)
         stype_info = config_mgr.get("server_type", "bds")
-        self._install_info.setText(f"已下载 BDS {version}，请选择安装路径后点击 [开始安装]" + (f"\n⚠ 当前服务器模式: {stype_info.upper()}" if stype_info != "bds" else ""))
+        self._install_info.setText(f"已下载 BDS {version}，请选择安装路径后点击 [开始安装]" + (f"\n当前服务器模式: {stype_info.upper()}" if stype_info != "bds" else ""))
         self._install_btn.setEnabled(True)
         self._install_card.setVisible(True)
         self._update_install_status()

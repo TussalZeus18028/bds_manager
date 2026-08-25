@@ -118,7 +118,7 @@ def handle_errors(default_return: Any = None, title: str = "操作失败", silen
                 if not silent:
                     _report_error(
                         title,
-                        f"{e}\n\n💡 如持续出现请查看 logs/bds_manager.log",
+                        f"{e}\n\n如持续出现请查看 logs/bds_manager.log",
                         "ERROR",
                     )
                 return default_return

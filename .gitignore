@@ -41,6 +41,7 @@ bds_version_cache.json
 dist/
 archives/
 .workbuddy/
+.DSH/
 Server/
 
 PROJECT_SUMMARY.md

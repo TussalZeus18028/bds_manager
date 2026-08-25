@@ -307,7 +307,10 @@ class LevelFilterBar(QWidget):
         self._show_all.hide()
 
     def is_enabled(self, level: str) -> bool:
-        return self._filters.get(level, CheckBox(self)).isChecked()
+        # v3.05.02: 之前 get(level, CheckBox(self)) 每次调用都新建临时 CheckBox
+        # （未勾选）→ 未注册的级别会被错误过滤掉。未知级别默认放行。
+        cb = self._filters.get(level)
+        return cb.isChecked() if cb is not None else True
 
     def levels_enabled(self) -> set[str]:
         return {k for k, cb in self._filters.items() if cb.isChecked()}
@@ -635,7 +638,7 @@ class ConsolePage(QWidget):
         """崩溃重启时调用，在日志顶部插红条。"""
         if not self._crash_marker_visible:
             sep = "─" * 60
-            msg = f"{sep}\n⚠️ 服务异常退出，已自动重启 ({restart_count}/{max_retries})\n{sep}"
+            msg = f"{sep}\n服务异常退出，已自动重启 ({restart_count}/{max_retries})\n{sep}"
             self._log.appendHtml(
                 f'<span style="color:#ff5555; font-weight:bold; background:#2a1818;">{html.escape(msg)}</span>'
             )
@@ -653,7 +656,7 @@ class ConsolePage(QWidget):
         """恢复运行时清理崩溃标记。"""
         if self._crash_marker_visible:
             self._log.appendHtml(
-                '<span style="color:#4CAF50; font-weight:bold;">✅ 服务已恢复正常运行</span>'
+                '<span style="color:#4CAF50; font-weight:bold;">服务已恢复正常运行</span>'
             )
             self._crash_marker_visible = False
             self._log.moveCursor(QTextCursor.End)
@@ -680,8 +683,8 @@ class ConsolePage(QWidget):
                 self._cmd_input.clear()
                 return
             toast_warning("提示", "服务器未运行，输入 start 可启动", win or self)
-            self._cmd_history.append(cmd)
-            self._save_cmd_history()
+            # v3.05.02: 未执行的命令不进历史（之前会 append + save，
+            # 用户可能误以为命令已执行成功）
             return
         win._server.send_command(cmd)
         self._append_output(f"> {cmd}", "#0DC5D4")

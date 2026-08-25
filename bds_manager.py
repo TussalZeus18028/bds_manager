@@ -134,7 +134,7 @@ def download_zip(remote_ver: str, dl_url: str, expected_sha: str) -> str | None:
     """下载 zip 到 _update_v<ver>.zip，校验 SHA256，返回路径或 None。"""
     zip_path = os.path.join(SCRIPT_DIR, f"_update_v{remote_ver}.zip")
     try:
-        log(f"⬇  下载: {dl_url[:80]}...")
+        log(f"下载: {dl_url[:80]}...")
         req = urllib.request.Request(dl_url, headers={"User-Agent": USER_AGENT})
         with urllib.request.urlopen(req, timeout=60) as resp:
             with open(zip_path, "wb") as f:
@@ -178,7 +178,7 @@ def common_top_dir(names: list[str]) -> str:
 def extract_zip(zip_path: str) -> bool:
     """解压 zip 到 SCRIPT_DIR，跳过用户配置和冲突目录。"""
     try:
-        log(f"📦 解压: {os.path.basename(zip_path)}")
+        log(f"解压: {os.path.basename(zip_path)}")
         with zipfile.ZipFile(zip_path, "r") as zf:
             top = common_top_dir(zf.namelist())
             for name in zf.namelist():
@@ -227,7 +227,7 @@ def launch_main_py() -> None:
         log(f"   main.py 不存在: {main_py}")
         log(f"  请手动从 https://github.com/{GITHUB_REPO_OWNER}/{GITHUB_REPO_NAME}/releases 下载完整 zip 解压")
         sys.exit(1)
-    log(f"🚀 启动主程序: main.py")
+    log(f"启动主程序: main.py")
     if sys.platform == "win32":
         # DETACHED_PROCESS = 0x00000008，让 main.py 完全独立（关闭 bds_manager.py 也不退出）
         DETACHED_PROCESS = 0x00000008
@@ -275,7 +275,7 @@ def ensure_dependencies() -> None:
     if not missing:
         return
 
-    log(f"📦 缺失依赖: {', '.join(missing)}，正在自动安装...")
+    log(f"缺失依赖: {', '.join(missing)}，正在自动安装...")
     import subprocess as _sp
     try:
         _sp.check_call(
@@ -307,7 +307,7 @@ def auto_update_then_launch() -> int:
             if not remote_ver or remote <= local:
                 log(f" 已是最新（远端 {'.'.join(map(str, remote)) or remote_ver}）")
             else:
-                log(f"📥 发现新版本: {'.'.join(map(str, remote))}（当前 {'.'.join(map(str, local))}）")
+                log(f"发现新版本: {'.'.join(map(str, remote))}（当前 {'.'.join(map(str, local))}）")
                 dl_url = data.get("download_url", "")
                 sha256 = data.get("sha256", "")
                 if not dl_url:
@@ -315,7 +315,7 @@ def auto_update_then_launch() -> int:
                 else:
                     zip_path = download_zip(remote_ver, dl_url, sha256)
                     if zip_path and extract_zip(zip_path):
-                        log("🎉 自动更新完成")
+                        log("自动更新完成")
     except Exception as e:
         log(f" 更新检查出错（不影响启动）: {e}")
 

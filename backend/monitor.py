@@ -124,8 +124,14 @@ class SystemResourceMonitor(QObject):
             self._last_net_io = net
             self._last_time = snap.timestamp
 
-            # 磁盘
-            disk = psutil.disk_usage("/")
+            # 磁盘（v3.05.02: 监控服务器目录所在盘，而非程序所在盘——
+            # 此前写死 "/"（程序盘），用户服务器在别的盘时显示与服务器无关）
+            try:
+                from shared.config import get_context
+                disk_path = get_context().server_dir
+            except (RuntimeError, ImportError):
+                disk_path = "/"
+            disk = psutil.disk_usage(disk_path)
             snap.disk_percent = disk.percent
             snap.disk_used_gb = disk.used / (1024**3)
             snap.disk_total_gb = disk.total / (1024**3)

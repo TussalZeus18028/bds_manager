@@ -333,7 +333,7 @@ class PackInfoDialog(QDialog):
         # ── 引擎要求 ──
         min_eng = pack_info.get("min_engine", [])
         if min_eng:
-            _section("⬆ 引擎要求")
+            _section("引擎要求")
             _field("最低引擎版本", ".".join(str(v) for v in min_eng))
 
         fl.addStretch()

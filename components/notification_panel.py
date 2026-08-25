@@ -14,7 +14,7 @@
 """
 
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from PySide6.QtCore import Qt, Signal, QPoint, QRect, QEvent, QPropertyAnimation, QEasingCurve, QSize, QTimer
 from PySide6.QtGui import QPainter, QColor, QFont, QFontMetrics, QPen, QBrush, QIcon, QCursor
@@ -30,8 +30,8 @@ from qfluentwidgets import (
 )
 
 from backend.notifications import (
-    get_all, get_unread_count, mark_all_read, clear_all, parse_action_target,
-    Notification, get_bus,
+    get_all, get_unread_count, mark_all_read, mark_read, clear_all, remove,
+    parse_action_target, Notification, get_bus,
 )
 from shared.theme import theme_palette
 
@@ -42,13 +42,15 @@ def _level_accent(level: str) -> str:
     return theme_palette().level_accent(level)
 
 
+# v3.05.02: 类别图标改用 FluentIcon 矢量图标（此前用 emoji）
 CATEGORY_ICONS = {
-    "server":  "🖥",
-    "backup":  "📦",
-    "update":  "🔄",
-    "player":  "👤",
-    "webhook": "🔗",
-    "system":  "⚙",
+    "server":  FluentIcon.CONNECT,
+    "backup":  FluentIcon.SAVE,
+    "update":  FluentIcon.UPDATE,
+    "player":  FluentIcon.PEOPLE,
+    "webhook": FluentIcon.LINK,
+    "system":  FluentIcon.SETTING,
+    "toast":   FluentIcon.MESSAGE,
 }
 
 
@@ -65,6 +67,19 @@ def _format_time(ts: float) -> str:
         return f"{int(delta // 86400)} 天前"
     else:
         return datetime.fromtimestamp(ts).strftime("%m-%d %H:%M")
+
+
+def _notif_time_bucket(ts: float) -> str:
+    """v3.05.02: 通知时间分桶（今日/昨日/本周/更早）。"""
+    now = datetime.now()
+    dt = datetime.fromtimestamp(ts)
+    if dt.date() == now.date():
+        return "今日"
+    if dt.date() == (now - timedelta(days=1)).date():
+        return "昨日"
+    if (now - dt).days < 7:
+        return "本周"
+    return "更早"
 
 
 # ════════════════════════════════════════════
@@ -152,6 +167,7 @@ class NotificationItemWidget(QFrame):
 
     clicked = Signal(object)  # 单击展开（携带 Notification）
     navigate_requested = Signal(object)  # 双击/按钮跳转（携带 Notification）
+    delete_requested = Signal(object)  # v3.05.02: 点删除按钮（携带 Notification）
 
     def __init__(self, notification: Notification, parent=None):
         super().__init__(parent)
@@ -209,8 +225,22 @@ class NotificationItemWidget(QFrame):
         self.setMinimumHeight(h)
         self.setMaximumHeight(h)
 
+    def _delete_rect(self) -> QRect:
+        """v3.05.02: 删除按钮区域（右上角，hover 时显示）。"""
+        return QRect(self.width() - 28, 6, 20, 20)
+
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
+            # v3.05.02: 删除按钮优先（仅 hover 时可见可点）
+            if self._hovered:
+                try:
+                    click_pos = event.position().toPoint()
+                except (AttributeError, TypeError):
+                    click_pos = event.pos()
+                if self._delete_rect().contains(click_pos):
+                    self.delete_requested.emit(self.n)
+                    event.accept()
+                    return
             # 单击：切换展开
             if self._has_body():
                 self._expanded = not self._expanded
@@ -244,12 +274,10 @@ class NotificationItemWidget(QFrame):
         p.setBrush(QColor(accent_hex))
         p.setPen(Qt.NoPen)
         p.drawRoundedRect(0, 8, 4, rect.height() - 16, 2, 2)
-        # 类别图标
-        icon = CATEGORY_ICONS.get(self.n.category, "•")
-        icon_color = palette.text_secondary
-        p.setPen(QColor(icon_color))
-        p.setFont(self.FONT_ICON)
-        p.drawText(rect.adjusted(14, 8, 0, 0), Qt.AlignLeft | Qt.AlignTop, icon)
+        # 类别图标（v3.05.02: FluentIcon 矢量图标，paintEvent 用 drawPixmap）
+        icon = CATEGORY_ICONS.get(self.n.category, FluentIcon.MESSAGE)
+        icon_pix = icon.icon().pixmap(16, 16)
+        p.drawPixmap(14, 8, 16, 16, icon_pix)
         # 标题（粗体）
         title_color = palette.text
         body_color = palette.text_secondary
@@ -306,6 +334,15 @@ class NotificationItemWidget(QFrame):
             p.setBrush(QColor("#4488ff"))
             p.setPen(Qt.NoPen)
             p.drawEllipse(rect.right() - 14, rect.top() + 10, 6, 6)
+        # v3.05.02: 删除按钮（hover 时显示 ✕ 圆形按钮）
+        if self._hovered:
+            dr = self._delete_rect()
+            p.setBrush(QColor(theme_palette().card_hover))
+            p.setPen(Qt.NoPen)
+            p.drawEllipse(dr)
+            p.setPen(QColor(theme_palette().text_secondary))
+            p.setFont(self.FONT_MARK)
+            p.drawText(dr, Qt.AlignCenter, "✕")
 
 
 # ════════════════════════════════════════════
@@ -329,8 +366,11 @@ class NotificationDrawer(QWidget):
     navigate_requested = Signal(str, dict)  # (page_name, params)
 
     FILTER_ALL = "all"
+    # v3.05.02: 新增 未读/已读 筛选（ftype 为特殊值 unread/read 时按 read 状态过滤）
     FILTER_MAP = {
         "all":     ("全部",     None),
+        "unread":  ("未读",     "unread"),
+        "read":    ("已读",     "read"),
         "error":   ("错误",     "error"),
         "server":  ("服务器",   "server"),
         "backup":  ("备份",     "backup"),
@@ -494,7 +534,12 @@ class NotificationDrawer(QWidget):
         items = get_all()
         if self._filter != self.FILTER_ALL:
             _, ftype = self.FILTER_MAP[self._filter]
-            if ftype in ("error",):
+            # v3.05.02: 未读/已读筛选（ftype 特殊值）
+            if ftype == "unread":
+                items = [n for n in items if not n.read]
+            elif ftype == "read":
+                items = [n for n in items if n.read]
+            elif ftype in ("error",):
                 items = [n for n in items if n.level == "error"]
             else:
                 items = [n for n in items if n.category == ftype]
@@ -517,11 +562,27 @@ class NotificationDrawer(QWidget):
                 empty.setStyleSheet(f"color: {_empty_c}; padding: 40px; font-size: 12px;")
                 self._list_layout.insertWidget(0, empty)
                 return
+            # v3.05.02: 按时间分桶插入（今日/昨日/本周/更早），组内保持最新在前
+            bucket_order = ["今日", "昨日", "本周", "更早"]
+            by_bucket: dict[str, list] = {b: [] for b in bucket_order}
             for n in items:
-                row = NotificationItemWidget(n, self._list_container)
-                row.clicked.connect(lambda _n=n: self._on_item_expanded(_n))
-                row.navigate_requested.connect(self._on_item_navigate)
-                self._list_layout.insertWidget(self._list_layout.count() - 1, row)
+                b = _notif_time_bucket(n.ts)
+                by_bucket.setdefault(b, []).append(n)
+            _sub = theme_palette().text_secondary
+            for b in bucket_order:
+                group = by_bucket.get(b)
+                if not group:
+                    continue
+                head = CaptionLabel(b, self._list_container)
+                head.setStyleSheet(
+                    f"color: {_sub}; padding: 6px 4px 2px 4px; font-size: 11px; font-weight: bold;")
+                self._list_layout.insertWidget(self._list_layout.count() - 1, head)
+                for n in group:
+                    row = NotificationItemWidget(n, self._list_container)
+                    row.clicked.connect(lambda _n=n: self._on_item_expanded(_n))
+                    row.navigate_requested.connect(self._on_item_navigate)
+                    row.delete_requested.connect(self._on_item_delete)
+                    self._list_layout.insertWidget(self._list_layout.count() - 1, row)
             return
         # v3.03.00: 增量追加 — 只插入 newest（在"全部"过滤下）
         new_items = [n for n in items if n.id != "n_placeholder"]
@@ -538,12 +599,30 @@ class NotificationDrawer(QWidget):
             row = NotificationItemWidget(new_items[0], self._list_container)
             row.clicked.connect(lambda _n=new_items[0]: self._on_item_expanded(_n))
             row.navigate_requested.connect(self._on_item_navigate)
+            row.delete_requested.connect(self._on_item_delete)
             self._list_layout.insertWidget(0, row)
 
     # ---------- 信号处理 ----------
     def _on_notification_event(self, n):
-        """通知添加 / mark_all_read / clear_all 时刷新列表。"""
-        self.refresh()
+        """通知添加 / 已读变更 / 清空时刷新列表。
+
+        v3.05.02: None 表示批量变更（mark_read/mark_all_read/clear_all/remove），
+        全量重建（否则已读蓝点不会消失）；
+        非 None 表示新增单条，增量追加即可。
+        """
+        if not self.isVisible():
+            return  # 抽屉未打开，打开时 show_drawer() 会 refresh()
+        if n is None:
+            self.refresh(force=True)
+        else:
+            self.refresh()
+
+    def _on_item_delete(self, n: Notification):
+        """v3.05.02: 删除单条通知。"""
+        try:
+            remove(n.id)
+        except (ImportError, AttributeError, RuntimeError):
+            pass
 
     def _on_unread_changed(self, n):
         """未读数变化由主窗口的 bell 处理，这里不用管。"""
@@ -562,12 +641,11 @@ class NotificationDrawer(QWidget):
 
     def _on_item_expanded(self, n: Notification):
         """单击通知：标记已读 + 关闭抽屉（如果有跳转意图）。"""
-        # 标记单条已读（如果未读）
+        # 标记单条已读（如果未读）—— v3.05.02: 用公共 mark_read（修复存储键不匹配 + 广播）
         if not n.read:
             try:
-                from backend.notifications import _STORE
-                _STORE.mark_read(n.id)
-            except (AttributeError, RuntimeError):
+                mark_read(n.id)
+            except (RuntimeError, AttributeError):
                 pass  # 通知存储未就绪
             n.read = True
         # v3.02.01: 单击不关闭抽屉，只展开详情；用户继续浏览其他通知
@@ -581,8 +659,7 @@ class NotificationDrawer(QWidget):
         # 标记已读
         if not n.read:
             try:
-                from backend.notifications import _STORE
-                _STORE.mark_read(n.id)
+                mark_read(n.id)
                 n.read = True
             except (ImportError, AttributeError, RuntimeError):
                 pass

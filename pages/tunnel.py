@@ -258,7 +258,7 @@ class TunnelPage(QWidget):
         try:
             with open(cfg, "r", encoding="utf-8") as f:
                 self._cfg_edit.setPlainText(f.read())
-            self._append_log(f"📂 已加载: {cfg}", "#888")
+            self._append_log(f"已加载: {cfg}", "#888")
             toast_success("已加载", cfg, self.window())
         except Exception as e:
             toast_error("加载失败", str(e), self.window())
@@ -294,7 +294,7 @@ class TunnelPage(QWidget):
             "# remote_port = 外网端口\n"
         )
         w = MessageBox("加载模板",
-            "⚠ 将清除并替换当前所有编辑内容，是否继续？\n\n"
+            "将清除并替换当前所有编辑内容，是否继续？\n\n"
             "提示：请前往 https://www.chmlfrp.net/ 创建隧道。",
             self.window())
         w.yesSignal.connect(lambda: self._cfg_edit.setPlainText(template))

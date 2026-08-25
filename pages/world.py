@@ -239,21 +239,22 @@ class WorldPage(QWidget):
         layout.addWidget(list_card)
         layout.addStretch()
 
-        # 数据加载 + 定时器延迟到 showEvent（启动加速）
+        # v3.05.02: 自动备份 timer 在构造时即启动（不再依赖世界页被显示）。
+        # 之前 timer 在 showEvent 创建 → 用户从不打开"世界"页则自动备份永不触发。
+        self._auto_backup_timer = QTimer(self)
+        self._auto_backup_timer.timeout.connect(self._on_auto_backup_tick)
+        self._schedule_auto_backup()
+        # 数据加载 + 刷新定时器延迟到 showEvent（启动加速）
 
     def showEvent(self, event):
         """首次显示时再做磁盘扫描和数据加载（启动加速）。"""
         if not self._initialized:
             self._initialized = True
-            # 定时刷新
+            # 定时刷新（仅页面可见时刷新列表）
             self._refresh_timer = QTimer(self)
             self._refresh_timer.setInterval(15000)
             self._refresh_timer.timeout.connect(self._refresh_list)
             self._refresh_timer.start()
-            # 自动备份
-            self._auto_backup_timer = QTimer(self)
-            self._auto_backup_timer.timeout.connect(self._on_auto_backup_tick)
-            self._schedule_auto_backup()
             # 数据加载
             self._refresh_list()
             self._refresh_world_info()
@@ -282,11 +283,12 @@ class WorldPage(QWidget):
             placeholder = QTreeWidgetItem(["(无法读取备份，可能已损坏)", ""])
             self._preview_tree.addTopLevelItem(placeholder)
             return
-        # 根
+        # 根（v3.05.02: FluentIcon 图标替代 emoji）
         root_item = QTreeWidgetItem([
-            f"📦 {tree_data['name']}",
+            tree_data['name'],
             f"{tree_data['total_files']} 个文件 · {_format_size(tree_data['total_size'])}",
         ])
+        root_item.setIcon(0, FluentIcon.SAVE.icon())
         root_item.setExpanded(True)
         self._preview_tree.addTopLevelItem(root_item)
         # 递归填充
@@ -301,11 +303,13 @@ class WorldPage(QWidget):
 
     def _fill_tree(self, parent_item: QTreeWidgetItem, node: dict):
         for name, child in node.get("children", {}).items():
-            dir_item = QTreeWidgetItem([f"📁 {child['name']}/", ""])
+            dir_item = QTreeWidgetItem([f"{child['name']}/", ""])
+            dir_item.setIcon(0, FluentIcon.FOLDER.icon())  # v3.05.02: 替代 emoji
             parent_item.addChild(dir_item)
             self._fill_tree(dir_item, child)
         for f in node.get("files", []):
-            file_item = QTreeWidgetItem([f"📄 {f['name']}", _format_size(f.get("size", 0))])
+            file_item = QTreeWidgetItem([f['name'], _format_size(f.get("size", 0))])
+            file_item.setIcon(0, FluentIcon.DOCUMENT.icon())  # v3.05.02: 替代 emoji
             parent_item.addChild(file_item)
 
     # ---------- 备份列表 ----------
@@ -445,6 +449,14 @@ class WorldPage(QWidget):
         level, world_path = active_world
         os.makedirs(ctx.backup_dir, exist_ok=True)
 
+        # v3.05.02: 先做前置检查，再改 UI 状态。
+        # 之前检查在 setEnabled/进度条之后 → 提前 return 时按钮永久禁用、进度条卡 busy。
+        win = self.window()
+        server = getattr(win, "_server", None)
+        if server is not None and server.process_alive and not server.is_running:
+            toast_warning("服务器正在停止", "请等待服务器完全退出后再备份。", self.window())
+            return
+
         self._backup_btn.setEnabled(False)
         self._restore_btn.setEnabled(False)
         self._progress.setVisible(True)
@@ -458,11 +470,6 @@ class WorldPage(QWidget):
         except (ImportError, AttributeError):
             bds_ver = "unknown"
 
-        win = self.window()
-        server = getattr(win, "_server", None)
-        if server is not None and server.process_alive and not server.is_running:
-            toast_warning("服务器正在停止", "请等待服务器完全退出后再备份。", self.window())
-            return
         online = bool(
             config_mgr.get("online_backup", True)
             and server is not None
@@ -477,6 +484,12 @@ class WorldPage(QWidget):
         self._worker.progress.connect(self._on_backup_progress)
         self._worker.finished.connect(self._on_backup_done)
         self._worker.start()
+        # v3.05.02: 接入仪表盘"后台任务"卡（此前 add_task 无任何调用方，卡片永远显示"(无)"）
+        try:
+            if hasattr(win, "dashboard_page") and hasattr(win.dashboard_page, "tasks_card"):
+                win.dashboard_page.tasks_card.add_task(f"备份: {level}")
+        except (AttributeError, RuntimeError):
+            pass
 
     def _on_backup_progress(self, msg: str):
         self._status_label.setText(msg)
@@ -485,6 +498,14 @@ class WorldPage(QWidget):
         self._backup_btn.setEnabled(True)
         self._progress.setVisible(False)
         self._progress.setRange(0, 100)
+        # v3.05.02: 从后台任务卡移除对应任务
+        try:
+            win = self.window()
+            if hasattr(win, "dashboard_page") and hasattr(win.dashboard_page, "tasks_card"):
+                win.dashboard_page.tasks_card.remove_all_with(
+                    lambda v: str(v.get("name", "")).startswith("备份"))
+        except (AttributeError, RuntimeError):
+            pass
         if success:
             toast_success("备份完成", message, self.window())
             send_webhook("backup", "备份完成", message)
@@ -556,7 +577,10 @@ class WorldPage(QWidget):
         level, world_path = active_world
         backup_path = os.path.join(ctx.backup_dir, filename)
 
-        info = toast_info("还原中", f"正在还原 {filename} ...", self.window(), duration=-1)
+        # v3.05.02: duration 用 None（默认时长）—— 之前 -1 会被 original 模式
+        # `duration or _get_duration(...)` 当成 truthy 传入 QTimer.singleShot(-1)
+        # → toast 立即 dismiss，"还原中"提示一闪而过。
+        info = toast_info("还原中", f"正在还原 {filename} ...", self.window(), duration=None)
 
         self._restore_worker = RestoreWorker(
             level, world_path, backup_path, parent=self
@@ -565,12 +589,27 @@ class WorldPage(QWidget):
             lambda s, m: self._on_restore_done(s, m, info)
         )
         self._restore_worker.start()
+        # v3.05.02: 接入仪表盘后台任务卡
+        try:
+            win2 = self.window()
+            if hasattr(win2, "dashboard_page") and hasattr(win2.dashboard_page, "tasks_card"):
+                win2.dashboard_page.tasks_card.add_task(f"还原: {filename}")
+        except (AttributeError, RuntimeError):
+            pass
 
     def _on_restore_done(self, success: bool, message: str, info_bar):
         try:
             info_bar.close()
         except (AttributeError, RuntimeError):
             pass  # InfoBar 可能已被销毁
+        # v3.05.02: 从后台任务卡移除还原任务
+        try:
+            win = self.window()
+            if hasattr(win, "dashboard_page") and hasattr(win.dashboard_page, "tasks_card"):
+                win.dashboard_page.tasks_card.remove_all_with(
+                    lambda v: str(v.get("name", "")).startswith("还原"))
+        except (AttributeError, RuntimeError):
+            pass
         if success:
             toast_success("还原完成", message, self.window())
             try:
@@ -607,11 +646,22 @@ class WorldPage(QWidget):
         self._refresh_list()
 
     # ---------- 自动备份 ----------
+    # v3.05.02: 记录下次自动备份时间戳，供仪表盘倒计时对齐（之前仪表盘
+    # 假设"从整点开始"计算，与实际 timer 起点不一致 → 显示误导）。
+    _auto_backup_next: float = 0.0
+
     def _schedule_auto_backup(self):
         interval_min = config_mgr.get("backup_interval", 60)
         self._auto_backup_timer.start(interval_min * 60 * 1000)
+        self._auto_backup_next = time.time() + interval_min * 60
+
+    def apply_backup_interval(self):
+        """v3.05.02: 设置页修改 backup_interval 后调用，即时重启 timer（此前要重启应用才生效）。"""
+        self._schedule_auto_backup()
 
     def _on_auto_backup_tick(self):
+        # 周期性 timer 触发即新一轮开始，同步下次时间戳
+        self._auto_backup_next = time.time() + config_mgr.get("backup_interval", 60) * 60
         if self._auto_toggle.isChecked():
             self._start_backup("auto_")
 

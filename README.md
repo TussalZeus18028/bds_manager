@@ -2,7 +2,7 @@
 
 Minecraft Bedrock Dedicated Server 全功能管理器 —— 基于 **PySide6 + QFluentWidgets Fluent Design**。
 
-[![Version](https://img.shields.io/badge/version-3.05.01-blue)](https://github.com/TussalZeus18028/bds_manager/releases)
+[![Version](https://img.shields.io/badge/version-3.05.02-blue)](https://github.com/TussalZeus18028/bds_manager/releases)
 [![Python](https://img.shields.io/badge/python-3.10+-green)](https://www.python.org/)
 [![License](https://img.shields.io/badge/license-MIT-orange)](LICENSE)
 
@@ -12,15 +12,17 @@ Minecraft Bedrock Dedicated Server 全功能管理器 —— 基于 **PySide6 + 
 
 | 页面 | 功能 |
 |------|------|
-| 仪表盘 | CPU/内存/磁盘实时监控、服务器启停、RTT 延迟检测、崩溃自愈重启 |
+| 仪表盘 | CPU/内存/磁盘/**网络速度**实时监控与曲线、服务器启停、RTT 延迟检测、崩溃自愈重启、后台任务卡 |
 | 控制台 | 彩色日志、命令交互（Tab 补全）、命令预设下拉、命令历史持久化、过滤计数 |
-| 世界 | 备份列表、手动/自动备份、一键还原（失败回滚）、备份删除、存档大小计算 |
+| 世界 | 备份列表、手动/自动备份（**全局定时**）、一键还原（失败回滚）、备份删除、存档大小计算 |
 | 资源包 | 资源包/行为包分 Tab 管理，manifest.json 扫描、注册到世界 JSON、详情对话框 |
-| 配置 | server.properties 可视化编辑（28 项）、属��预设、白名单/权限管理、重载/重置、端口检测 |
+| 配置 | server.properties 可视化编辑（28 项，**保留注释**）、属性预设、白名单/权限管理、重载/重置、端口检测 |
 | 升级 | BDS 版本列表 + HEAD 扫描、分支颜色标识、下载/安装分离、lip 一键 LL 部署 |
 | 隧道 | frpc 启动/停止/日志，frpc.ini 编辑、状态指示、模板加载 |
 | 设置 | 深浅主题/自定义主色、Toast 通知、Webhook、快捷键自定义、高 DPI、双服务器路径 |
 | 关于 | 版本信息 + 相关链接 |
+| 通知中心 | 铃铛 + 抽屉，**单条删除/未读筛选/时间分组**，点击跳转，已读同步 |
+| 命令面板 | Ctrl+K 全局动作搜索 |
 
 ## 快速开始
 
@@ -84,6 +86,32 @@ Manager_Fluent/
     ├── errors.py            # 错误处理
     └── utils.py             # 工具函数
 ```
+
+## v3.05.02 (2026-08-25)
+
+### 修复
+- 通知中心单条"已读"永久失效（存储键不匹配）+ 已读蓝点残留
+- 备份页"服务器正在停止"时按钮卡死、进度条空转
+- 还原中提示一闪而过
+- **自动备份依赖世界页显示**：从不打开"世界"页则永不备份 → 全局定时启动
+- 仪表盘备份倒计时与实际定时器不同步
+- 磁盘监控显示程序盘而非服务器所在盘
+- 配置保存丢弃 server.properties 全部注释 → 行级保留
+- 日志 gzip 轮转链断裂（backupCount 失效，旧 .gz 永不轮换）
+- 服务器未运行时的命令误入历史
+- 版本列表"稳定版/预览版"列宽不足被截断
+- 移除 `bds_manager.py` shim 的全局 SSL 验证绕过（安全）
+
+### 增强
+- 仪表盘新增**网络速度双线曲线**（上行/下行）
+- 通知中心：**单条删除**（hover ✕）、**未读/已读筛选**、**时间分组**（今日/昨日/本周/更早）
+- 备份间隔修改**即时生效**（无需重启）
+- 闪屏跟随主题主色 + auto 主题按系统判断
+- 全项目 emoji 替换为 **QFluentWidgets 矢量图标**（FluentIcon）
+
+### 其他
+- 测试防抖 timer 泄漏修复 + 清理已污染配置
+- 归档脚本等 CLI 输出改为纯文本标记（修复 Windows GBK 控制台编码错误）
 
 ## v3.05.01 (2026-08-25)
 

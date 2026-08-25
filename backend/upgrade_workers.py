@@ -294,7 +294,15 @@ class InstallWorker(QThread):
                     if any(rel.lower().startswith(s) for s in skip): continue
                     target = os.path.join(self.server_dir, rel)
                     tr = os.path.realpath(target)
-                    if tr != server_real and not tr.startswith(server_real + os.sep): continue
+                    # v3.05.02: Windows 路径大小写不敏感——zip 内路径大小写与磁盘
+                    # 实际不一致时 realpath 不规范化大小写，startswith 会误跳过；
+                    # 统一小写后比较（Linux 保持大小写敏感）。
+                    if os.name == "nt":
+                        tr_c, sr_c = tr.lower(), server_real.lower()
+                    else:
+                        tr_c, sr_c = tr, server_real
+                    if tr_c != sr_c and not tr_c.startswith(sr_c + os.sep):
+                        continue
                     os.makedirs(os.path.dirname(target), exist_ok=True)
                     with open(target, "wb") as dst:
                         dst.write(zf.read(orig))

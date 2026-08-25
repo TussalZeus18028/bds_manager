@@ -812,12 +812,6 @@ class BDSFluentWindow(FluentWindow):
         dlg = CommandPaletteDialog(cmds, self)
         dlg.exec()
 
-    def keyPressEvent(self, event):
-        if event.modifiers() == (Qt.ControlModifier | Qt.ShiftModifier) and event.key() == Qt.Key_R:
-            self._restart_app()
-            return
-        super().keyPressEvent(event)
-
     def _restart_app(self):
         from shared.toast import toast_info
         config_mgr.save()
@@ -1039,9 +1033,20 @@ def main():
     # 防止防抖 timer 未触发就退出导致配置丢失
     app.aboutToQuit.connect(config_mgr.save_now)
 
-    # 2. 闪屏（根据配置主题选择深/浅色）
+    # 2. 闪屏（v3.05.02: 跟随配置主题 + 主色；auto 时按系统实际主题判断，
+    #    之前写死 is_dark=(theme=="dark")，auto 永远走浅色且主色不跟随）
     theme_raw = config_mgr.get("theme", "light")
-    splash = AnimatedSplashScreen(__version__, is_dark=(theme_raw == "dark"))
+    splash_dark = theme_raw == "dark"
+    if theme_raw == "auto":
+        try:
+            splash_dark = (app.styleHints().colorScheme() == Qt.ColorScheme.Dark)
+        except (RuntimeError, AttributeError):
+            splash_dark = False
+    splash = AnimatedSplashScreen(
+        __version__,
+        is_dark=splash_dark,
+        accent=config_mgr.get("theme_color", "#0DC5D4"),
+    )
     splash.show()
     app.processEvents()
 

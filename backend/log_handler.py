@@ -16,32 +16,33 @@ from logging.handlers import RotatingFileHandler, TimedRotatingFileHandler
 
 
 class GzipRotatingFileHandler(RotatingFileHandler):
-    """按大小轮转，旧文件自动 gzip 压缩。"""
+    """按大小轮转，轮转文件自动 gzip 压缩。
+
+    v3.05.02 重构（修复压缩链断裂）：
+    - 旧实现：父类轮转 `.1/.2` 中间态后再压缩成 `.gz`，父类从此"看不见"这些文件，
+      导致 `.2.gz~.5.gz` 永远停留在首次到达该编号的旧内容，backupCount 形同虚设。
+    - 新实现：namer 让所有轮转名直接带 `.gz`（父类以 `.gz` 后缀管理整条链：
+      超龄清理、`.1.gz → .2.gz` 移动均由父类完成），rotator 在 rotate 时直接 gzip。
+    """
 
     def __init__(self, filename, mode="a", maxBytes=0, backupCount=0,
                  encoding=None, delay=False, errors=None):
         super().__init__(filename, mode, maxBytes, backupCount, encoding, delay, errors)
-        self._namer_gzip = None  # 标记是否已重命名
+        # namer：轮转目标名统一加 .gz
+        self.namer = lambda name: name + ".gz"
+        # rotator：父类 rotate(source, dest) 时 gzip 压缩 source 到 dest
+        self.rotator = self._gzip_rotate
 
-    def doRollover(self):
-        """重写：先调用父类轮转，再把轮出的 .1 .2 文件 gzip 压缩。"""
-        super().doRollover()
+    @staticmethod
+    def _gzip_rotate(source, dest):
         try:
-            base_path = self.baseFilename
-            # 把 backups/bds_manager.log.X 压缩为 backups/bds_manager.log.X.gz
-            for i in range(1, self.backupCount + 1):
-                s = f"{base_path}.{i}"
-                if os.path.exists(s) and not s.endswith(".gz"):
-                    gz = s + ".gz"
-                    with open(s, "rb") as f_in, gzip.open(gz, "wb", compresslevel=6) as f_out:
-                        shutil.copyfileobj(f_in, f_out)
-                    try:
-                        os.remove(s)
-                    except OSError:
-                        pass
-        except Exception as e:
-            # 压缩失败不应阻断日志
-            logging.getLogger("bds_manager").debug("日志压缩失败: %s", e)
+            with open(source, "rb") as f_in:
+                with gzip.open(dest, "wb", compresslevel=6) as f_out:
+                    shutil.copyfileobj(f_in, f_out)
+            os.remove(source)
+        except OSError:
+            # 压缩失败不应阻断日志（保留未压缩源文件，下次轮转父类会再处理）
+            pass
 
 
 def make_rotating_file_handler(

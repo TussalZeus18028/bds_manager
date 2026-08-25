@@ -46,14 +46,20 @@ class ToastNotification(QWidget):
 
         self.setFixedWidth(320)
 
-        icon_text = {"error": "\u274c", "warning": "\u26a0\ufe0f", "success": "\u2705", "info": "\u2139\ufe0f"}.get(level, "\u2139\ufe0f")
+        # v3.05.02: 等级图标改用 FluentIcon 矢量图标（此前用 emoji 文本）
+        from qfluentwidgets import FluentIcon as _FI
+        _level_icon = {
+            "error": _FI.CANCEL, "warning": _FI.MEGAPHONE,
+            "success": _FI.ACCEPT, "info": _FI.INFO,
+        }.get(level, _FI.INFO)
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(12, 10, 12, 10)
         layout.setSpacing(10)
 
-        icon_label = QLabel(icon_text)
-        icon_label.setStyleSheet("font-size:18px; background:transparent;")
+        icon_label = QLabel()
+        icon_label.setPixmap(_level_icon.icon().pixmap(18, 18))
+        icon_label.setStyleSheet("background:transparent;")
         layout.addWidget(icon_label, 0, Qt.AlignmentFlag.AlignTop)
 
         text_layout = QVBoxLayout()

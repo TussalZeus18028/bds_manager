@@ -17,7 +17,6 @@ import queue
 import threading
 from shared.config import config_mgr
 from shared.retry import retry
-from shared.errors import NetworkError
 
 logger = logging.getLogger("bds_manager")
 
@@ -78,8 +77,9 @@ def _post_webhook(url: str, payload: dict, timeout: int = 8):
         headers={"Content-Type": "application/json", "User-Agent": "BDS-Manager/3.1"},
     )
     with urllib.request.urlopen(req, timeout=timeout) as resp:
-        if resp.status >= 400:
-            raise NetworkError(f"Webhook HTTP {resp.status}", code="E_WEBHOOK_HTTP")
+        # v3.05.02: urllib 对 4xx/5xx 响应会直接抛 HTTPError（由 retry_on 白名单
+        # 捕获重试），能走到这里的一定是 2xx/3xx，无需再检查 resp.status。
+        pass
 
 
 def _deliver_webhook(event: str, url: str, payload: dict):

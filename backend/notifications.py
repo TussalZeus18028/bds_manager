@@ -150,17 +150,23 @@ class _Store:
         if len(self._items) > MAX_NOTIFICATIONS:
             self._items = self._items[:MAX_NOTIFICATIONS]
 
-    def mark_read(self, uuid: str):
-        """v3.02.02: 标记单条通知已读（线程安全）。"""
+    def mark_read(self, uuid: str) -> bool:
+        """v3.02.02: 标记单条通知已读（线程安全）。
+
+        v3.05.02 修复: 存储键是 "id"（dataclass to_dict → asdict），
+        之前查 "uuid" 永远匹配不上 → 单条已读永久失效。
+        兼容旧数据: 同时匹配 "id" 与遗留的 "uuid" 键。
+        """
         with self._lock:
             self._load()
             changed = False
             for n in self._items:
-                if n.get("uuid") == uuid and not n.get("read"):
+                if (n.get("id") == uuid or n.get("uuid") == uuid) and not n.get("read"):
                     n["read"] = True
                     changed = True
             if changed:
                 self._save()
+            return changed
 
     def add_raw(self, level: str, category: str, title: str, body: str = "",
                  action_target: str = "") -> Notification:
@@ -209,6 +215,20 @@ class _Store:
         with self._lock:
             self._items = []
             self._save()
+
+    def remove(self, uuid: str) -> bool:
+        """v3.05.02: 删除单条通知。返回是否删除成功。"""
+        with self._lock:
+            self._load()
+            before = len(self._items)
+            self._items = [
+                n for n in self._items
+                if n.get("id") != uuid and n.get("uuid") != uuid
+            ]
+            changed = len(self._items) != before
+            if changed:
+                self._save()
+            return changed
 
 
 _STORE = _Store()
@@ -262,6 +282,22 @@ def get_unread_count() -> int:
     return _STORE.get_unread_count()
 
 
+def mark_read(uuid: str):
+    """v3.05.02: 标记单条已读 + 广播信号（与 mark_all_read 一致）。
+
+    之前单条已读只能通过 _STORE 内部调用且不广播，
+    导致铃铛未读数不更新、列表不刷新。
+    """
+    if _STORE.mark_read(uuid):
+        try:
+            bus = get_bus()
+            # None 触发 UI 全量重建（notification_added 槽应能处理 None）
+            bus.notification_added.emit(None)
+            bus.unread_count_changed.emit(_STORE.get_unread_count())
+        except RuntimeError:
+            pass
+
+
 def mark_all_read():
     """标记全部已读 + 广播信号。"""
     _STORE.mark_all_read()
@@ -272,6 +308,17 @@ def mark_all_read():
         bus.unread_count_changed.emit(0)
     except RuntimeError:
         pass
+
+
+def remove(uuid: str):
+    """v3.05.02: 删除单条通知 + 广播信号。"""
+    if _STORE.remove(uuid):
+        try:
+            bus = get_bus()
+            bus.notification_added.emit(None)
+            bus.unread_count_changed.emit(_STORE.get_unread_count())
+        except RuntimeError:
+            pass
 
 
 def clear_all():

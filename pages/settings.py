@@ -494,7 +494,8 @@ class SettingsPage(QWidget):
 
         # ── 备份 ──
         s._backup_toggle.toggled.connect(lambda v: _sa("auto_backup_enabled", v))
-        s._backup_interval.valueChanged.connect(lambda v: _sa("backup_interval", v))
+        s._backup_interval.valueChanged.connect(
+            lambda v: (_sa("backup_interval", v), self._restart_auto_backup_timer()))
         s._backup_keep.valueChanged.connect(lambda v: _sa("backup_keep", v))
         s._online_backup.toggled.connect(lambda v: _sa("online_backup", v))
 
@@ -739,6 +740,16 @@ class SettingsPage(QWidget):
         """v3.02.02: 静默保存配置（不弹 toast）。"""
         config_mgr.set(key, value)
         config_mgr.save()
+
+    def _restart_auto_backup_timer(self):
+        """v3.05.02: 备份间隔变更后即时重启世界页的自动备份 timer（此前需重启应用）。"""
+        try:
+            win = self._main_window if hasattr(self, "_main_window") else self.window()
+            wp = getattr(win, "world_page", None)
+            if wp is not None and hasattr(wp, "apply_backup_interval"):
+                wp.apply_backup_interval()
+        except (AttributeError, RuntimeError):
+            pass
 
     def _save_wh(self, event: str, checked: bool):
         """v3.02.02: 静默保存 webhook 事件列表。"""

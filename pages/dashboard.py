@@ -86,6 +86,9 @@ class ResourceCurveWidget(QWidget):
         self._max = max_value
         self._unit = unit
         self._values: deque = deque(maxlen=60)
+        self._values2: deque | None = None   # v3.05.02: 双序列模式（网络下行）
+        self._color2: str = "#FFA726"
+        self._unit2: str = ""
         self._current_text = "—"
         self.setMinimumHeight(80)
         self.setMinimumWidth(160)
@@ -94,7 +97,31 @@ class ResourceCurveWidget(QWidget):
     def set_data(self, current: float, values: deque):
         self._current_text = f"{current:.1f}{self._unit}"
         self._values = values
+        self._values2 = None  # v3.05.02: 切回单序列
         self.update()
+
+    def set_data2(self, current_a: float, values_a: deque,
+                  current_b: float, values_b: deque,
+                  color_b: str = "#FFA726", unit_b: str = ""):
+        """v3.05.02: 双序列模式（如网络上行/下行）。
+
+        A 序列用本曲线主色，B 序列用 color_b；纵轴按两组历史峰值自适应
+        （网络速率无固定百分比上限）。
+        """
+        self._current_text = f"↑ {current_a:.0f}  ↓ {current_b:.0f}{unit_b}"
+        self._values = values_a
+        self._values2 = values_b
+        self._color2 = color_b
+        self._unit2 = unit_b
+        self.update()
+
+    def _series_max(self) -> float:
+        """双序列模式的纵轴上限：历史峰值 * 1.2，至少 256。"""
+        peak = 0.0
+        for seq in (self._values, self._values2):
+            if seq:
+                peak = max(peak, max(seq))
+        return max(peak * 1.2, 256.0)
 
     def paintEvent(self, event):
         p = QPainter(self)
@@ -118,7 +145,23 @@ class ResourceCurveWidget(QWidget):
             y = int(h * i / 4)
             p.drawLine(0, y, w, y)
         # 折线
-        if not self._values:
+        from PySide6.QtGui import QPolygonF
+        if self._values2 is not None:
+            # v3.05.02: 双序列模式（网络）——两条折线，无面积，纵轴自适应
+            ymax = self._series_max()
+            for seq, color in ((self._values, self._color), (self._values2, self._color2)):
+                if not seq:
+                    continue
+                n = len(seq)
+                pts = []
+                for i, v in enumerate(seq):
+                    x = int(w * i / max(n - 1, 1))
+                    y = h - int(h * min(v / ymax, 1.0))
+                    pts.append(QPointF(x, y))
+                p.setBrush(Qt.NoBrush)
+                p.setPen(QPen(QColor(color), 2))
+                p.drawPolyline(QPolygonF(pts))
+        elif not self._values:
             # 空状态
             p.setPen(QPen(empty_c, 1))
             p.drawText(self.rect(), Qt.AlignCenter, "(等待数据...)")
@@ -138,7 +181,6 @@ class ResourceCurveWidget(QWidget):
             poly = points + [QPointF(w, h), QPointF(0, h)]
             p.setBrush(QBrush(grad))
             p.setPen(Qt.NoPen)
-            from PySide6.QtGui import QPolygonF
             p.drawPolygon(QPolygonF(poly))
             # 折线
             p.setBrush(Qt.NoBrush)
@@ -258,18 +300,23 @@ class StatusCard(CardWidget):
             self._uptime_label.setText("运行: —")
             self._stale_label.setVisible(False)
 
-        # 备份倒计时
+        # 备份倒计时（v3.05.02: 与 WorldPage 的真实 timer 同步，不再假设从整点开始）
         from shared.config import config_mgr
         if config_mgr.get("auto_backup_enabled", True):
-            interval = config_mgr.get("backup_interval", 60)  # 分钟
-            # 用当前分钟数估算剩下时间（假设从整点开始计数）
-            import datetime
-            now = datetime.datetime.now()
-            elapsed_min = now.minute + now.hour * 60
-            next_backup = ((elapsed_min // interval) + 1) * interval
-            remain = next_backup - elapsed_min
-            self._backup_countdown.setText(f"下次备份: {remain} 分钟后")
-            self._backup_countdown.setVisible(True)
+            try:
+                win = self.window()
+                wp = getattr(win, "world_page", None)
+                next_ts = getattr(wp, "_auto_backup_next", 0.0) if wp is not None else 0.0
+            except (RuntimeError, AttributeError):
+                next_ts = 0.0
+            if next_ts > 0:
+                remain = max(0, int(next_ts - time.time()))
+                mins, secs = divmod(remain, 60)
+                self._backup_countdown.setText(f"下次备份: {mins} 分 {secs} 秒")
+                self._backup_countdown.setVisible(True)
+            else:
+                # 世界页未显示（timer 未启动）→ 自动备份实际不会触发，不显示倒计时
+                self._backup_countdown.setVisible(False)
         else:
             self._backup_countdown.setVisible(False)
 
@@ -350,11 +397,41 @@ class ResourceCard(CardWidget):
             setattr(self, f"_{key}_val", val)
             setattr(self, f"_{key}_bar", bar)
             setattr(self, f"_{key}_curve", curve)
+        # v3.05.02: 网络速度（双线曲线：上行主色 / 下行橙）—— 数据早已采集，此前未展示
+        self._net_curve = ResourceCurveWidget(label="网络", color="#0DC5D4", parent=self)
+        net_row = QHBoxLayout()
+        self._net_val = CaptionLabel("—", self)
+        self._net_val.setMinimumWidth(120)
+        self._net_val.setStyleSheet("font-weight: bold;")
+        net_row.addWidget(self._net_curve, 1)
+        net_row.addWidget(self._net_val, 0, Qt.AlignBottom)
+        layout.addLayout(net_row)
 
     def update_stats(self, snap: SystemStatsSnapshot):
         self._set("cpu", snap.cpu_percent)
         self._set("mem", snap.mem_percent)
         self._set("disk", snap.disk_percent)
+        self._update_net(snap)
+
+    def _update_net(self, snap: SystemStatsSnapshot):
+        """v3.05.02: 网络上行/下行双线曲线（KB/s，纵轴自适应）。"""
+        if self._monitor is None:
+            return
+        h = self._monitor.history
+        send, recv = h.get("net_send"), h.get("net_recv")
+        if send is None or recv is None:
+            return
+        try:
+            self._net_curve.set_data2(
+                snap.net_sent_kb_per_sec, send,
+                snap.net_recv_kb_per_sec, recv,
+                color_b="#FFA726", unit_b=" KB/s",
+            )
+            self._net_val.setText(
+                f"↑ {snap.net_sent_kb_per_sec:.0f}  ↓ {snap.net_recv_kb_per_sec:.0f} KB/s"
+            )
+        except (AttributeError, TypeError):
+            pass
 
     def _set(self, key: str, value: float):
         val = getattr(self, f"_{key}_val", None)
@@ -548,7 +625,7 @@ class BackgroundTasksCard(CardWidget):
             lines = []
             for v in self._tasks.values():
                 elapsed = int(time.time() - v["started_at"])
-                lines.append(f"⏳ {v['name']}（{elapsed}s）")
+                lines.append(f"{v['name']}（{elapsed}s）")
             self._list_label.setText("\n".join(lines))
             self._list_label.setStyleSheet(f"color: {main_color};")
 

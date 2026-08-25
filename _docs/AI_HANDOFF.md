@@ -202,7 +202,10 @@ cd "E:/Launcher/服务器/Bedrock/Manager_Fluent"
 ### 发布
 
 ```bash
-# release.py 会: 打包 → 更新 version.json → git push → 推 tag → GitHub Release + 上传 zip
+# 1) 打包 + 回填 version.json（.DSH 工作区工具，不入库）
+"C:\Users\SudoKernel\AppData\Local\Programs\Python\Python312\python.exe" .DSH/pack_release.py
+
+# 2) release.py 会: 打包 → 更新 version.json → git push → 推 tag → GitHub Release + 上传 zip
 "C:\Users\SudoKernel\AppData\Local\Programs\Python\Python312\python.exe" release.py
 ```
 
@@ -210,6 +213,12 @@ cd "E:/Launcher/服务器/Bedrock/Manager_Fluent"
 ```bash
 "C:\Program Files\Git\bin\git.exe" push "https://TussalZeus18028:ghp_<你的_GitHub_Token>@github.com/TussalZeus18028/bds_manager.git"
 ```
+
+### `.DSH/` 工作区目录
+
+- 位置：项目根目录 `.DSH/`（与 `.workbuddy/` 平级，已加入 .gitignore 不入库）
+- 用途：DSH 会话产生的临时/可复用脚本放这里，避免散落在系统 Temp
+- 现有工具：`.DSH/pack_release.py` — 发布打包（zip + SHA256 + version.json 回填），含 archives.rar 排除修复
 
 ---
 
@@ -238,3 +247,72 @@ cd "E:/Launcher/服务器/Bedrock/Manager_Fluent"
 | save() 并发写入冲突 | RLock 保护（v3.05.00） |
 | 端口检测卡 GUI | 异步化（v3.04.03） |
 | 崩溃倒计时期间点停止 | 可追踪 QTimer 供 stop_server 取消（v3.04.03） |
+| 通知单条已读失效 | mark_read 查 "uuid" 而存储键是 "id" → 双键匹配 + 广播（v3.05.02） |
+| 备份页 UI 卡死 | "服务器正在停止"检查在 UI 变更前（v3.05.02） |
+| 通知已读后蓝点残留 | None 广播 → refresh(force=True)（v3.05.02） |
+| 还原中 toast 一闪而过 | duration=-1 → None（-1 是 truthy 立即 dismiss）（v3.05.02） |
+| 备份倒计时误导 | 仪表盘改为读 WorldPage._auto_backup_next（v3.05.02） |
+| 后台任务卡死功能 | 备份/还原 worker 接入 add_task（v3.05.02） |
+| 磁盘监控显示程序盘 | 改读 get_context().server_dir 所在盘（v3.05.02） |
+| 闪屏主色不跟随主题 | 传 theme_color + auto 按系统判断（v3.05.02） |
+
+---
+
+## 开发备忘（2026-08-25 更新 —— 防上下文丢失）
+
+> 新 AI 接手时**先读本小节**，可快速恢复上下文。上一会话做了大量修复，改动还在工作区未提交。
+
+### 1. 当前工作区状态（⚠️ 未提交）
+
+**Manager_Fluent（主仓库，origin = git@github.com:TussalZeus18028/bds_manager.git）**
+- 工作区有 **14+ 项改动未提交**：12 项逻辑修复 + 闪屏主题兼容 + `.gitignore`（.DSH/）+ 本交接文档
+- 版本号未 bump（当前 v3.05.01，修复建议发 v3.05.02）
+- **提交前记得先 `archive.py --force` 归档**
+
+**bds_version_list（数据源仓库，origin = https://github.com/TussalZeus18028/bds_version_list.git）**
+- ✅ 已提交并推送（commit `2b5e4ef`，105 版本，最新 stable **1.26.43.1** / preview **1.26.40.31**）
+- 路径 `E:\Launcher\服务器\Bedrock\bds_version_list`，内有 `bds_versions.json` + `scan_new.py`（串行扫描，慢）
+
+### 2. v3.05.02 已修复清单（未发布，随版本 bump 一起发）
+
+| 类别 | 修复 |
+|------|------|
+| 通知中心 | mark_read 键修复（id/uuid 双匹配）+ 新增公共 mark_read() 广播；None 广播 → force 重建列表 |
+| 世界页 | 备份前检查提前（防 UI 卡死）；还原 toast duration 修复；备份/还原接入后台任务卡 |
+| 仪表盘 | 备份倒计时读 WorldPage._auto_backup_next（与真实 timer 同步） |
+| 控制台 | is_enabled 不再新建临时 CheckBox；未运行命令不进历史 |
+| 监控 | 磁盘改用服务器目录所在盘 |
+| 闪屏 | accent 跟随 theme_color；auto 主题按系统判断 |
+| 其他 | webhook 冗余检查删除；InstallWorker 路径 Windows 大小写不敏感；main.py 重复 Ctrl+Shift+R 移除 |
+| **A1** | **自动备份 timer 构造即启动**（不再依赖世界页 showEvent——之前从不打开世界页则永不备份）；设置页改 backup_interval 即时生效（`apply_backup_interval()`） |
+| **A2** | **仪表盘网络双线曲线**（ResourceCurveWidget 新增 `set_data2` 双序列 + 纵轴自适应；上行主色/下行橙） |
+| **A4** | **通知中心**：单条删除（hover ✕ 按钮 → `remove()`）、未读/已读筛选 chip、按 今日/昨日/本周/更早 时间分组 |
+| **A5** | **配置页保留注释**：server.properties 行级处理，原 `#` 注释/未知 key 保留（此前整文件重写丢注释） |
+| **A6** | **日志 gzip 轮转链重构**：namer(.gz)+rotator(gzip)，backupCount 真正生效（模拟验证：3 份恰保留、无中间态） |
+
+### 3. 已知待修问题（审查发现，尚未处理）
+
+> N1（日志轮转）与 N4（配置注释）已随 A6/A5 修复，从下表移除。
+
+| # | 位置 | 问题 | 建议修复 |
+|---|------|------|---------|
+| N2 | `pages/command_palette.py:102` | 输入框边框主色写死 `#0DC5D4`，不跟随 theme_color（与闪屏同类） | 用 `config_mgr.get("theme_color")` |
+| N3 | `pages/packs.py:47` | `logger.warning(f"...")` f-string 格式化，应惰性 `%s` | 改惰性格式化 |
+| N5 | `backend/lip_utils.py:95` | `except (OSError, Exception)` 冗余（Exception 已含 OSError） | 只留 `Exception` |
+
+### 4. 环境事实（容易忘）
+
+- **本机 SSH 已修复**（2026-08-25）：`.ssh` ACL 曾混入 `SUDOKERNEL\Administrator` 条目（继承自主目录）导致 OpenSSH 拒绝。已对 `.ssh` 目录及文件执行 `icacls /inheritance:r` + 重新授权 SudoKernel/SYSTEM/Administrators。**主目录 `C:\Users\SudoKernel` 仍有该遗留条目**（未动，风险自负）。
+- **推送 GitHub**：Manager_Fluent 走 SSH（已恢复）；bds_version_list 用 HTTPS。PowerShell 下 gh credential helper 失效 → 用 `gh auth token` + `https://x-access-token:<token>@github.com/...` 推送（token 勿打印）。
+- **版本嗅探工具**：`.DSH/scan_bds_versions.py`（10 并发，~200s 扫 2850 候选）；`bds_version_list/scan_new.py`（串行，慢）。探测源：minecraft.net CDN HEAD。
+- **版本缓存**：`bds_version_cache.json` 48h TTL，升级页启动即出列表后台静默刷新。
+- **BDS 当前最新**：stable 1.26.43.1（2026-08-25 嗅探），preview 1.26.40.31。
+
+### 5. 架构速查（防遗忘）
+
+- 分层：`pages/(View)` → `backend/(Worker)` → `shared/(无 Qt 依赖基础设施)`，禁止反向 import
+- 版本号唯一源：`shared/version.py`（发版先改这里 → `python release.py` 或 `.DSH/pack_release.py`）
+- 配置：`shared/config.py` — 原子写 + 防抖落盘 + 白名单自动推导；**测试不要用 `set()` 触发 timer**（历史泄漏教训）
+- QThread worker 必须存 `self._xxx` 属性（防 GC 崩溃）
+- 颜色一律走 `theme_palette()`，禁手写 `isDarkTheme()` 三元
+- 硬编码主色（#0DC5D4）是遗留，新代码用 `config_mgr.get("theme_color")`

@@ -1,9 +1,9 @@
 {
-    "version": "3.05.01",
+    "version": "3.05.02",
     "release_date": "2026-08-25",
-    "download_url": "https://github.com/TussalZeus18028/bds_manager/releases/download/v3.05.01/bds_manager_v3.05.01.zip",
-    "sha256": "9e63e5dccbe09dbb5834e15beef111b9cb56181f32ddfab941adb83ec5efb143",
-    "file_size": 187634,
+    "download_url": "https://github.com/TussalZeus18028/bds_manager/releases/download/v3.05.02/bds_manager_v3.05.02.zip",
+    "sha256": "15e0bf2fe6d5fa07bfead0b87bf75d26b7a48803c0e56c09c7aa79bc981f36dd",
+    "file_size": 196021,
     "min_compatible_version": "2.00.00",
-    "changelog": "## v3.05.01 (2026-08-25)\n\n### 安全\n- 移除 `bds_manager.py`（旧版入口/智能更新 shim）的全局 SSL 验证绕过，与 main.py v3.04.03 安全基线对齐\n\n### Bug 修复\n- 修复测试防抖保存 timer 泄漏临时键到真实配置（`__test_temp_key__`），并清理已污染的配置\n- 测试改为直接赋值 values，杜绝 timer 在测试上下文外触发写盘\n\n### 文档\n- PROJECT_SUMMARY.md 同步至 v3.05.00+ 实际架构\n- _docs/AI_HANDOFF.md 更新版本/结构/测试数（25 用例）/踩坑记录"
+    "changelog": "## v3.05.02 (2026-08-25)\n\n### 修复\n- 通知中心单条已读失效 + 已读蓝点残留\n- 备份页服务器正在停止时 UI 卡死\n- 自动备份依赖世界页显示（从不打开则不备份）→ 全局定时\n- 配置保存丢弃 server.properties 注释 → 行级保留\n- 日志 gzip 轮转链断裂（backupCount 失效）\n- 版本列表分支列截断\n- 移除 bds_manager.py 全局 SSL 验证绕过（安全）\n\n### 增强\n- 仪表盘网络速度双线曲线\n- 通知中心：单条删除 / 未读已读筛选 / 时间分组\n- 备份间隔修改即时生效\n- 闪屏跟随主题主色 + auto 主题\n- 全项目 emoji 替换为 FluentIcon 矢量图标"
 }

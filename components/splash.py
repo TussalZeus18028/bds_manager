@@ -21,8 +21,14 @@ class AnimatedSplashScreen(QSplashScreen):
 
     W, H = 480, 300
 
-    def __init__(self, version: str, is_dark: bool = False):
+    def __init__(self, version: str, is_dark: bool = False, accent: str = "#0DC5D4"):
         self._is_dark = is_dark
+        # v3.05.02: 主色跟随 config theme_color（之前写死 #0DC5D4，
+        # 用户自定义主色后闪屏与主窗口主题色不一致）
+        try:
+            self._accent = QColor(accent) if accent else QColor("#0DC5D4")
+        except (TypeError, ValueError):
+            self._accent = QColor("#0DC5D4")
 
         pix = QPixmap(self.W, self.H)
         bg = "#1a1c20" if is_dark else "#f5f5f5"
@@ -45,6 +51,14 @@ class AnimatedSplashScreen(QSplashScreen):
         self._status = "正在启动..."
         self._version = version
 
+    def set_accent(self, accent: str):
+        """运行时更新主色（主题切换时调用）。"""
+        try:
+            self._accent = QColor(accent) if accent else QColor("#0DC5D4")
+        except (TypeError, ValueError):
+            self._accent = QColor("#0DC5D4")
+        self.repaint()
+
     def set_progress(self, percent: int, status: str = ""):
         self._progress = max(0, min(100, percent))
         if status:
@@ -59,8 +73,9 @@ class AnimatedSplashScreen(QSplashScreen):
         rect = self.rect()
         is_dark = self._is_dark
 
-        accent = QColor("#0DC5D4")
-        title_color = QColor("#0DC5D4") if is_dark else QColor("#0078D4")
+        accent = self._accent
+        # v3.05.02: 标题跟随用户主色；浅色下加深保证白底可读性
+        title_color = accent if is_dark else QColor(accent).darker(120)
         sub_color = QColor("#78909c") if is_dark else QColor("#6b7b8d")
         line_color = QColor("#2a2e33") if is_dark else QColor("#d0d4d8")
         track_color = QColor("#252830") if is_dark else QColor("#e0e3e6")
