@@ -2,7 +2,7 @@
 
 Minecraft Bedrock Dedicated Server 全功能管理器 —— 基于 **PySide6 + QFluentWidgets Fluent Design**。
 
-[![Version](https://img.shields.io/badge/version-3.05.00-blue)](https://github.com/TussalZeus18028/bds_manager/releases)
+[![Version](https://img.shields.io/badge/version-3.05.01-blue)](https://github.com/TussalZeus18028/bds_manager/releases)
 [![Python](https://img.shields.io/badge/python-3.10+-green)](https://www.python.org/)
 [![License](https://img.shields.io/badge/license-MIT-orange)](LICENSE)
 
@@ -84,6 +84,19 @@ Manager_Fluent/
     ├── errors.py            # 错误处理
     └── utils.py             # 工具函数
 ```
+
+## v3.05.01 (2026-08-25)
+
+### 安全
+- 移除 `bds_manager.py`（旧版入口/智能更新 shim）的全局 SSL 验证绕过，与 main.py v3.04.03 安全基线对齐
+
+### Bug 修复
+- 修复测试防抖保存 timer 泄漏临时键到真实配置（`__test_temp_key__`），并清理已污染的配置
+- 测试改为直接赋值 values，杜绝 timer 在测试上下文外触发写盘
+
+### 文档
+- PROJECT_SUMMARY.md 同步至 v3.05.00+ 实际架构（补全 backend/upgrade_workers、lip_utils、notifications、shortcuts 等）
+- _docs/AI_HANDOFF.md 更新版本/结构/测试数（25 用例）/踩坑记录
 
 ## v3.05.00 (2026-08-01)
 

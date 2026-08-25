@@ -300,9 +300,12 @@ class ConfigSaveWhitelistTests(unittest.TestCase):
                     patch.object(config_module, "CONFIG_BACKUP_DIR", str(backup_dir)),
                 ):
                     manager.load()
-                    manager.set(extra_key, "roundtrip_ok")
-                    # v3.05.00: set() 会触发 0.5s 延迟保存 timer；必须用 save_now()
-                    # 取消 timer，否则 patch 退出后 timer 会把默认值写进真实配置文件
+                    # v3.05.01: 直接赋值 values 而不是 set()。
+                    # set() 会创建 0.5s 延迟保存 timer（threading.Timer），若 timer 在
+                    # patch 上下文退出后才触发，会把临时键写进真实 bds_manager_config.json
+                    # —— 历史上 __test_temp_key__ 就是这样泄漏进真实配置的（8-20 清理前）。
+                    # 本测试只验证 save() 的白名单自动推导，不需要 timer 路径。
+                    manager.values[extra_key] = "roundtrip_ok"
                     manager.save_now()
 
                 manager.cancel_pending_save()  # 双保险：确保无残留延迟保存

@@ -1,6 +1,7 @@
 # AI 交接文档 — BDS Manager Fluent
 
 > 写给下一个 AI：这份文档告诉你项目结构、工具位置、坑和惯例。读完就能上手。
+> 最后同步: 2026-08-25（v3.05.00 + 08-14 补丁）。
 
 ---
 
@@ -10,11 +11,11 @@
 
 | 项 | 值 |
 |---|-----|
-| 语言 | Python 3.12 |
+| 语言 | Python 3.10+（开发用 3.12） |
 | GUI | PySide6 + QFluentWidgets (Fluent Design) |
 | 入口 | `main.py` (双击 `run.bat`) |
 | 配置 | `bds_manager_config.json` |
-| 当前版本 | 3.04.00 |
+| 当前版本 | 3.05.00 |
 
 ---
 
@@ -22,19 +23,56 @@
 
 ```
 Manager_Fluent/
-├── main.py              # QFluentWindow 主窗口，导航，主题，启动流程
-├── pages/               # 9 个页面：dashboard/console/world/packs/config/upgrade/tunnel/settings/about
-├── backend/             # 服务器进程、生命周期、备份、Webhook、自更新、lip 工具
-├── shared/              # 配置管理(config_mgr)、版本号(version.py)、Toast、主题工具、跨平台工具(utils.py)
-├── components/          # 通知面板、可复用 widget
-├── tests/               # 单元测试 test_core.py (12 个用例)
-├── bds_manager.py       # 旧版命令行启动器
+├── main.py              # QFluentWindow 主窗口，导航，主题，启动流程，快捷键
+├── run.bat / run.sh     # 启动脚本
 ├── release.py           # 发布脚本（打包 + git push + GitHub Release）
-├── archive.py           # 本地归档（存 zip 到 archives/）
-├── run.bat / run.sh     # 双击启动
+├── archive.py           # 本地归档（存 zip 到 archives/，内容哈希智能跳过）
+├── bds_manager.py       # 旧版入口伪装 + 智能更新 shim（可独立运行，无 PySide6 依赖）
+├── requirements.txt
 ├── version.json         # 自更新的版本信息文件
-├── bds_manager_config.json  # 用户配置文件
-└── bds_version_cache.json   # BDS 版本列表缓存 (24h)
+├── pages/               # UI 页面
+│   ├── dashboard.py     # 仪表盘（资源曲线/状态卡/BDS进程卡/快捷操作）
+│   ├── console.py       # 控制台（ANSI解析/玩家追踪/命令历史）
+│   ├── console_search.py# 控制台搜索工具栏
+│   ├── command_palette.py # 命令面板 (Ctrl+K)
+│   ├── world.py         # 世界管理（备份/还原）
+│   ├── packs.py         # 资源包
+│   ├── config.py        # 配置编辑
+│   ├── upgrade.py       # 版本升级 + lip 部署
+│   ├── tunnel.py        # 内网穿透 (frpc)
+│   ├── settings.py      # 设置
+│   └── about.py         # 关于
+├── backend/             # 后端逻辑（纯 QThread，无 Widget 依赖）
+│   ├── server.py        # ServerProcess: 子进程/输出/进程监控/优雅停服
+│   ├── server_lifecycle.py # 启停/崩溃自愈/RTT/资源告警（ServerHost 协议）
+│   ├── backup.py        # 备份/还原（在线 save-hold、失败回滚）
+│   ├── monitor.py       # 系统资源监控
+│   ├── self_update.py / self_update_ui.py  # 工具自更新
+│   ├── upgrade_workers.py # BDS 版本嗅探/下载/安装 Worker
+│   ├── lip_utils.py     # lip 检测/镜像/部署
+│   ├── webhook.py       # Webhook 通知（队列化）
+│   ├── notifications.py # 通知中心（notify 单写）
+│   ├── shortcuts.py     # 快捷键管理
+│   ├── log_handler.py   # gzip 轮转日志
+│   └── network.py       # 端口检测
+├── components/          # 可复用组件
+│   ├── notification_panel.py # 铃铛 + 通知抽屉
+│   ├── splash.py        # 启动闪屏
+│   ├── key_capture.py   # 快捷键捕获
+│   └── widgets.py       # 通用控件
+├── shared/              # 共享基础设施（无 Qt 依赖）
+│   ├── config.py        # 配置管理（ConfigManager + ServerContext）
+│   ├── version.py       # 唯一版本号源（改版本只改这里）
+│   ├── theme.py         # ThemePalette + scrollbar_style()
+│   ├── toast.py         # Toast 通知
+│   ├── errors.py        # 错误处理桥接
+│   ├── retry.py         # 重试工具
+│   ├── utils.py         # bds_exe()/ll_exe()/is_linux()
+│   └── workers.py       # BaseWorker(QThread)
+├── tests/test_core.py   # 单元测试（25 用例）
+├── _docs/               # 交接文档 + 对话框样式规范
+├── bds_manager_config.json  # 用户配置文件（不入库）
+└── bds_version_cache.json   # BDS 版本列表缓存 (48h)
 ```
 
 ---
@@ -76,7 +114,7 @@ Manager_Fluent/
 
 **用法：**
 ```bash
-GH_TOKEN="ghp_<你的_GitHub_Token>" gh release create v3.04.00 dist/xxx.zip --title "..." --notes "..."
+GH_TOKEN="ghp_<你的_GitHub_Token>" gh release create v3.05.00 dist/xxx.zip --title "..." --notes "..."
 GH_TOKEN="ghp_<你的_GitHub_Token>" gh release delete v3.03.04 --yes
 ```
 
@@ -88,13 +126,19 @@ GH_TOKEN="ghp_<你的_GitHub_Token>" gh release delete v3.03.04 --yes
 
 ### 配置系统 (`shared/config.py`)
 
-- `DEFAULT_CONFIG` — 所有默认值
-- `BOOL_FIELDS` — 布尔字段白名单（只有 `True/False` 才能通过 `_validate_value`，int 1/0 会被当成非法值回退默认）
-- `DEFAULT_RANGE_FIELDS` — 范围校验字段
-- `ConfigManager.save()` 有一个**手写的 keys 白名单**（第 332-357 行），新增配置项必须同时加入这个白名单 + `DEFAULT_CONFIG` + 相应的 `BOOL_FIELDS`/`DEFAULT_RANGE_FIELDS`
+- `DEFAULT_CONFIG` — 所有默认值；`SCHEMA` — 数值范围校验；`BOOL_FIELDS` — 布尔白名单；`STR_CHOICES` — 枚举白名单
+- **白名单自动推导**（v3.04.01 起）：`save()` 遍历 `DEFAULT_CONFIG` keys + `self.values` 中的扩展键，新增配置项只需加 `DEFAULT_CONFIG` + 相应校验集合，**不再需要手写 keys 白名单**
+- `ConfigManager.set()` 防抖 0.5s 自动落盘（v3.05.00）；`save()` 原子写（tmp+fsync+replace）+ RLock 防并发；快照回滚保留 5 份到 `backups/config/`；损坏自动从快照恢复
 - `ServerContext._active_dir()` — 根据 `server_type` 返回 BDS 或 LL 目录
 
 **常见坑：** `config_mgr.get("key")` 返回 `None` 时不会触发默认值（key 存在只是值为 None）。防御写法：`config_mgr.get("key") or default_value`
+
+**历史事故：** `__test_temp_key__` 曾泄漏进真实配置 —— 测试里 `set()` 创建的 0.5s 延迟保存 timer 在 patch 上下文退出后触发，把临时键写进 `bds_manager_config.json`。修复：测试直接赋值 `manager.values[...]` 不触发 timer。**新写测试时注意：涉及 ConfigManager 的测试要么不用 set()，要么保证 cancel_pending_save()。**
+
+### 版本号源
+
+- `shared/version.py` 是**唯一版本号源**（VERSION / VERSION_INFO / CONFIG_VERSION / RELEASE_DATE）
+- 发版流程：改 `shared/version.py` → `python release.py`
 
 ### 双服务器 (`server_type`)
 
@@ -121,23 +165,29 @@ toast_info("标题", "详情", parent_widget)
 
 所有 toast 自动写入 `notifications` 到通知中心。
 
+### 通知中心 (`backend/notifications.py`)
+
+- `notify(level, category, title, body, target)` 是唯一写入入口（单写，v3.04.01 修复双写）
+- 抽屉在 `components/notification_panel.py`，数据存 `bds_manager_notifications.json`
+
 ---
 
 ## 开发流程
 
-### 归档
+### 归档（改代码前必做）
 
 ```bash
 cd "E:/Launcher/服务器/Bedrock/Manager_Fluent"
-"C:\Users\SudoKernel\AppData\Local\Programs\Python\Python312\python.exe" archive.py --force
+$env:PYTHONIOENCODING="utf-8"  # Windows 控制台必需，否则 emoji 报 GBK 编码错
+"C:\Users\SudoKernel\AppData\Local\Programs\Python\Python312\python.exe" archive.py --force --label <标签>
 ```
 
-**规则：** 改代码前先归档。
+**规则：** 改代码前先归档。`--force` 强制创建；内容哈希相同会跳过。
 
 ### 编译检查
 
 ```bash
-"C:\Users\SudoKernel\AppData\Local\Programs\Python\Python312\python.exe" -m py_compile main.py pages/*.py backend/*.py shared/*.py components/*.py
+"C:\Users\SudoKernel\AppData\Local\Programs\Python\Python312\python.exe" -m py_compile main.py pages/*.py backend/*.py shared/*.py components/*.py bds_manager.py archive.py release.py
 ```
 
 ### 运行测试
@@ -147,18 +197,19 @@ cd "E:/Launcher/服务器/Bedrock/Manager_Fluent"
 "C:\Users\SudoKernel\AppData\Local\Programs\Python\Python312\python.exe" tests/test_core.py
 ```
 
+当前 25 个用例：备份/配置快照/SHA256/Webhook/生命周期/世界选择/主题/ANSI解析/配置白名单/ZipSlip/重启取消/下载清理。
+
 ### 发布
 
 ```bash
-# release.py 会: 打包 → 更新 version.json → git push → GitHub Release
-# 但 push 可能失败（缺 SSH），需要手动：
-"C:\Program Files\Git\bin\git.exe" push "https://TussalZeus18028:ghp_<你的_GitHub_Token>@github.com/TussalZeus18028/bds_manager.git"
-
-# 创建 Release:
-GH_TOKEN="ghp_<你的_GitHub_Token>" gh release create vX.XX.XX dist/bds_manager_vX.XX.XX.zip --title "BDS Manager vX.XX.XX" --notes "..."
+# release.py 会: 打包 → 更新 version.json → git push → 推 tag → GitHub Release + 上传 zip
+"C:\Users\SudoKernel\AppData\Local\Programs\Python\Python312\python.exe" release.py
 ```
 
-**注意：** 用户规则是**推送/发布前必须确认**，不要自动推送。
+**注意：** 用户规则是**推送/发布前必须确认**，不要自动推送。push 若失败（缺 SSH helper），手动：
+```bash
+"C:\Program Files\Git\bin\git.exe" push "https://TussalZeus18028:ghp_<你的_GitHub_Token>@github.com/TussalZeus18028/bds_manager.git"
+```
 
 ---
 
@@ -167,24 +218,23 @@ GH_TOKEN="ghp_<你的_GitHub_Token>" gh release create vX.XX.XX dist/bds_manager
 ### QFluentWidgets 踩坑记录
 
 1. **`FluentIcon` 属性** — 用之前 `dir(FluentIcon)` 查，`UNDO`/`REFRESH`/`BELL` 等不存在
-2. **QThread worker** — 必须存为 `self._xxx` 实例属性，局部变量会被 GC 回收导致进程静默崩溃（最近的「加速源」按钮 crash 就是这个原因）
+2. **QThread worker** — 必须存为 `self._xxx` 实例属性，局部变量会被 GC 回收导致进程静默崩溃（「加速源」按钮 crash 就是这个原因）
 3. **`MessageBox` 不解析 HTML** — `<b>`/`<i>` 标签会原样显示，用纯文本
 4. **`TeachingTip` API** — 本机 1.11.2 版本不支持 `title/content/icon` 参数
 5. **Qt 控件类名选择器不可靠** — 用 `QWidget#objectName { ... }` + `setObjectName()`
-6. **硬编码颜色** — 必须用 `isDarkTheme()` 三元判断
+6. **硬编码颜色** — 必须用 `theme_palette()`（ThemePalette），禁止手写 `isDarkTheme()` 三元
 
-### 修复历史（v3.04.00）
+### 修复历史（最近版本）
 
-最近几天修过的问题，避免重蹈：
-
-| 问题 | 根因 |
-|------|------|
-| `first_launch_done` 不落盘 | save() 白名单缺失 + int 1/0 被 BOOL_FIELDS 拒绝 |
-| `cmd_history` 为 None 崩溃 | `config_mgr.get` 返回 None 不触发默认值 |
-| Webhook 开关 | 新增 `webhook_enabled` 配置项 |
-| 加速源按钮静默崩溃 | LipCmdWorker 局部变量被 GC |
-| 配置文件 `<b>` 标签泄漏 | MessageBox 不渲染 HTML |
-| 自更新 + 服务器运行死锁 | restart_app 不先停服 |
-| BDS 安装路径不管 server_type | `_on_dl_done` 硬编码 bds_dir |
-| 升级页双重拉取 | `_fetch()` 无去重 |
-| server_root_dir 不落盘 | save 白名单缺失 |
+| 问题 | 根因 / 修复 |
+|------|------------|
+| `first_launch_done` 不落盘 | save() 白名单缺失 + int 1/0 被 BOOL_FIELDS 拒绝（v3.04.00） |
+| 自更新 + 服务器运行死锁 | restart_app 不先停服（v3.04.00） |
+| 配置防抖 timer 泄漏测试键 | 测试直接赋值 values，不走 set() 的 timer（v3.05.01 补丁） |
+| 测试污染真实配置 | 测试加 save_now + cancel_pending_save 双保险（08-14 commit 465a642） |
+| 任意退出路径丢配置 | `app.aboutToQuit.connect(config_mgr.save_now)`（08-14 commit 4a3cf43） |
+| 全局 SSL 绕过 | main.py v3.04.03 移除；**bds_manager.py shim 于 v3.05.01 移除** |
+| ZipSlip 边界绕过 | `startswith()` → `commonpath()`（v3.04.03） |
+| save() 并发写入冲突 | RLock 保护（v3.05.00） |
+| 端口检测卡 GUI | 异步化（v3.04.03） |
+| 崩溃倒计时期间点停止 | 可追踪 QTimer 供 stop_server 取消（v3.04.03） |

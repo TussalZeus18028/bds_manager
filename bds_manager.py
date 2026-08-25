@@ -45,9 +45,11 @@ import time
 import urllib.request
 import zipfile
 
-# SSL: 部分 Windows 缺少根证书
-import ssl as _ssl
-_ssl._create_default_https_context = _ssl._create_unverified_context
+# v3.05.01 安全修复: 移除全局 SSL 验证绕过。
+# 之前 _ssl._create_default_https_context = _ssl._create_unverified_context
+# 会禁用本 shim 全部 HTTPS 证书验证（与 main.py v3.04.03 的修复保持一致）。
+# urllib 现在使用系统默认 CA 上下文；若本机证书有问题，fetch_remote_version_json /
+# download_zip 的 try/except 会捕获错误并跳过更新、直接启动主程序，不会崩溃。
 
 # ── 常量 ──────────────────────────────────────────────────────────────
 GITHUB_REPO_OWNER = "TussalZeus18028"
