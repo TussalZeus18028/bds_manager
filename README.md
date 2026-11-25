@@ -2,7 +2,7 @@
 
 Minecraft Bedrock Dedicated Server 全功能管理器 —— 基于 **PySide6 + QFluentWidgets Fluent Design**。
 
-[![Version](https://img.shields.io/badge/version-3.05.06-blue)](https://github.com/TussalZeus18028/bds_manager/releases)
+[![Version](https://img.shields.io/badge/version-3.05.07-blue)](https://github.com/TussalZeus18028/bds_manager/releases)
 [![Python](https://img.shields.io/badge/python-3.10+-green)](https://www.python.org/)
 [![License](https://img.shields.io/badge/license-MIT-orange)](LICENSE)
 
@@ -86,6 +86,22 @@ Manager_Fluent/
     ├── errors.py            # 错误处理
     └── utils.py             # 工具函数
 ```
+
+## v3.05.07 (2026-11-25)
+
+### Bug 修复
+- **自更新重启崩溃**：`threading.Timer` 的签名是 `(interval, function, args, kwargs)`，**没有 `daemon` 参数**（那是 `Thread` 的）→ v3.05.06 的 `restart_app` 每次自更新都抛 `TypeError`，`os._exit` 兜底从未生效，且弹"程序遇到未预期错误"
+- **自更新失败无法自救**：新进程若启动即崩溃（旧代码本身有 bug），旧进程会被无条件强杀 → 用户彻底打不开程序。现在改为检测子进程状态并**从备份自动回滚**（`backups/upgrade_backup_*`）
+- **winget 安装 lip 可能永久卡死**：缺 `--accept-package-agreements` / `--disable-interactivity`，winget 会停在 EULA 交互界面 → 补全非交互参数 + 240 秒超时 + 可取消
+- **版本列表拉取无降级**：`raw.githubusercontent.com` 偶发超时/502 时静默失败 → 增加 GitHub Contents API 备用源，失败日志从 debug 提升到 warning
+
+### 新增
+- 设置页 / 升级页显示 **lip 版本号**（`lip -v`）
+- lip 镜像地址统一为 `MIRROR_CMDS` 常量，移除重复定义
+
+### 改进
+- **BDS 版本嗅探支持跨 minor**：旧逻辑只探同一 minor，官方发大版本时 patch 号会跳到 60+/70+（如 `1.26.43.1` → `1.26.70.x`），探测范围完全够不着 → 现在依次探测同 patch 大 build、更高 patch、以及下一个 minor 的开头
+- 版本列表数据已更新至 **373 个版本**（含 stable / preview 双通道）
 
 ## v3.05.06 (2026-11-25)
 

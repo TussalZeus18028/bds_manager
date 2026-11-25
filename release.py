@@ -52,6 +52,7 @@ SKIP_DIRS = {
     "__pycache__", ".git", "logs", "backups", ".workbuddy",
     "archives", "dist", "tests",
     "Server",  # v3.05.00: BDS 服务器程序，不应打包
+    "_docs",   # v3.05.07: 内部交接文档（含开发机绝对路径/工具路径），不应对外发布
 }
 SKIP_FILES = {
     # 用户配置 + 运行时数据（不应覆盖）
@@ -60,6 +61,8 @@ SKIP_FILES = {
     "bds_manager_notifications.json",  # v3.02.00 通知中心数据
     # 本地开发工具（不需要给最终用户）
     ".gitignore", "release.py", "archive.py",
+    # v3.05.07: 内部项目文档（正文提及 release.py/archive.py/fuck-u-code 等内部工具）
+    "PROJECT_SUMMARY.md",
     # v3.05.01: 本地大体积归档（曾导致发布包 902MB，v3.05.00 仅 205KB）
     "archives.rar",
 }
