@@ -2,7 +2,7 @@
 
 Minecraft Bedrock Dedicated Server 全功能管理器 —— 基于 **PySide6 + QFluentWidgets Fluent Design**。
 
-[![Version](https://img.shields.io/badge/version-3.05.04-blue)](https://github.com/TussalZeus18028/bds_manager/releases)
+[![Version](https://img.shields.io/badge/version-3.05.05-blue)](https://github.com/TussalZeus18028/bds_manager/releases)
 [![Python](https://img.shields.io/badge/python-3.10+-green)](https://www.python.org/)
 [![License](https://img.shields.io/badge/license-MIT-orange)](LICENSE)
 
@@ -86,6 +86,14 @@ Manager_Fluent/
     ├── errors.py            # 错误处理
     └── utils.py             # 工具函数
 ```
+
+## v3.05.05 (2026-11-25)
+
+### Bug 修复
+- **自更新下载失败**：`DownloadUpdateWorker` 用 requests（certifi CA）在代理/自签根证书环境报 `SSL: CERTIFICATE_VERIFY_FAILED` → 改用 **urllib（系统证书库）** 下载（与 BDS 版本下载一致），已实测真实下载 + SHA256 校验通过
+
+### 新增
+- 设置页 → 其他 → **"立即检查更新"按钮**（强制重新检查，绕过会话内一次性检查；检查中禁用，完成后恢复）
 
 ## v3.05.04 (2026-11-25)
 

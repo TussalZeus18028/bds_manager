@@ -1,9 +1,9 @@
 {
-    "version": "3.05.04",
+    "version": "3.05.05",
     "release_date": "2026-11-25",
-    "download_url": "https://github.com/TussalZeus18028/bds_manager/releases/download/v3.05.04/bds_manager_v3.05.04.zip",
-    "sha256": "9d83b1bba58b0dcceefcecedf04be92bbb4809b9d19a84f1e755c701cd11a868",
-    "file_size": 204526,
+    "download_url": "https://github.com/TussalZeus18028/bds_manager/releases/download/v3.05.05/bds_manager_v3.05.05.zip",
+    "sha256": "9146b2a60f06e41d2ef9036e3c820a08aeb9ec197ef13f515f244139ae5226f1",
+    "file_size": 204899,
     "min_compatible_version": "2.00.00",
-    "changelog": "## v3.05.04 (2026-11-25)\n\n### Bug 修复\n- 自更新崩溃：点击更新确认后 NameError（toast_info 未导入）→ 更新中断并弹\"程序遇到未预期错误\"\n- lip 安装输出跨线程直接操作 UI → 改为方法槽（QueuedConnection）"
+    "changelog": "## v3.05.05 (2026-11-25)\n\n### Bug 修复\n- 自更新下载 SSL 失败（requests certifi CA → urllib 系统证书库）\n\n### 新增\n- 设置页\"立即检查更新\"按钮"
 }

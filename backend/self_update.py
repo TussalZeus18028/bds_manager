@@ -169,24 +169,31 @@ class DownloadUpdateWorker(QThread):
         self._ver = remote_ver
 
     def run(self):
-        import requests
+        # v3.05.05 fix: 改用 urllib（系统 CA 证书库）下载 —— 之前用 requests 默认
+        # certifi CA bundle，在代理/自签根证书环境下报
+        # "SSL: CERTIFICATE_VERIFY_FAILED unable to get local issuer certificate"，
+        # 导致自更新下载永远失败（urllib 走 Windows 系统证书存储，可正常验证）
+        import urllib.request
         path = os.path.join(SCRIPT_DIR, f"bds_manager_v{self._ver}.zip")
         try:
-            r = requests.get(self._url, headers=_github_headers(), stream=True, timeout=60)
-            r.raise_for_status()
-            total = int(r.headers.get("content-length", 0))
-            done = 0
-            last_pct = -1
-            CHUNK = 256 * 1024
-            with open(path, "wb") as f:
-                for chunk in r.iter_content(chunk_size=CHUNK):
-                    f.write(chunk)
-                    done += len(chunk)
-                    if total:
-                        pct = int(done * 100 / total)
-                        if pct != last_pct:
-                            self.progress.emit(pct)
-                            last_pct = pct
+            req = urllib.request.Request(self._url, headers=_github_headers())
+            with urllib.request.urlopen(req, timeout=60) as resp:
+                total = int(resp.headers.get("content-length", 0) or 0)
+                done = 0
+                last_pct = -1
+                CHUNK = 256 * 1024
+                with open(path, "wb") as f:
+                    while True:
+                        chunk = resp.read(CHUNK)
+                        if not chunk:
+                            break
+                        f.write(chunk)
+                        done += len(chunk)
+                        if total:
+                            pct = int(done * 100 / total)
+                            if pct != last_pct:
+                                self.progress.emit(pct)
+                                last_pct = pct
             if os.path.getsize(path) < 1000:
                 # v3.04.03 R3 修复: 清理异常下载文件
                 self._cleanup(path)

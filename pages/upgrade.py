@@ -15,8 +15,6 @@ import html as _html_lip
 
 logger = logging.getLogger("bds_manager")
 
-import requests
-
 from PySide6.QtCore import Qt, QThread, QTimer, Signal
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QTableWidget, QTableWidgetItem,
