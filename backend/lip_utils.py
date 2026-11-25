@@ -92,7 +92,7 @@ class LipCmdWorker(QThread):
         except FileNotFoundError:
             self.output.emit("", "未找到命令行工具")
             self.finished.emit(-1)
-        except (OSError, Exception) as e:
+        except Exception as e:  # v3.05.03: 移除冗余的 (OSError, Exception)
             self.output.emit("", str(e))
             self.finished.emit(-1)
 

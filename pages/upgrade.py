@@ -470,7 +470,8 @@ class UpgradePage(QWidget):
         self._lip_progress.setVisible(True)
         self._lip_progress.setRange(0, 0)
         self._lip_installer = InstallLipWorker()
-        self._lip_installer.line.connect(lambda t: None)  # 输出重定向至下方日志
+        # v3.05.03 fix: winget 安装输出接到 lip 终端（之前用 lambda 丢弃，用户看不到进度）
+        self._lip_installer.line.connect(lambda t: self._append_lip_term(f"{t}\n", "#888"))
         self._lip_installer.done.connect(self._on_lip_installed)
         self._lip_installer.start()
 
@@ -568,17 +569,16 @@ class UpgradePage(QWidget):
             os.makedirs(deploy_dir, exist_ok=True)
         ver = self._ll_ver.text().strip()
         pkg = "github.com/LiteLDev/LeviLamina"
-        # 检测是否已安装——已安装用 update，未安装用 install
+        pkg_spec = f"{pkg}@{ver}" if ver else pkg
+        # 检测是否已安装——已安装用 update（lip 官方升级命令），未安装用 install
+        # v3.05.03 fix: 之前已安装时用 `lip install --upgrade`（该标志不存在），
+        # 正确命令是 `lip update <pkg>`（见 lip 官方文档）
         already = os.path.isfile(os.path.join(deploy_dir, "bedrock_server_mod.exe"))
         if already:
-            args = ["install", "--upgrade"]
+            args = ["update", pkg_spec]
             self._append_lip_term("检测到已安装，升级模式\n", "#ff8c00")
         else:
-            args = ["install"]
-        if ver:
-            args.append(f"{pkg}@{ver}")
-        else:
-            args.append(pkg)
+            args = ["install", pkg_spec]
 
         self._deploy_btn.setEnabled(False)
         self._deploy_btn.setText("部署中...")
@@ -615,8 +615,9 @@ class UpgradePage(QWidget):
         if code == 0:
             d = self._deploy_dir.text().strip() or get_context().server_dir
             # 自动配置: 更新 LL 目录 + 切换服务器类型
-            rel = os.path.relpath(d, SCRIPT_DIR) if os.path.isabs(d) else d
-            config_mgr.set("ll_server_dir", rel)
+            # v3.05.03 fix: 部署目录存绝对路径（之前 relpath 产生 ../.. 相对路径）
+            ll_dir_val = d if os.path.isabs(d) else os.path.relpath(d, SCRIPT_DIR)
+            config_mgr.set("ll_server_dir", ll_dir_val)
             config_mgr.set("server_type", "ll")
             config_mgr.save()
             self._append_lip_term("部署完成！已自动切换为 LL 服务器\n", "#4caf50")
@@ -1082,17 +1083,15 @@ class UpgradePage(QWidget):
         ctx = get_context()
         # 下载确认
         from qfluentwidgets import MessageBox
-        if not hasattr(self, "_skip_confirm"):
-            w = MessageBox("确认下载", f"即将下载 BDS {version}\n\n当前服务器文件将自动备份。\n是否继续？", self.window())
-            w.yesSignal.connect(lambda: self._install_after_confirm(url, version, True))
-            w.cancelSignal.connect(w.close)
-            w.show()
-            return
-        self._install_after_confirm(url, version, False)
+        # v3.05.03: 每次下载都确认 —— 原 _skip_confirm 置 True 后从不重置，
+        # 导致后续所有 BDS 下载都跳过确认（误触风险）
+        w = MessageBox("确认下载", f"即将下载 BDS {version}\n\n当前服务器文件将自动备份。\n是否继续？", self.window())
+        w.yesSignal.connect(lambda: self._install_after_confirm(url, version))
+        w.cancelSignal.connect(w.close)
+        w.show()
+        return
 
-    def _install_after_confirm(self, url: str, version: str, skip_next: bool):
-        if skip_next:
-            self._skip_confirm = True
+    def _install_after_confirm(self, url: str, version: str):
         self._dl_bar.setVisible(True)
         self._dl_bar.setRange(0, 100)
         self._dl_bar.setValue(0)

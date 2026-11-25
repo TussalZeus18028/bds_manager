@@ -54,13 +54,16 @@ class KeyCaptureButton(QPushButton):
         """)
 
     def _apply_recording_style(self):
-        self.setStyleSheet("""
-            QPushButton {
-                background: #0DC5D4; color: #ffffff;
-                border: 1px solid #0DC5D4; border-radius: 4px;
+        # v3.05.03 fix: 跟随配置主色（原硬编码 #0DC5D4）
+        from shared.config import config_mgr
+        accent = config_mgr.get("theme_color", "#0DC5D4")
+        self.setStyleSheet(f"""
+            QPushButton {{
+                background: {accent}; color: #ffffff;
+                border: 1px solid {accent}; border-radius: 4px;
                 padding: 2px 12px; font-weight: bold;
                 font-family: "Consolas", "Microsoft YaHei"; font-size: 11px;
-            }
+            }}
         """)
 
     def _start_recording(self):

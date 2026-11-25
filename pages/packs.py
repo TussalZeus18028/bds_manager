@@ -44,7 +44,8 @@ def _read_manifest(pack_dir: str) -> dict:
                 with open(fp, "r", encoding="utf-8-sig") as f:
                     return json.load(f)
             except Exception as e2:
-                logger.warning(f"无法解析 manifest: {pack_dir} (json5: {e}, json: {e2})")
+                # v3.05.03: 惰性格式化（原 f-string 无论是否记录都执行格式化）
+                logger.warning("无法解析 manifest: %s (json5: %s, json: %s)", pack_dir, e, e2)
     return {}
 
 

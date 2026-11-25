@@ -2,7 +2,7 @@
 
 Minecraft Bedrock Dedicated Server 全功能管理器 —— 基于 **PySide6 + QFluentWidgets Fluent Design**。
 
-[![Version](https://img.shields.io/badge/version-3.05.02-blue)](https://github.com/TussalZeus18028/bds_manager/releases)
+[![Version](https://img.shields.io/badge/version-3.05.03-blue)](https://github.com/TussalZeus18028/bds_manager/releases)
 [![Python](https://img.shields.io/badge/python-3.10+-green)](https://www.python.org/)
 [![License](https://img.shields.io/badge/license-MIT-orange)](LICENSE)
 
@@ -86,6 +86,28 @@ Manager_Fluent/
     ├── errors.py            # 错误处理
     └── utils.py             # 工具函数
 ```
+
+## v3.05.03 (2026-11-25)
+
+### Bug 修复
+- 升级页下载确认框"一次性跳过"后永不恢复（误触风险）
+- 控制台搜索"上一个"按钮导航错乱（QTextDocument.find 只支持向前）
+- 备份元数据 `bds_version` 误存工具版本 → 改为从控制台日志解析真实 BDS 版本；`tool_version` 改用真实版本号
+- frpc.ini 启动时重复保存两次
+- frpc 主动停止后迟到退出信号误弹"意外退出"提示
+- frpc 路径为空时 frpc.ini 写到当前工作目录
+- lip 升级命令错误：`lip install --upgrade`（不存在）→ `lip update <pkg>`
+- lip 安装 winget 输出被丢弃 → 接入终端日志
+- LL 部署目录存成 `../..` 相对路径 → 绝对路径
+- 快捷键录制态/命令面板边框硬编码主色 → 跟随 theme_color
+
+### 增强
+- **自更新备份增强**：升级前递归备份 `pages/backend/shared/components` 子目录代码（此前只备份根目录，升级后无法回滚子目录）
+- 新增通用文本编辑器组件 `components/text_editor_dialog.py`（无边框圆角/半透明/主题感知/Ctrl+S），白名单编辑器改用该组件
+- 新增 `_docs/UI_STYLE.md` UI 风格规范（主题/控件选型/弹窗/布局/图标/自检清单）
+
+### 清理
+- 删除根目录冗余 allowlist.json（代码零引用）、旧 dist 包与旧日志
 
 ## v3.05.02 (2026-08-25)
 

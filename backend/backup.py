@@ -172,13 +172,16 @@ class BackupWorker(BaseWorker):
                             self.progress.emit(f"已打包 {file_count} 个文件...")
 
             # 写入元数据
+            # v3.05.03 fix: tool_version 用真实工具版本（之前硬编码 "3.1"）；
+            # bds_version 为服务器 BDS 版本（world.py 从日志解析，未知为空串）
+            from shared.version import VERSION as _TOOL_VER
             metadata = {
                 "world_name": self.level_name,
                 "created_at": datetime.now().isoformat(timespec="seconds"),
                 "bds_version": self.bds_version,
                 "file_count": file_count,
                 "total_bytes": total_bytes,
-                "tool_version": "3.1",
+                "tool_version": _TOOL_VER,
             }
             _write_backup_metadata(backup_path, metadata)
             self.result_path = backup_path

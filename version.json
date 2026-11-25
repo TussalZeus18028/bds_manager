@@ -1,9 +1,9 @@
 {
-    "version": "3.05.02",
-    "release_date": "2026-08-25",
-    "download_url": "https://github.com/TussalZeus18028/bds_manager/releases/download/v3.05.02/bds_manager_v3.05.02.zip",
-    "sha256": "15e0bf2fe6d5fa07bfead0b87bf75d26b7a48803c0e56c09c7aa79bc981f36dd",
-    "file_size": 196021,
+    "version": "3.05.03",
+    "release_date": "2026-11-25",
+    "download_url": "https://github.com/TussalZeus18028/bds_manager/releases/download/v3.05.03/bds_manager_v3.05.03.zip",
+    "sha256": "387a0953be7c10a77b5aa5392b2fb46d755cf4d5d258dda4a28fd46804b93855",
+    "file_size": 204460,
     "min_compatible_version": "2.00.00",
-    "changelog": "## v3.05.02 (2026-08-25)\n\n### 修复\n- 通知中心单条已读失效 + 已读蓝点残留\n- 备份页服务器正在停止时 UI 卡死\n- 自动备份依赖世界页显示（从不打开则不备份）→ 全局定时\n- 配置保存丢弃 server.properties 注释 → 行级保留\n- 日志 gzip 轮转链断裂（backupCount 失效）\n- 版本列表分支列截断\n- 移除 bds_manager.py 全局 SSL 验证绕过（安全）\n\n### 增强\n- 仪表盘网络速度双线曲线\n- 通知中心：单条删除 / 未读已读筛选 / 时间分组\n- 备份间隔修改即时生效\n- 闪屏跟随主题主色 + auto 主题\n- 全项目 emoji 替换为 FluentIcon 矢量图标"
+    "changelog": "## v3.05.03 (2026-11-25)\n\n### Bug 修复\n- 升级页下载确认框一次性跳过不恢复\n- 控制台搜索\"上一个\"导航错乱\n- 备份元数据 bds_version 误存工具版本\n- frpc 重复保存 / 迟到误报 / 空路径写当前目录\n- lip 升级命令 `lip install --upgrade` → `lip update`\n- lip 安装输出接入终端、LL 部署目录存绝对路径\n- 快捷键录制态/命令面板主色硬编码\n\n### 增强\n- 自更新备份递归包含子目录代码（升级后可回滚）\n- 新增文本编辑器组件 text_editor_dialog\n- 新增 UI 风格规范 _docs/UI_STYLE.md\n\n### 清理\n- 删除根目录冗余 allowlist.json、旧 dist/日志"
 }

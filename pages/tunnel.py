@@ -217,19 +217,28 @@ class TunnelPage(QWidget):
             config_mgr.save()
 
     def _cfg_path(self) -> str:
-        return os.path.join(os.path.dirname(self._path_edit.text() or "."), "frpc.ini")
+        """v3.05.03 fix: frpc.exe 路径为空时返回空串（原写当前工作目录）。"""
+        exe = self._path_edit.text().strip()
+        if not exe:
+            return ""
+        d = os.path.dirname(exe)
+        return os.path.join(d, "frpc.ini") if d else ""
 
     def _load_config(self):
         cfg = self._cfg_path()
-        if os.path.exists(cfg):
-            try:
-                with open(cfg, "r", encoding="utf-8") as f:
-                    self._cfg_edit.setPlainText(f.read())
-            except OSError:
-                pass  # frpc 配置文件损坏或不存在
+        if not cfg or not os.path.exists(cfg):
+            return
+        try:
+            with open(cfg, "r", encoding="utf-8") as f:
+                self._cfg_edit.setPlainText(f.read())
+        except OSError:
+            pass  # frpc 配置文件损坏或不存在
 
     def _save_config(self):
         cfg = self._cfg_path()
+        if not cfg:
+            toast_warning("提示", "请先设置 frpc.exe 路径", self.window())
+            return
         try:
             os.makedirs(os.path.dirname(cfg), exist_ok=True)
             with open(cfg, "w", encoding="utf-8") as f:
@@ -252,6 +261,9 @@ class TunnelPage(QWidget):
     def _load_ini_from_file(self):
         """从文件加载 frpc.ini（不清空，追加到编辑器）"""
         cfg = self._cfg_path()
+        if not cfg:
+            toast_warning("提示", "请先设置 frpc.exe 路径", self.window())
+            return
         if not os.path.exists(cfg):
             toast_warning("文件不存在", f"frpc.ini 不存在：{cfg}", self.window())
             return
@@ -314,10 +326,12 @@ class TunnelPage(QWidget):
             toast_error("错误", f"frpc.exe 不存在: {frpc}", self.window())
             return
         cfg = self._cfg_path()
+        if not cfg:
+            toast_warning("提示", "请先设置 frpc.exe 路径", self.window())
+            return
         if not os.path.exists(cfg):
             toast_warning("提示", f"frpc.ini 不存在，已创建: {cfg}", self.window())
-            self._save_config()
-
+        # v3.05.03 fix: 统一只保存一次（原 if 分支 + 无条件调用重复保存两次）
         self._save_config()
         config_mgr.set("frpc_path", frpc)
         config_mgr.save()
@@ -344,6 +358,10 @@ class TunnelPage(QWidget):
 
     def _on_frpc_exited(self):
         """v3.04.03 L4: frpc 进程意外退出时的 UI 同步。"""
+        # v3.05.03 fix: 用户主动停止（_stop 已置 _running=False）后，
+        # FrpcReader 迟到的退出信号不再误弹"意外退出"提示
+        if not self._running:
+            return
         self._running = False
         self._process = None
         self._reader = None
@@ -355,6 +373,11 @@ class TunnelPage(QWidget):
     def _stop(self):
         self._running = False
         if self._reader:
+            # v3.05.03: 断开退出信号（双保险，与 _running 检查配合）
+            try:
+                self._reader.process_exited.disconnect(self._on_frpc_exited)
+            except (TypeError, RuntimeError):
+                pass
             self._reader.stop()
             self._reader.wait(2000)
             self._reader = None

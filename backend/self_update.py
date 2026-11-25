@@ -233,14 +233,34 @@ class InstallUpdateWorker(QThread):
             self.finished.emit(False, str(e))
 
     def _backup_core_files(self) -> str:
-        """备份 .py/.json/.txt/.md 到 backups/upgrade_backup_<ts>/。"""
+        """备份核心代码到 backups/upgrade_backup_<ts>/。
+
+        v3.05.03 fix: 之前只备份根目录 .py/.json/.txt/.md，子目录
+        （pages/backend/shared/components）代码被升级覆盖后无法回滚。
+        现在递归备份这些目录的 .py，加上根目录的配置/文档文件。
+        """
         ts = __import__("time").strftime("%Y%m%d_%H%M%S")
         backup_dir = os.path.join(SCRIPT_DIR, "backups", f"upgrade_backup_{ts}")
         os.makedirs(backup_dir, exist_ok=True)
         self.log.emit("正在备份核心文件...")
+        # 根目录的 .py/.json/.txt/.md
         for f in os.listdir(SCRIPT_DIR):
             if f.endswith((".py", ".json", ".txt", ".md")) and os.path.isfile(os.path.join(SCRIPT_DIR, f)):
                 shutil.copy2(os.path.join(SCRIPT_DIR, f), os.path.join(backup_dir, f))
+        # 子目录代码（pages/backend/shared/components）递归备份 .py，保持相对路径
+        for sub in ("pages", "backend", "shared", "components"):
+            src_dir = os.path.join(SCRIPT_DIR, sub)
+            if not os.path.isdir(src_dir):
+                continue
+            for root, _dirs, files in os.walk(src_dir):
+                for fn in files:
+                    if not fn.endswith(".py"):
+                        continue
+                    src = os.path.join(root, fn)
+                    rel = os.path.relpath(src, SCRIPT_DIR)
+                    dst = os.path.join(backup_dir, rel)
+                    os.makedirs(os.path.dirname(dst), exist_ok=True)
+                    shutil.copy2(src, dst)
         return backup_dir
 
     def _migrate_legacy_v2(self):

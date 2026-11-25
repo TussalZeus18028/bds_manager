@@ -96,10 +96,12 @@ class CommandPaletteDialog(QDialog):
         self._input = QLineEdit(self)
         self._input.setPlaceholderText("搜索：备份、玩家、升级、回环...")
         self._input.setFont(QFont("Consolas", 12))
+        # v3.05.03 fix: 边框跟随配置主色（原硬编码 #0DC5D4）
+        _accent = config_mgr.get("theme_color", "#0DC5D4")
         self._input.setStyleSheet(f"""
             QLineEdit {{
                 background:{p.card_bg}; color:{p.text};
-                border:2px solid #0DC5D4; border-radius:8px;
+                border:2px solid {_accent}; border-radius:8px;
                 padding:9px 12px; font-size:14px;
             }}
         """)

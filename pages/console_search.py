@@ -85,7 +85,8 @@ class ConsoleSearchBar(QHBoxLayout):
 
     def _refresh_highlight(self):
         """在全部匹配位置添加高亮 ExtraSelection。"""
-        if not isinstance(self._log, type(self._log)) or not hasattr(self._log, "extraSelections"):
+        # v3.05.03 fix: 移除恒真的 isinstance 检查（原 if not isinstance(self._log, type(self._log)) 永为 False）
+        if not hasattr(self._log, "extraSelections"):
             return
         text = self._input.text()
         selections = []
@@ -109,20 +110,35 @@ class ConsoleSearchBar(QHBoxLayout):
         text = self._input.text()
         if not text:
             return
-        # v3.02.01 fix: 同上
+        # v3.02.01 fix: 区分大小写用 FindCaseSensitively（之前用 FindFlag(0) 逻辑反了）
         flags = QTextDocument.FindFlag.FindCaseSensitively if self._case_sensitive.isChecked() else QTextDocument.FindFlag(0)
-        # 用 QTextDocument.find 替代手写 rfind
         if backward:
-            start = max(0, self._last_pos - 1)
-            cursor = self._log.document().find(text, start, flags)
-            if cursor.isNull():
-                cursor = self._log.document().find(text, 0, flags)
+            # v3.05.03 fix: QTextDocument.find() 只支持向前查找，
+            # 旧实现从 _last_pos-1 起"向前"找下一个 → "上一个"行为错乱。
+            # 正确做法：遍历全部匹配，取起点在 _last_pos 之前的最后一个（无则回绕到末尾）。
+            found = None
+            cursor = self._log.document().find(text, 0, flags)
+            while not cursor.isNull():
+                if cursor.selectionStart() < self._last_pos:
+                    found = cursor
+                    cursor = self._log.document().find(text, cursor, flags)
+                    continue
+                break
+            if found is None:
+                # 回绕：取文档中最后一个匹配
+                last = None
+                cur = self._log.document().find(text, 0, flags)
+                while not cur.isNull():
+                    last = cur
+                    cur = self._log.document().find(text, cur, flags)
+                found = last
+            cursor = found
         else:
             start = max(0, self._last_pos)
             cursor = self._log.document().find(text, start, flags)
             if cursor.isNull():
                 cursor = self._log.document().find(text, 0, flags)
-        if not cursor.isNull():
+        if cursor is not None and not cursor.isNull():
             self._log.setTextCursor(cursor)
             self._log.ensureCursorVisible()
             self._last_pos = cursor.selectionEnd()

@@ -57,6 +57,7 @@ Manager_Fluent/
 │   └── network.py       # 端口检测
 ├── components/          # 可复用组件
 │   ├── notification_panel.py # 铃铛 + 通知抽屉
+│   ├── text_editor_dialog.py # 通用文件编辑器对话框（v3.05.02 从 config._open_file 提取：无边框圆角/主题感知/Ctrl+S/saved 信号）
 │   ├── splash.py        # 启动闪屏
 │   ├── key_capture.py   # 快捷键捕获
 │   └── widgets.py       # 通用控件
@@ -70,7 +71,7 @@ Manager_Fluent/
 │   ├── utils.py         # bds_exe()/ll_exe()/is_linux()
 │   └── workers.py       # BaseWorker(QThread)
 ├── tests/test_core.py   # 单元测试（25 用例）
-├── _docs/               # 交接文档 + 对话框样式规范
+├── _docs/               # 交接文档 + 对话框样式规范 + UI 风格规范
 ├── bds_manager_config.json  # 用户配置文件（不入库）
 └── bds_version_cache.json   # BDS 版本列表缓存 (48h)
 ```
@@ -232,6 +233,10 @@ cd "E:/Launcher/服务器/Bedrock/Manager_Fluent"
 4. **`TeachingTip` API** — 本机 1.11.2 版本不支持 `title/content/icon` 参数
 5. **Qt 控件类名选择器不可靠** — 用 `QWidget#objectName { ... }` + `setObjectName()`
 6. **硬编码颜色** — 必须用 `theme_palette()`（ThemePalette），禁止手写 `isDarkTheme()` 三元
+7. **按钮/开关文字截断** — ToggleButton 必须 `setMinimumWidth`（≥100），否则文字被 check indicator 挤压
+8. **表格列宽** — 固定列必须量好宽度（分支列 80→120 教训），按钮列留 buffer
+
+> **UI 风格总规范见 `_docs/UI_STYLE.md`**（主题色板/控件选型/文本编辑器/弹窗/布局/图标/自检清单）——新 UI 开发前必读。
 
 ### 修复历史（最近版本）
 
@@ -292,13 +297,8 @@ cd "E:/Launcher/服务器/Bedrock/Manager_Fluent"
 
 ### 3. 已知待修问题（审查发现，尚未处理）
 
-> N1（日志轮转）与 N4（配置注释）已随 A6/A5 修复，从下表移除。
-
-| # | 位置 | 问题 | 建议修复 |
-|---|------|------|---------|
-| N2 | `pages/command_palette.py:102` | 输入框边框主色写死 `#0DC5D4`，不跟随 theme_color（与闪屏同类） | 用 `config_mgr.get("theme_color")` |
-| N3 | `pages/packs.py:47` | `logger.warning(f"...")` f-string 格式化，应惰性 `%s` | 改惰性格式化 |
-| N5 | `backend/lip_utils.py:95` | `except (OSError, Exception)` 冗余（Exception 已含 OSError） | 只留 `Exception` |
+> N1-N5 已全部修复（N1/N4 随 v3.05.02 的 A6/A5；N2/N3/N5 随 v3.05.03）。当前无遗留待修问题。
+> v3.05.03 另修复：升级页下载确认 `_skip_confirm` 永不重置、控制台搜索"上一个"导航、备份 metadata bds_version 存工具版本（改为日志解析）、tunnel frpc.ini 重复保存/迟到退出误报/空路径写当前目录、key_capture 录制态主色硬编码。
 
 ### 4. 环境事实（容易忘）
 

@@ -426,6 +426,19 @@ class WorldPage(QWidget):
     def _on_backup(self):
         self._start_backup("manual_")
 
+    def _server_version_from_log(self) -> str:
+        """v3.05.03: 从控制台日志缓存解析真实 BDS 版本（如 '1.26.43.1'），找不到返回空。"""
+        import re
+        try:
+            win = self.window()
+            log = getattr(getattr(win, "console_page", None), "_log", None)
+            if log is None:
+                return ""
+            m = re.search(r"Version:\s*([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)", log.toPlainText())
+            return m.group(1) if m else ""
+        except (RuntimeError, AttributeError):
+            return ""
+
     def _start_backup(self, prefix: str):
         ctx = get_context()
         if not os.path.isdir(ctx.worlds_dir):
@@ -462,13 +475,17 @@ class WorldPage(QWidget):
         self._progress.setVisible(True)
         self._progress.setRange(0, 0)
 
-        # 尝试读取当前 BDS 版本
+        # v3.05.03 fix: BDS 版本探测 —— 之前把工具版本（main.__version__）当 BDS 版本
+        # 写入 metadata，备份列表"源版本"列显示误导。BDS 无版本文件，
+        # 仅当服务器运行时可从 `version` 命令输出解析（此处从控制台日志缓存读取，
+        # 失败则留空，列表显示 "—"）。
         bds_ver = ""
         try:
-            import main
-            bds_ver = main.__version__
-        except (ImportError, AttributeError):
-            bds_ver = "unknown"
+            log_text = self._server_version_from_log()
+            if log_text:
+                bds_ver = log_text
+        except Exception:
+            pass
 
         online = bool(
             config_mgr.get("online_backup", True)
