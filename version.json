@@ -1,9 +1,9 @@
 {
-    "version": "3.05.03",
+    "version": "3.05.04",
     "release_date": "2026-11-25",
-    "download_url": "https://github.com/TussalZeus18028/bds_manager/releases/download/v3.05.03/bds_manager_v3.05.03.zip",
-    "sha256": "387a0953be7c10a77b5aa5392b2fb46d755cf4d5d258dda4a28fd46804b93855",
-    "file_size": 204460,
+    "download_url": "https://github.com/TussalZeus18028/bds_manager/releases/download/v3.05.04/bds_manager_v3.05.04.zip",
+    "sha256": "9d83b1bba58b0dcceefcecedf04be92bbb4809b9d19a84f1e755c701cd11a868",
+    "file_size": 204526,
     "min_compatible_version": "2.00.00",
-    "changelog": "## v3.05.03 (2026-11-25)\n\n### Bug 修复\n- 升级页下载确认框一次性跳过不恢复\n- 控制台搜索\"上一个\"导航错乱\n- 备份元数据 bds_version 误存工具版本\n- frpc 重复保存 / 迟到误报 / 空路径写当前目录\n- lip 升级命令 `lip install --upgrade` → `lip update`\n- lip 安装输出接入终端、LL 部署目录存绝对路径\n- 快捷键录制态/命令面板主色硬编码\n\n### 增强\n- 自更新备份递归包含子目录代码（升级后可回滚）\n- 新增文本编辑器组件 text_editor_dialog\n- 新增 UI 风格规范 _docs/UI_STYLE.md\n\n### 清理\n- 删除根目录冗余 allowlist.json、旧 dist/日志"
+    "changelog": "## v3.05.04 (2026-11-25)\n\n### Bug 修复\n- 自更新崩溃：点击更新确认后 NameError（toast_info 未导入）→ 更新中断并弹\"程序遇到未预期错误\"\n- lip 安装输出跨线程直接操作 UI → 改为方法槽（QueuedConnection）"
 }

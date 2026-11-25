@@ -470,10 +470,15 @@ class UpgradePage(QWidget):
         self._lip_progress.setVisible(True)
         self._lip_progress.setRange(0, 0)
         self._lip_installer = InstallLipWorker()
-        # v3.05.03 fix: winget 安装输出接到 lip 终端（之前用 lambda 丢弃，用户看不到进度）
-        self._lip_installer.line.connect(lambda t: self._append_lip_term(f"{t}\n", "#888"))
+        # v3.05.04 fix: 改用真正的方法槽（lambda 无 QObject 接收者 → 在 worker 线程
+        # 直接调 UI，跨线程操作 QPlainTextEdit 会崩溃）
+        self._lip_installer.line.connect(self._on_lip_install_line)
         self._lip_installer.done.connect(self._on_lip_installed)
         self._lip_installer.start()
+
+    def _on_lip_install_line(self, text: str):
+        """winget 安装 lip 的输出行（主线程槽）。"""
+        self._append_lip_term(f"{text}\n", "#888")
 
     def _on_lip_installed(self, ok: bool):
         self._lip_install_btn.setEnabled(True)

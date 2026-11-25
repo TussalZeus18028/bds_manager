@@ -952,6 +952,9 @@ class BDSFluentWindow(FluentWindow):
 
     def _start_self_update_download(self, dl_url, remote_ver, sha256=""):
         """确认后开始下载自更新包。"""
+        # v3.05.04 fix: 补局部 import —— 之前用 toast_info 但 main.py 全局未导入，
+        # 点"更新"确认后 NameError → 更新中断并弹"程序遇到未预期错误"
+        from shared.toast import toast_info
         toast_info("正在下载", f"v{remote_ver} 下载中...", self)
         self._dl_updater = DownloadUpdateWorker(dl_url, remote_ver, self)
         self._dl_updater.finished.connect(lambda s, m, p: self._on_update_downloaded(s, m, p, sha256))

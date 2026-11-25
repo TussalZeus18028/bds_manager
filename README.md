@@ -2,7 +2,7 @@
 
 Minecraft Bedrock Dedicated Server 全功能管理器 —— 基于 **PySide6 + QFluentWidgets Fluent Design**。
 
-[![Version](https://img.shields.io/badge/version-3.05.03-blue)](https://github.com/TussalZeus18028/bds_manager/releases)
+[![Version](https://img.shields.io/badge/version-3.05.04-blue)](https://github.com/TussalZeus18028/bds_manager/releases)
 [![Python](https://img.shields.io/badge/python-3.10+-green)](https://www.python.org/)
 [![License](https://img.shields.io/badge/license-MIT-orange)](LICENSE)
 
@@ -86,6 +86,12 @@ Manager_Fluent/
     ├── errors.py            # 错误处理
     └── utils.py             # 工具函数
 ```
+
+## v3.05.04 (2026-11-25)
+
+### Bug 修复
+- **自更新崩溃**：点击更新确认后 `_start_self_update_download` 抛 `NameError: toast_info`（main.py 未导入）→ 更新中断并弹"程序遇到未预期错误"
+- lip 安装输出跨线程直接操作 UI（lambda 无 QObject 接收者）→ 改为方法槽（QueuedConnection）
 
 ## v3.05.03 (2026-11-25)
 
