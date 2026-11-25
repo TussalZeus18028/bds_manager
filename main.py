@@ -1014,7 +1014,9 @@ class BDSFluentWindow(FluentWindow):
                 force_stop_for_update()
             except Exception:
                 pass
-            QTimer.singleShot(1500, lambda: restart_app("main.py"))
+            # v3.05.07: 传备份目录，新进程启动失败时可自动回滚
+            backup_dir = getattr(self._installer, "backup_dir", "")
+            QTimer.singleShot(1500, lambda: restart_app("main.py", backup_dir))
         else:
             toast_error("安装失败", msg, self, duration=6000)
             notify("error", "update", "安装失败", msg, "page:upgrade")

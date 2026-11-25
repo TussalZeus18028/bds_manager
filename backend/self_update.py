@@ -223,10 +223,12 @@ class InstallUpdateWorker(QThread):
     def __init__(self, zip_path: str, parent=None):
         super().__init__(parent)
         self._zip = zip_path
+        # v3.05.07: 暴露备份目录，供新进程启动失败时自动回滚
+        self.backup_dir: str = ""
 
     def run(self):
         try:
-            backup_dir = self._backup_core_files()
+            self.backup_dir = self._backup_core_files()
             self._migrate_legacy_v2()
             self._extract_update()
             try:
@@ -332,13 +334,61 @@ def _resolve_zip_path(name: str, top: str, skip_files: set, skip_dirs: set) -> s
 
 
 # ── 重启 ──
-def restart_app(script_name: str = "main.py"):
-    # v3.05.06: 强制重启 —— 启动新进程后直接退出旧进程。
-    # QApplication.quit() 在极端情况（活动模态/托盘/事件循环阻塞）可能不生效，
-    # 2.5 秒后若旧进程仍存活则 os._exit(0) 强制结束，杜绝新旧窗口并存。
-    subprocess.Popen([sys.executable, os.path.join(SCRIPT_DIR, script_name)],
-                     cwd=SCRIPT_DIR,
-                     creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0)
+def _rollback_from(backup_dir: str) -> bool:
+    """从备份目录恢复核心代码（自更新后新进程启动失败时使用）。"""
+    if not backup_dir or not os.path.isdir(backup_dir):
+        return False
+    try:
+        for root, _dirs, files in os.walk(backup_dir):
+            for fn in files:
+                src = os.path.join(root, fn)
+                rel = os.path.relpath(src, backup_dir)
+                dst = os.path.join(SCRIPT_DIR, rel)
+                os.makedirs(os.path.dirname(dst), exist_ok=True)
+                shutil.copy2(src, dst)
+        logger.info("已从备份回滚: %s", backup_dir)
+        return True
+    except OSError as e:
+        logger.error("回滚失败: %s", e)
+        return False
+
+
+def restart_app(script_name: str = "main.py", backup_dir: str = ""):
+    """启动新进程并退出当前进程。
+
+    v3.05.07 fix（三处）：
+    1. threading.Timer 的签名是 (interval, function, args, kwargs)，**没有
+       daemon 参数**（那是 Thread 的）。v3.05.06 写成 Timer(..., daemon=True)
+       会抛 TypeError → os._exit 兜底从未生效，且每次自更新都弹
+       「程序遇到未预期错误」。
+    2. os._exit() 会跳过 atexit，配置可能来不及落盘 → 退出前显式保存。
+    3. 新进程若启动即崩溃（旧代码本身有 bug），不再无条件强杀旧进程，
+       改为从 backups/upgrade_backup_* 自动回滚，避免用户彻底打不开程序。
+    """
+    proc = subprocess.Popen(
+        [sys.executable, os.path.join(SCRIPT_DIR, script_name)],
+        cwd=SCRIPT_DIR,
+        creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0,
+    )
     QApplication.quit()
+
     import threading
-    threading.Timer(2.5, lambda: os._exit(0), daemon=True).start()
+
+    def _after_start():
+        # 新进程仍在运行 → 旧进程可以安全强退（杜绝新旧窗口并存）
+        if proc.poll() is None:
+            try:
+                config_mgr.save_now()
+            except Exception:
+                pass
+            os._exit(0)
+            return
+        # 新进程启动失败 → 回滚代码，让用户下次启动能正常打开
+        logger.error("自更新后新进程启动失败 (exit=%s)，执行自动回滚", proc.returncode)
+        restored = _rollback_from(backup_dir)
+        if not restored:
+            logger.error("自动回滚失败，请手动从 backups/upgrade_backup_* 恢复")
+
+    timer = threading.Timer(3.0, _after_start)
+    timer.daemon = True
+    timer.start()

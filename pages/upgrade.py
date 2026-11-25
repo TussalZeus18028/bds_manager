@@ -869,7 +869,8 @@ class UpgradePage(QWidget):
         self.__installer = InstallUpdateWorker(self._tool_zip, self)
         self.__installer.finished.connect(lambda s, _: (
             MessageBox.information(self, "更新完成", "BDS Manager 已更新！即将自动重启。") if s else None,
-            restart_app("main.py") if s else None
+            # v3.05.07: 传备份目录，新进程启动失败时可自动回滚
+            restart_app("main.py", getattr(self.__installer, "backup_dir", "")) if s else None
         ))
         self.__installer.start()
 
