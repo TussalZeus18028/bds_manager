@@ -216,22 +216,43 @@ def git_push_tag():
 
 # ── GitHub API ──
 def get_github_token() -> str | None:
-    """从 bds_manager_config.json 读 obfuscated token 并解码。"""
+    """获取 GitHub Token。
+
+    v3.05.07: 三级回退 —— 配置文件（XOR 混淆）→ gh CLI 凭据 → 环境变量。
+    之前只认配置文件，导致已 `gh auth login` 的用户仍需把 token 写进配置。
+    """
+    # 1. 配置文件（混淆存储）
     cfg = SCRIPT_DIR / "bds_manager_config.json"
-    if not cfg.exists():
-        return None
+    if cfg.exists():
+        try:
+            c = json.loads(cfg.read_text(encoding="utf-8"))
+            obf = c.get("github_token", "")
+            if obf:
+                data = base64.urlsafe_b64decode(obf.encode())
+                KEY = b"bds_manager_2026_token_obfuscation_key"
+                key = (KEY * (len(data) // len(KEY) + 1))[:len(data)]
+                tok = bytes(a ^ b for a, b in zip(data, key)).decode("utf-8")
+                if tok:
+                    return tok
+        except Exception as e:
+            warn(f"解码配置内 token 失败: {e}")
+
+    # 2. gh CLI 凭据（推荐：token 存在系统凭据库，不落配置文件）
     try:
-        c = json.loads(cfg.read_text(encoding="utf-8"))
-        obf = c.get("github_token", "")
-        if not obf:
-            return None
-        data = base64.urlsafe_b64decode(obf.encode())
-        KEY = b"bds_manager_2026_token_obfuscation_key"
-        key = (KEY * (len(data) // len(KEY) + 1))[:len(data)]
-        return bytes(a ^ b for a, b in zip(data, key)).decode("utf-8")
-    except Exception as e:
-        warn(f"解码 token 失败: {e}")
-        return None
+        r = subprocess.run(["gh", "auth", "token"], capture_output=True,
+                           text=True, timeout=10)
+        if r.returncode == 0 and r.stdout.strip():
+            return r.stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        pass
+
+    # 3. 环境变量
+    for env in ("GH_TOKEN", "GITHUB_TOKEN"):
+        v = os.environ.get(env)
+        if v and v.strip():
+            return v.strip()
+
+    return None
 
 
 def gh_headers(token: str) -> dict:
