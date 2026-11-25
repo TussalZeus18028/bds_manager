@@ -451,9 +451,11 @@ class UpgradePage(QWidget):
         self._check_lip_status()
 
     def _check_lip_status(self):
-        from backend.lip_utils import lip_installed
+        from backend.lip_utils import lip_installed, lip_version
         if lip_installed():
-            self._lip_status.setText("已安装")
+            # v3.05.07: 显示版本号，便于判断是否需要升级 lip
+            ver = lip_version()
+            self._lip_status.setText(f"已安装 v{ver}" if ver else "已安装")
             self._lip_install_btn.setVisible(False)
             self._deploy_btn.setEnabled(True)
         else:
@@ -487,7 +489,7 @@ class UpgradePage(QWidget):
             toast_success("lip 就绪", "已安装 lip，可以部署 BDS + LeviLamina", self.window())
 
     def _on_lip_mirrors(self):
-        from backend.lip_utils import lip_installed, find_lip_exe, LipCmdWorker
+        from backend.lip_utils import lip_installed, find_lip_exe, LipCmdWorker, MIRROR_CMDS
         try:
             if not lip_installed():
                 toast_error("请先安装 lip", "未检测到 lip 命令行工具，请先安装 lip。", self.window())
@@ -519,7 +521,9 @@ class UpgradePage(QWidget):
         def _step1(code):
             try:
                 if code == 0:
-                    w2 = LipCmdWorker([lip, "config", "set", "go_module_proxy", "https://goproxy.cn"])
+                    # v3.05.07: 镜像地址统一用 MIRROR_CMDS 常量，不再各写一份
+                    key, val = MIRROR_CMDS[1]
+                    w2 = LipCmdWorker([lip, "config", "set", key, val])
                     w2.finished.connect(_step2)
                     self._mirror_worker = w2
                     w2.start()
@@ -530,7 +534,8 @@ class UpgradePage(QWidget):
                 _done(-1)
 
         try:
-            w1 = LipCmdWorker([lip, "config", "set", "github_proxy", "https://github.bibk.top"])
+            key, val = MIRROR_CMDS[0]
+            w1 = LipCmdWorker([lip, "config", "set", key, val])
             w1.finished.connect(_step1)
             self._mirror_worker = w1
             w1.start()

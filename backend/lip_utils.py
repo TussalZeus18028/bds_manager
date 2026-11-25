@@ -9,12 +9,14 @@ import os
 import shutil
 import subprocess
 import glob as _g
+import time
 
 from PySide6.QtCore import QThread, Signal
 
 
 # ── 检测 ──
 _LIP_PATHS = [
+    os.path.expandvars(r"%LOCALAPPDATA%\Microsoft\WinGet\Links\lip.exe"),
     os.path.expandvars(r"%LOCALAPPDATA%\Microsoft\WinGet\Packages\futrime.lip_*\lip.exe"),
     os.path.expanduser("~/.local/bin/lip"),
     "/usr/local/bin/lip",
@@ -45,22 +47,32 @@ def find_lip_exe() -> str:
     return ""
 
 
+def lip_version() -> str:
+    """获取 lip 版本号。
+
+    v3.05.07 注意：lip **没有** `version` 子命令（会报 Unknown command），
+    正确用法是全局选项 `lip -v` / `lip --version`。
+    """
+    exe = find_lip_exe()
+    if not exe:
+        return ""
+    try:
+        r = subprocess.run([exe, "-v"], capture_output=True, timeout=8)
+        if r.returncode != 0:
+            return ""
+        # lip 输出是 GBK（CP936）不是 UTF-8
+        out = r.stdout.decode("gbk", errors="replace").strip()
+        return out.splitlines()[0].strip() if out else ""
+    except (OSError, subprocess.SubprocessError):
+        return ""
+
+
 # ── 镜像源命令 ──
+# v3.05.07: 抽成常量，upgrade.py 的「加速源」按钮复用，避免两处各写一份
 MIRROR_CMDS = [
     ("github_proxy", "https://github.bibk.top"),
     ("go_module_proxy", "https://goproxy.cn"),
 ]
-
-
-def setup_mirrors(lip_exe: str) -> bool:
-    """配置 lip 加速源，成功返回 True。"""
-    ok = True
-    for key, val in MIRROR_CMDS:
-        r = subprocess.run([lip_exe, "config", "set", key, val],
-                           capture_output=True, text=True, timeout=15)
-        if r.returncode != 0:
-            ok = False
-    return ok
 
 
 # ── 工作线程 ──
@@ -81,10 +93,13 @@ class LipCmdWorker(QThread):
                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
             )
             for raw_line in p.stdout:
+                # lip 输出是 GBK(CP936)；先试 UTF-8，失败用 GBK 兜底
                 try:
-                    line = raw_line.decode("utf-8").rstrip("\n")
+                    line = raw_line.decode("utf-8")
                 except UnicodeDecodeError:
-                    line = raw_line.decode("gbk", errors="replace").rstrip("\n")
+                    line = raw_line.decode("gbk", errors="replace")
+                # v3.05.07: 同时去掉 CR —— lip 在 Windows 下输出 CRLF
+                line = line.rstrip("\r\n")
                 if line:
                     self.output.emit(line, "")
             p.wait()
@@ -92,7 +107,7 @@ class LipCmdWorker(QThread):
         except FileNotFoundError:
             self.output.emit("", "未找到命令行工具")
             self.finished.emit(-1)
-        except Exception as e:  # v3.05.03: 移除冗余的 (OSError, Exception)
+        except Exception as e:
             self.output.emit("", str(e))
             self.finished.emit(-1)
 
@@ -102,6 +117,16 @@ class InstallLipWorker(QThread):
     line = Signal(str)
     done = Signal(bool)
 
+    # v3.05.07: winget 安装可能因 EULA 交互而挂起，这里设硬超时
+    INSTALL_TIMEOUT = 240
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._cancel = False
+
+    def cancel(self):
+        self._cancel = True
+
     def run(self):
         self.line.emit("lip 未安装，使用 winget 自动安装...")
         if lip_installed():
@@ -109,15 +134,34 @@ class InstallLipWorker(QThread):
             self.done.emit(True)
             return
         try:
+            # v3.05.07: 补全 winget 参数 —— 缺 --accept-package-agreements /
+            # --disable-interactivity 时 winget 可能弹交互界面卡住不返回
             p = subprocess.Popen(
-                ["winget", "install", "futrime.lip", "--accept-source-agreements"],
+                ["winget", "install", "futrime.lip",
+                 "--accept-source-agreements",
+                 "--accept-package-agreements",
+                 "--disable-interactivity"],
                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                text=True, bufsize=1, encoding="utf-8", errors="replace",
             )
+            deadline = time.time() + self.INSTALL_TIMEOUT
             for raw in p.stdout:
-                ln = raw.rstrip()
+                if self._cancel:
+                    p.terminate()
+                    self.line.emit("已取消安装")
+                    self.done.emit(False)
+                    return
+                # winget 输出同样是 GBK
+                try:
+                    ln = raw.decode("utf-8").rstrip()
+                except UnicodeDecodeError:
+                    ln = raw.decode("gbk", errors="replace").rstrip()
                 if ln:
                     self.line.emit(ln)
+                if time.time() > deadline:
+                    p.kill()
+                    self.line.emit(f"安装超时（>{self.INSTALL_TIMEOUT}s）")
+                    self.done.emit(False)
+                    return
             p.wait()
             ok = lip_installed()
             self.line.emit("lip 就绪" if ok else f"winget 退出码 {p.returncode}")

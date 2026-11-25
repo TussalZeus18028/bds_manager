@@ -246,13 +246,17 @@ class SettingsPage(QWidget):
         sl.addLayout(_row("lip 部署目录", dr2_w, svr, "一键安装 BDS + LeviLamina 的目标"))
 
         # lip 状态
-        from backend.lip_utils import lip_installed, find_lip_exe
+        from backend.lip_utils import lip_installed, find_lip_exe, lip_version
         self._lip_path_edit = LineEdit(svr)
         lip_path = find_lip_exe() or ("(未检测到)" if not lip_installed() else "lip")
         self._lip_path_edit.setText(lip_path)
         self._lip_path_edit.setReadOnly(True)
         self._lip_path_edit.setStyleSheet("color: #888;")
-        lip_status = CaptionLabel("已安装" if lip_installed() else "未安装", svr)
+        # v3.05.07: 显示 lip 版本号（lip -v，注意没有 `lip version` 子命令）
+        _lip_ver = lip_version() if lip_installed() else ""
+        lip_status = CaptionLabel(
+            (f"已安装 v{_lip_ver}" if _lip_ver else "已安装") if lip_installed() else "未安装",
+            svr)
         if lip_installed():
             lip_status.setStyleSheet("color: #4caf50;")
         else:

@@ -17,6 +17,11 @@ logger = logging.getLogger("bds_manager")
 VERSION_LIST_URL = (
     "https://raw.githubusercontent.com/TussalZeus18028/bds_version_list/main/bds_versions.json"
 )
+# v3.05.07: 备用源 —— raw.githubusercontent 偶发超时/502 时走 GitHub Contents API
+VERSION_LIST_API_URL = (
+    "https://api.github.com/repos/TussalZeus18028/bds_version_list"
+    "/contents/bds_versions.json?ref=main"
+)
 _UA_POOL = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
@@ -36,26 +41,53 @@ _ANSI_COLORS = {
 #  GitHub 版本列表抓取
 # ══════════════════════════════════════════
 
+def _parse_versions_payload(raw: bytes) -> list:
+    """从 bds_versions.json 字节流里解析版本条目。"""
+    data = json.loads(raw.decode("utf-8"))
+    results = []
+    for entry in data.get("versions", []):
+        ver = entry.get("version", "")
+        branch = entry.get("branch", "stable")
+        url = entry.get("url", "")
+        if ver and url:
+            results.append((ver, branch, url))
+    return results
+
+
 def scrape_github_versions() -> list | None:
-    try:
-        req = urllib.request.Request(VERSION_LIST_URL, headers={
-            "User-Agent": "BDS-Manager/3.1",
-            "Accept": "application/vnd.github.v3+json",
-        })
-        with urllib.request.urlopen(req, timeout=15) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
-        results = []
-        for entry in data.get("versions", []):
-            ver = entry.get("version", "")
-            branch = entry.get("branch", "stable")
-            url = entry.get("url", "")
-            if ver and url:
-                results.append((ver, branch, url))
-        return results if results else None
-    except (urllib.error.URLError, urllib.error.HTTPError, json.JSONDecodeError,
-            socket.timeout, OSError) as e:
-        logger.debug("抓取 GitHub 版本列表失败: %s", e)
-        return None
+    """拉取 bds_version_list 仓库的版本列表。
+
+    v3.05.07：加降级链 —— raw.githubusercontent 偶发超时/502（代理环境下尤其明显），
+    失败时自动切 GitHub Contents API，两个都不行才返回 None。
+    """
+    import base64 as _b64
+
+    attempts = [
+        ("raw", VERSION_LIST_URL, False),
+        ("api", VERSION_LIST_API_URL, True),
+    ]
+    for label, url, is_api in attempts:
+        try:
+            req = urllib.request.Request(url, headers={
+                "User-Agent": "BDS-Manager/3.1",
+                "Accept": "application/vnd.github.v3+json",
+            })
+            with urllib.request.urlopen(req, timeout=20) as resp:
+                raw = resp.read()
+            if is_api:
+                api_data = json.loads(raw.decode("utf-8"))
+                raw = _b64.b64decode(api_data["content"])
+            results = _parse_versions_payload(raw)
+            if results:
+                if label == "api":
+                    logger.info("版本列表经 API 备用源获取: %d 条", len(results))
+                return results
+            logger.warning("版本列表源 %s 返回空列表", label)
+        except (urllib.error.URLError, urllib.error.HTTPError, json.JSONDecodeError,
+                socket.timeout, OSError, KeyError, ValueError) as e:
+            logger.warning("版本列表源 %s 失败: %s", label, e)
+    logger.error("所有版本列表源均不可用")
+    return None
 
 
 # ══════════════════════════════════════════
@@ -147,15 +179,35 @@ class HeadScanWorker(QThread):
         self.finished.emit()
 
     def _generate_urls(self, parts: list[int]) -> list[tuple[str, str, str]]:
+        """生成待探测的版本 URL 列表。
+
+        v3.05.07 修复：append 模式原先从 patch=0 开始扫同一 minor，
+        官方发大版本时（patch 号跳到 60+/70+，如 1.26.43.1 → 1.26.70.x）
+        探测范围完全够不着。现在改为：
+          1. 同 minor 同 patch 的更大 build
+          2. 同 minor 的更高 patch
+          3. **下一个 minor 的开头几个 patch**（新大版本首发通常是 patch 0/1）
+        """
         if self._append_mode:
-            stable = [(f"{parts[0]}.{parts[1]}.{p}.{b}",
-                       f"https://www.minecraft.net/bedrockdedicatedserver/bin-win/bedrock-server-{parts[0]}.{parts[1]}.{p}.{b}.zip",
-                       "stable")
-                      for p in range(0, self._patch_range) for b in range(0, self._build_range)]
-            preview = [(f"{parts[0]}.{parts[1]}.{p}.{b}",
-                        f"https://www.minecraft.net/bedrockdedicatedserver/bin-win-preview/bedrock-server-{parts[0]}.{parts[1]}.{p}.{b}.zip",
-                        "preview")
-                       for p in range(0, self._patch_range) for b in range(0, self._build_range)]
+            major, minor, patch, build = parts
+            stable_tpl = ("https://www.minecraft.net/bedrockdedicatedserver/bin-win/"
+                          "bedrock-server-{}.zip")
+            preview_tpl = ("https://www.minecraft.net/bedrockdedicatedserver/bin-win-preview/"
+                           "bedrock-server-{}.zip")
+            cands: list[str] = []
+            # 1. 同 minor 同 patch，更大 build
+            for b in range(build + 1, build + 1 + self._build_range):
+                cands.append(f"{major}.{minor}.{patch}.{b}")
+            # 2. 同 minor，更高 patch
+            for p in range(patch + 1, patch + 1 + self._patch_range):
+                for b in range(0, self._build_range):
+                    cands.append(f"{major}.{minor}.{p}.{b}")
+            # 3. 下一个 minor 的开头（新大版本）
+            for p in range(0, 4):
+                for b in range(0, min(self._build_range, 20)):
+                    cands.append(f"{major}.{minor + 1}.{p}.{b}")
+            stable = [(v, stable_tpl.format(v), "stable") for v in cands]
+            preview = [(v, preview_tpl.format(v), "preview") for v in cands]
             return stable + preview
         urls = []
         for major in range(1, parts[0] + 1):
