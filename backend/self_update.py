@@ -333,7 +333,12 @@ def _resolve_zip_path(name: str, top: str, skip_files: set, skip_dirs: set) -> s
 
 # ── 重启 ──
 def restart_app(script_name: str = "main.py"):
+    # v3.05.06: 强制重启 —— 启动新进程后直接退出旧进程。
+    # QApplication.quit() 在极端情况（活动模态/托盘/事件循环阻塞）可能不生效，
+    # 2.5 秒后若旧进程仍存活则 os._exit(0) 强制结束，杜绝新旧窗口并存。
     subprocess.Popen([sys.executable, os.path.join(SCRIPT_DIR, script_name)],
                      cwd=SCRIPT_DIR,
                      creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0)
     QApplication.quit()
+    import threading
+    threading.Timer(2.5, lambda: os._exit(0), daemon=True).start()

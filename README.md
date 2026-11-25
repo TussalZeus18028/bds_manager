@@ -2,7 +2,7 @@
 
 Minecraft Bedrock Dedicated Server 全功能管理器 —— 基于 **PySide6 + QFluentWidgets Fluent Design**。
 
-[![Version](https://img.shields.io/badge/version-3.05.05-blue)](https://github.com/TussalZeus18028/bds_manager/releases)
+[![Version](https://img.shields.io/badge/version-3.05.06-blue)](https://github.com/TussalZeus18028/bds_manager/releases)
 [![Python](https://img.shields.io/badge/python-3.10+-green)](https://www.python.org/)
 [![License](https://img.shields.io/badge/license-MIT-orange)](LICENSE)
 
@@ -86,6 +86,11 @@ Manager_Fluent/
     ├── errors.py            # 错误处理
     └── utils.py             # 工具函数
 ```
+
+## v3.05.06 (2026-11-25)
+
+### Bug 修复
+- **自更新重启残留双窗口**：更新安装完成后改为**强制停服**（`force_stop_for_update`，不等待优雅关停）+ `restart_app` 增加 2.5 秒 `os._exit(0)` 兜底——`QApplication.quit()` 在极端情况未生效时强制结束旧进程，杜绝新旧窗口并存
 
 ## v3.05.05 (2026-11-25)
 

@@ -1007,6 +1007,13 @@ class BDSFluentWindow(FluentWindow):
         from shared.toast import toast_error, toast_success
         if success:
             toast_success("更新完成", "BDS Manager 已更新，旧文件已备份，即将自动重启", self, duration=6000)
+            # v3.05.06: 强制停服（不等优雅关停），随后直接退出旧进程重启，
+            # 避免更新后旧窗口/新窗口并存
+            try:
+                from backend.server_lifecycle import force_stop_for_update
+                force_stop_for_update()
+            except Exception:
+                pass
             QTimer.singleShot(1500, lambda: restart_app("main.py"))
         else:
             toast_error("安装失败", msg, self, duration=6000)

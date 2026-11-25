@@ -1,9 +1,9 @@
 {
-    "version": "3.05.05",
+    "version": "3.05.06",
     "release_date": "2026-11-25",
-    "download_url": "https://github.com/TussalZeus18028/bds_manager/releases/download/v3.05.05/bds_manager_v3.05.05.zip",
-    "sha256": "9146b2a60f06e41d2ef9036e3c820a08aeb9ec197ef13f515f244139ae5226f1",
-    "file_size": 204899,
+    "download_url": "https://github.com/TussalZeus18028/bds_manager/releases/download/v3.05.06/bds_manager_v3.05.06.zip",
+    "sha256": "bb6f08fa121da563642a8d24fa8ab1980a6ead77945a93da16d7d356ba61c649",
+    "file_size": 205406,
     "min_compatible_version": "2.00.00",
-    "changelog": "## v3.05.05 (2026-11-25)\n\n### Bug 修复\n- 自更新下载 SSL 失败（requests certifi CA → urllib 系统证书库）\n\n### 新增\n- 设置页\"立即检查更新\"按钮"
+    "changelog": "## v3.05.06 (2026-11-25)\n\n### Bug 修复\n- 自更新重启残留双窗口：更新完成后强制停服（不等优雅关停）+ restart_app 增加 2.5s os._exit(0) 兜底，杜绝新旧窗口并存"
 }
