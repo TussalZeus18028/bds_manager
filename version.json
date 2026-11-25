@@ -5,5 +5,5 @@
     "sha256": "3105ae202df147e7db466ce2d24ab8333d524f4892f7499f7322958508e1f3b8",
     "file_size": 188349,
     "min_compatible_version": "2.00.00",
-    "changelog": "## v3.05.06 (2026-11-25)\n\n### Bug 修复\n- 自更新重启残留双窗口：更新完成后强制停服（不等优雅关停）+ restart_app 增加 2.5s os._exit(0) 兜底，杜绝新旧窗口并存"
+    "changelog": "## v3.05.07 (2026-11-25)\n\n### Bug 修复\n- **自更新重启崩溃**：`threading.Timer` 签名是 `(interval, function, args, kwargs)`，没有 `daemon` 参数（那是 `Thread` 的）。v3.05.06 的 `restart_app` 每次自更新都抛 `TypeError`，`os._exit` 兜底从未生效，且弹\"程序遇到未预期错误\"\n- **自更新失败无法自救**：新进程若启动即崩溃，旧进程会被无条件强杀 → 用户彻底打不开程序。现在检测子进程状态并从备份自动回滚\n- **winget 安装 lip 可能永久卡死**：补全 `--accept-package-agreements` / `--disable-interactivity` 非交互参数 + 240 秒超时 + 可取消\n- **版本列表拉取无降级**：`raw.githubusercontent.com` 偶发超时/502 时静默失败 → 增加 GitHub Contents API 备用源，失败日志提升到 warning\n\n### 新增\n- 设置页 / 升级页显示 lip 版本号\n- lip 镜像地址统一为 `MIRROR_CMDS` 常量，移除重复定义\n\n### 改进\n- **BDS 版本嗅探支持跨 minor**：旧逻辑只探同一 minor，官方发大版本时 patch 号会跳到 60+/70+，探测范围完全够不着 → 现依次探测同 patch 大 build、更高 patch、下一个 minor 的开头\n- 版本列表数据更新至 373 个版本（stable / preview 双通道）\n- 发布包不再包含内部文档与项目内部工具说明"
 }
